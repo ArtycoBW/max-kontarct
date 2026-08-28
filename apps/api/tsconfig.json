@@ -3,21 +3,23 @@
   "compilerOptions": {
     "module": "commonjs",
     "types": [
-      "node"
+      "node",
+      "jest"
     ],
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
     "sourceMap": true,
-    "rootDir": "./src",
     "outDir": "./dist",
     "noEmit": false,
     "strictPropertyInitialization": true
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "test/**/*.ts"
   ],
   "exclude": [
     "node_modules",

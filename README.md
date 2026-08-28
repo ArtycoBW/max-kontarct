@@ -14,7 +14,7 @@ Production monorepo для MAX Mini App по созданию, согласов�
 
 ```text
 apps/
-  design-review/  согласованный интерактивный дизайн-прототип
+  design-review/  референс макетов; не входит в production Mini App
   web/            production Next.js Mini App
   api/            production NestJS API
 packages/
@@ -35,7 +35,10 @@ npm run dev
 Приложения:
 
 - Web: http://localhost:3000
-- API listener: http://localhost:3001 — до подраздела 2.2 корневой URL ожидаемо возвращает `404`
+- API liveness: http://localhost:3001/api/v1/health/live
+- API readiness: http://localhost:3001/api/v1/health/ready
+- Swagger UI: http://localhost:3001/api/docs
+- OpenAPI JSON: http://localhost:3001/api/docs-json
 - Design review: http://localhost:3002
 - Jeton prototype: http://localhost:3002/concept/jeton/prototype?screen=splash
 - MinIO API: http://localhost:9100
@@ -48,6 +51,8 @@ PostgreSQL доступен на `localhost:5434`, Redis — на `localhost:638
 ```powershell
 npm run lint
 npm run typecheck
+npm test
+npm run test:e2e
 npm run build
 docker compose -f docker-compose.dev.yml config
 docker compose -f docker-compose.dev.yml ps
