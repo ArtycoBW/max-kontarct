@@ -33,6 +33,31 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     await this.client.ping();
   }
 
+  async get(key: string): Promise<string | null> {
+    return this.client.get(key);
+  }
+
+  async setWithExpiry(
+    key: string,
+    value: string,
+    ttlSeconds: number,
+  ): Promise<void> {
+    await this.client.set(key, value, "EX", ttlSeconds);
+  }
+
+  async setIfAbsent(
+    key: string,
+    value: string,
+    ttlSeconds: number,
+  ): Promise<boolean> {
+    const result = await this.client.set(key, value, "EX", ttlSeconds, "NX");
+    return result === "OK";
+  }
+
+  async delete(key: string): Promise<void> {
+    await this.client.del(key);
+  }
+
   async onModuleDestroy(): Promise<void> {
     if (this.client.status === "end") {
       return;

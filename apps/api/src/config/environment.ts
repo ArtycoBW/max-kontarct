@@ -1,9 +1,20 @@
 const DEVELOPMENT_DEFAULTS = {
   API_PORT: 3001,
+  AUTH_COOKIE_NAME: "max_contract_session",
+  AUTH_REDIS_PREFIX: "max-contract:auth",
+  AUTH_SESSION_TTL_SECONDS: 7 * 24 * 60 * 60,
   CORS_ORIGINS: "http://localhost:3000,http://localhost:3002",
   DATABASE_URL:
     "postgresql://max_contract:max_contract_dev@localhost:5434/max_contract",
+  DEV_MAX_FIRST_NAME: "Иван",
+  DEV_MAX_LANGUAGE_CODE: "ru",
+  DEV_MAX_LAST_NAME: "Тестовый",
+  DEV_MAX_USER_ID: "1000000000001",
+  DEV_MAX_USERNAME: "dev_max_user",
   LOG_LEVEL: "info",
+  MAX_BOT_TOKEN: "",
+  MAX_INIT_DATA_FUTURE_SKEW_SECONDS: 30,
+  MAX_INIT_DATA_TTL_SECONDS: 60 * 60,
   MINIO_ACCESS_KEY: "max_contract",
   MINIO_AUTO_CREATE_BUCKET: true,
   MINIO_BUCKET: "max-contract-dev",
@@ -22,6 +33,7 @@ const REQUIRED_PRODUCTION_KEYS = [
   "MINIO_BUCKET",
   "MINIO_ENDPOINT",
   "MINIO_SECRET_KEY",
+  "MAX_BOT_TOKEN",
   "REDIS_URL",
 ] as const;
 
@@ -89,6 +101,20 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
       "API_PORT",
       1,
     ),
+    AUTH_COOKIE_NAME: readString(
+      input.AUTH_COOKIE_NAME,
+      DEVELOPMENT_DEFAULTS.AUTH_COOKIE_NAME,
+    ),
+    AUTH_REDIS_PREFIX: readString(
+      input.AUTH_REDIS_PREFIX,
+      DEVELOPMENT_DEFAULTS.AUTH_REDIS_PREFIX,
+    ),
+    AUTH_SESSION_TTL_SECONDS: parseInteger(
+      input.AUTH_SESSION_TTL_SECONDS,
+      DEVELOPMENT_DEFAULTS.AUTH_SESSION_TTL_SECONDS,
+      "AUTH_SESSION_TTL_SECONDS",
+      60,
+    ),
     CORS_ORIGINS: readString(
       input.CORS_ORIGINS,
       DEVELOPMENT_DEFAULTS.CORS_ORIGINS,
@@ -97,7 +123,43 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
       input.DATABASE_URL,
       DEVELOPMENT_DEFAULTS.DATABASE_URL,
     ),
+    DEV_MAX_FIRST_NAME: readString(
+      input.DEV_MAX_FIRST_NAME,
+      DEVELOPMENT_DEFAULTS.DEV_MAX_FIRST_NAME,
+    ),
+    DEV_MAX_LANGUAGE_CODE: readString(
+      input.DEV_MAX_LANGUAGE_CODE,
+      DEVELOPMENT_DEFAULTS.DEV_MAX_LANGUAGE_CODE,
+    ),
+    DEV_MAX_LAST_NAME: readString(
+      input.DEV_MAX_LAST_NAME,
+      DEVELOPMENT_DEFAULTS.DEV_MAX_LAST_NAME,
+    ),
+    DEV_MAX_USER_ID: readString(
+      input.DEV_MAX_USER_ID,
+      DEVELOPMENT_DEFAULTS.DEV_MAX_USER_ID,
+    ),
+    DEV_MAX_USERNAME: readString(
+      input.DEV_MAX_USERNAME,
+      DEVELOPMENT_DEFAULTS.DEV_MAX_USERNAME,
+    ),
     LOG_LEVEL: readString(input.LOG_LEVEL, DEVELOPMENT_DEFAULTS.LOG_LEVEL),
+    MAX_BOT_TOKEN: readString(
+      input.MAX_BOT_TOKEN,
+      DEVELOPMENT_DEFAULTS.MAX_BOT_TOKEN,
+    ),
+    MAX_INIT_DATA_FUTURE_SKEW_SECONDS: parseInteger(
+      input.MAX_INIT_DATA_FUTURE_SKEW_SECONDS,
+      DEVELOPMENT_DEFAULTS.MAX_INIT_DATA_FUTURE_SKEW_SECONDS,
+      "MAX_INIT_DATA_FUTURE_SKEW_SECONDS",
+      0,
+    ),
+    MAX_INIT_DATA_TTL_SECONDS: parseInteger(
+      input.MAX_INIT_DATA_TTL_SECONDS,
+      DEVELOPMENT_DEFAULTS.MAX_INIT_DATA_TTL_SECONDS,
+      "MAX_INIT_DATA_TTL_SECONDS",
+      60,
+    ),
     MINIO_ACCESS_KEY: readString(
       input.MINIO_ACCESS_KEY ?? input.MINIO_ROOT_USER,
       DEVELOPMENT_DEFAULTS.MINIO_ACCESS_KEY,

@@ -1,5 +1,6 @@
 "use client";
 
+import type { AuthUser } from "@max-contract/contracts";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -16,6 +17,7 @@ import {
   LockKeyhole,
   PenLine,
   Plus,
+  RefreshCw,
   ShieldCheck,
   UserRound,
   type LucideIcon,
@@ -35,6 +37,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/components/providers/auth-provider";
 import { getReadiness } from "@/lib/api/health";
 import { queryKeys } from "@/lib/api/query-keys";
 import {
@@ -423,7 +426,14 @@ function DocumentsScreen() {
   );
 }
 
-function ProfileScreen() {
+function ProfileScreen({ user }: { user: AuthUser }) {
+  const name = [user.maxAccount.firstName, user.maxAccount.lastName]
+    .filter(Boolean)
+    .join(" ");
+  const identity = user.maxAccount.username
+    ? `@${user.maxAccount.username}`
+    : `MAX ID ${user.maxAccount.maxUserId}`;
+
   return (
     <div className="screen-content">
       <ScreenHeader eyebrow="Личные данные" title="Профиль" />
@@ -432,8 +442,11 @@ function ProfileScreen() {
           <UserRound size={27} />
         </span>
         <div>
-          <h2>Вход через MAX</h2>
-          <p>Профиль появится после безопасной авторизации.</p>
+          <span className="profile-connection">
+            <Check size={12} /> MAX подключён
+          </span>
+          <h2>{name || "Пользователь MAX"}</h2>
+          <p>{identity}</p>
         </div>
       </Card>
       <div className="profile-list">
@@ -501,15 +514,60 @@ function BottomNavigation({
 function ActiveScreen({
   active,
   onNavigate,
+  user,
 }: {
   active: AppTab;
   onNavigate: (tab: AppTab) => void;
+  user: AuthUser;
 }) {
   if (active === "home") return <HomeScreen onNavigate={onNavigate} />;
   if (active === "deals") return <DealsScreen onNavigate={onNavigate} />;
   if (active === "create") return <CreateDealScreen />;
   if (active === "documents") return <DocumentsScreen />;
-  return <ProfileScreen />;
+  return <ProfileScreen user={user} />;
+}
+
+function AuthenticationLoading() {
+  return (
+    <main className="app-viewport">
+      <section className="mini-app loading-screen" aria-label="Вход через MAX">
+        <div className="auth-loading">
+          <span className="auth-loading-mark">
+            <ShieldCheck size={24} />
+          </span>
+          <p className="screen-eyebrow">Безопасный вход</p>
+          <h1>Подключаем MAX</h1>
+          <p>Проверяем сессию и данные запуска приложения.</p>
+          <span className="auth-loading-line" aria-hidden="true" />
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function AuthenticationError({
+  error,
+  onRetry,
+}: {
+  error: Error | null;
+  onRetry: () => void;
+}) {
+  return (
+    <main className="app-viewport">
+      <section className="mini-app error-screen">
+        <div className="center-state auth-error">
+          <span className="state-icon is-error">
+            <CircleAlert size={31} />
+          </span>
+          <h1>Не удалось войти через MAX</h1>
+          <p>{error?.message ?? "Повторите попытку через несколько секунд."}</p>
+          <Button onClick={onRetry}>
+            <RefreshCw size={17} /> Повторить
+          </Button>
+        </div>
+      </section>
+    </main>
+  );
 }
 
 export function MiniAppShell({
@@ -517,6 +575,7 @@ export function MiniAppShell({
 }: {
   showEnvironmentBadge: boolean;
 }) {
+  const auth = useAuth();
   const [active, setActive] = useState<AppTab>("deals");
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -525,6 +584,14 @@ export function MiniAppShell({
       scrollRef.current.scrollTop = 0;
     }
   }, [active]);
+
+  if (auth.isPending) {
+    return <AuthenticationLoading />;
+  }
+
+  if (auth.error || !auth.user) {
+    return <AuthenticationError error={auth.error} onRetry={auth.retry} />;
+  }
 
   return (
     <main className="app-viewport">
@@ -542,7 +609,11 @@ export function MiniAppShell({
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
             >
-              <ActiveScreen active={active} onNavigate={setActive} />
+              <ActiveScreen
+                active={active}
+                onNavigate={setActive}
+                user={auth.user}
+              />
             </motion.div>
           </AnimatePresence>
         </div>

@@ -4,6 +4,7 @@ import { APP_FILTER, APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { LoggerModule } from "nestjs-pino";
 
+import { AuthModule } from "./auth/auth.module";
 import { ApiExceptionFilter } from "./common/errors/api-exception.filter";
 import { createLoggerParams } from "./common/logging/logger.config";
 import { validateEnvironment } from "./config/environment";
@@ -37,6 +38,7 @@ import { StorageModule } from "./storage/storage.module";
     RedisModule,
     StorageModule,
     HealthModule,
+    AuthModule,
   ],
   providers: [
     {
