@@ -10,6 +10,7 @@ import { createLoggerParams } from "./common/logging/logger.config";
 import { validateEnvironment } from "./config/environment";
 import { PrismaModule } from "./database/prisma.module";
 import { HealthModule } from "./health/health.module";
+import { OnboardingModule } from "./onboarding/onboarding.module";
 import { RedisModule } from "./redis/redis.module";
 import { StorageModule } from "./storage/storage.module";
 
@@ -39,6 +40,7 @@ import { StorageModule } from "./storage/storage.module";
     StorageModule,
     HealthModule,
     AuthModule,
+    OnboardingModule,
   ],
   providers: [
     {

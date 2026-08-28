@@ -16,6 +16,10 @@ import { AuthService } from "../src/auth/auth.service";
 import { MaxInitDataVerifier } from "../src/auth/max-init-data.verifier";
 import { MaxReplayProtectionService } from "../src/auth/max-replay-protection.service";
 import { SessionAuthGuard } from "../src/auth/session-auth.guard";
+import { MaxContactVerifier } from "../src/onboarding/max-contact.verifier";
+import { OnboardingController } from "../src/onboarding/onboarding.controller";
+import { OnboardingService } from "../src/onboarding/onboarding.service";
+import { createMaxContactFixture } from "./fixtures/max-contact.fixture";
 import {
   createMaxInitDataFixture,
   TEST_MAX_BOT_TOKEN,
@@ -44,6 +48,24 @@ interface StoredSession {
   userId: string;
 }
 
+interface StoredConsent {
+  documentVersion: string;
+  granted: boolean;
+  recordedAt: Date;
+  source: "MINI_APP" | "DEV_SEED";
+  type: string;
+  userId: string;
+}
+
+interface StoredPhone {
+  e164: string;
+  id: string;
+  isPrimary: boolean;
+  source: "MAX" | "DEV";
+  userId: string;
+  verifiedAt: Date;
+}
+
 interface StoredUser {
   createdAt: Date;
   id: string;
@@ -55,24 +77,33 @@ interface StoredUser {
 describe("MAX authentication (e2e)", () => {
   let app: INestApplication;
   const accounts = new Map<string, StoredAccount>();
+  const consents = new Map<string, StoredConsent>();
+  const phones = new Map<string, StoredPhone>();
   const redis = new Map<string, string>();
   const sessions = new Map<string, StoredSession>();
   const configValues: Record<string, unknown> = {
     AUTH_COOKIE_NAME: "max_contract_session",
     AUTH_REDIS_PREFIX: "max-contract:test-auth",
     AUTH_SESSION_TTL_SECONDS: 3_600,
+    CONSENT_PERSONAL_DATA_VERSION: "pd-v1",
+    CONSENT_STATUS_NOTIFICATIONS_VERSION: "notifications-v1",
+    CONSENT_TERMS_VERSION: "terms-v1",
     CORS_ORIGINS: "http://localhost:3000",
     DEV_MAX_FIRST_NAME: "Иван",
     DEV_MAX_LANGUAGE_CODE: "ru",
     DEV_MAX_LAST_NAME: "Тестовый",
+    DEV_MAX_PHONE: "+79991234567",
     DEV_MAX_USER_ID: "900001",
     DEV_MAX_USERNAME: "dev_max_user",
     MAX_BOT_TOKEN: TEST_MAX_BOT_TOKEN,
+    MAX_CONTACT_FUTURE_SKEW_SECONDS: 30,
+    MAX_CONTACT_TTL_SECONDS: 300,
     MAX_INIT_DATA_FUTURE_SKEW_SECONDS: 30,
     MAX_INIT_DATA_TTL_SECONDS: 3_600,
     NODE_ENV: "test",
   };
   let accountSequence = 0;
+  let phoneSequence = 0;
   let sessionSequence = 0;
 
   const config = {
@@ -85,6 +116,10 @@ describe("MAX authentication (e2e)", () => {
   } as unknown as ConfigService;
 
   const prisma = {
+    $transaction: jest.fn(
+      async (callback: (transaction: PrismaService) => Promise<unknown>) =>
+        callback(prisma),
+    ),
     auditEvent: {
       create: jest.fn(async () => ({ id: "audit-id" })),
     },
@@ -124,6 +159,82 @@ describe("MAX authentication (e2e)", () => {
           };
           accounts.set(account.maxUserId, account);
           return account;
+        },
+      ),
+    },
+    userConsent: {
+      findMany: jest.fn(async ({ where }: Record<string, any>) =>
+        [...consents.values()].filter(
+          (consent) =>
+            consent.userId === where.userId &&
+            (where.OR as Array<Record<string, string>>).some(
+              (candidate) =>
+                candidate.type === consent.type &&
+                candidate.documentVersion === consent.documentVersion,
+            ),
+        ),
+      ),
+      upsert: jest.fn(
+        async ({ create, update, where }: Record<string, any>) => {
+          const unique = where.userId_type_documentVersion as Record<
+            string,
+            string
+          >;
+          const key = `${unique.userId}:${unique.type}:${unique.documentVersion}`;
+          const existing = consents.get(key);
+          if (existing) {
+            Object.assign(existing, update);
+            return existing;
+          }
+          const consent = {
+            ...create,
+            recordedAt: new Date(),
+          } as StoredConsent;
+          consents.set(key, consent);
+          return consent;
+        },
+      ),
+    },
+    userPhone: {
+      findFirst: jest.fn(async ({ where }: Record<string, any>) => {
+        const matches = [...phones.values()].filter(
+          (phone) => phone.userId === where.userId,
+        );
+        return (
+          matches.sort(
+            (left, right) =>
+              Number(right.isPrimary) - Number(left.isPrimary) ||
+              right.verifiedAt.getTime() - left.verifiedAt.getTime(),
+          )[0] ?? null
+        );
+      }),
+      findUnique: jest.fn(async ({ where }: Record<string, any>) =>
+        phones.get(where.e164 as string) ?? null,
+      ),
+      updateMany: jest.fn(async ({ data, where }: Record<string, any>) => {
+        let count = 0;
+        for (const phone of phones.values()) {
+          if (phone.userId === where.userId && phone.isPrimary === where.isPrimary) {
+            Object.assign(phone, data);
+            count += 1;
+          }
+        }
+        return { count };
+      }),
+      upsert: jest.fn(
+        async ({ create, update, where }: Record<string, any>) => {
+          const existing = phones.get(where.e164 as string);
+          if (existing) {
+            Object.assign(existing, update);
+            return existing;
+          }
+          phoneSequence += 1;
+          const phone = {
+            ...create,
+            id: `30000000-0000-4000-8000-${String(phoneSequence).padStart(12, "0")}`,
+          } as StoredPhone;
+          phones.set(phone.e164, phone);
+          return phone;
         },
       ),
     },
@@ -190,11 +301,13 @@ describe("MAX authentication (e2e)", () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
-      controllers: [AuthController],
+      controllers: [AuthController, OnboardingController],
       providers: [
         AuthService,
         MaxInitDataVerifier,
+        MaxContactVerifier,
         MaxReplayProtectionService,
+        OnboardingService,
         SessionAuthGuard,
         { provide: ConfigService, useValue: config },
         { provide: PrismaService, useValue: prisma },
@@ -219,9 +332,12 @@ describe("MAX authentication (e2e)", () => {
 
   beforeEach(() => {
     accounts.clear();
+    consents.clear();
+    phones.clear();
     redis.clear();
     sessions.clear();
     accountSequence = 0;
+    phoneSequence = 0;
     sessionSequence = 0;
     jest.clearAllMocks();
   });
@@ -316,5 +432,89 @@ describe("MAX authentication (e2e)", () => {
     const response = await agent.get(`/${API_PREFIX}/auth/me`).expect(401);
     expect(response.body.code).toBe("AUTH_SESSION_INVALID");
     expect(redis.has(sessionKey!)).toBe(false);
+  });
+
+  it("records versioned consents and completes onboarding with the dev adapter", async () => {
+    const agent = request.agent(app.getHttpServer());
+    await agent.post(`/${API_PREFIX}/auth/dev`).expect(200);
+
+    const initial = await agent.get(`/${API_PREFIX}/onboarding`).expect(200);
+    expect(initial.body).toMatchObject({
+      completed: false,
+      phoneVerified: false,
+      requiredConsentsAccepted: false,
+    });
+
+    const accepted = await agent
+      .post(`/${API_PREFIX}/onboarding/consents`)
+      .send({
+        personalData: true,
+        statusNotifications: false,
+        termsOfUse: true,
+      })
+      .expect(201);
+    expect(accepted.body).toMatchObject({
+      completed: false,
+      requiredConsentsAccepted: true,
+    });
+    expect(accepted.body.consents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          granted: true,
+          type: "PERSONAL_DATA",
+          version: "pd-v1",
+        }),
+        expect.objectContaining({
+          granted: false,
+          type: "STATUS_NOTIFICATIONS",
+          version: "notifications-v1",
+        }),
+      ]),
+    );
+
+    const completed = await agent
+      .post(`/${API_PREFIX}/onboarding/phone/dev`)
+      .expect(201);
+    expect(completed.body).toMatchObject({
+      completed: true,
+      phone: { e164: "+79991234567", source: "DEV" },
+      phoneVerified: true,
+    });
+    expect(prisma.auditEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ eventType: "DEV_PHONE_VERIFIED" }),
+      }),
+    );
+  });
+
+  it("verifies a signed MAX contact for the authenticated MAX user", async () => {
+    const agent = request.agent(app.getHttpServer());
+    await agent.post(`/${API_PREFIX}/auth/dev`).expect(200);
+    const contact = createMaxContactFixture({
+      botToken: TEST_MAX_BOT_TOKEN,
+      maxUserId: "900001",
+    });
+
+    const response = await agent
+      .post(`/${API_PREFIX}/onboarding/phone/max`)
+      .send(contact)
+      .expect(201);
+
+    expect(response.body.phone).toMatchObject({
+      e164: "+79991234567",
+      source: "MAX",
+    });
+  });
+
+  it("never treats a manually entered phone as MAX-verified", async () => {
+    const agent = request.agent(app.getHttpServer());
+    await agent.post(`/${API_PREFIX}/auth/dev`).expect(200);
+
+    await agent
+      .post(`/${API_PREFIX}/onboarding/phone/max`)
+      .send({ phone: "+79991234567" })
+      .expect(400);
+
+    expect(phones.size).toBe(0);
   });
 });

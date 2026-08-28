@@ -4,6 +4,7 @@ const developmentApiTarget = "http://localhost:3001";
 
 const nextConfig: NextConfig = {
   agentRules: false,
+  allowedDevOrigins: ["127.0.0.1"],
   devIndicators: false,
   reactStrictMode: true,
   async rewrites() {

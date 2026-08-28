@@ -456,6 +456,37 @@ button.service-status {
   background: var(--surface-soft);
 }
 
+.button-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink);
+}
+
+.button-ghost:hover {
+  background: var(--surface-soft);
+}
+
+.button-secondary {
+  border-color: var(--border);
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.button-secondary:hover {
+  background: var(--accent-tint);
+}
+
+.button-icon {
+  width: 42px;
+  min-height: 42px;
+  padding: 0;
+}
+
+.button-sm {
+  min-height: 36px;
+  padding: 8px 13px;
+}
+
 .full-width {
   width: 100%;
 }
@@ -934,6 +965,245 @@ button.service-status {
   background: var(--accent);
 }
 
+.onboarding-shell {
+  background: var(--surface);
+}
+
+.onboarding-screen {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.onboarding-content {
+  min-height: 0;
+  flex: 1;
+  padding: max(64px, calc(env(safe-area-inset-top) + 28px)) 24px 28px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: none;
+}
+
+.onboarding-content::-webkit-scrollbar {
+  display: none;
+}
+
+.onboarding-header > .screen-eyebrow {
+  margin-bottom: 8px;
+}
+
+.onboarding-header > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.onboarding-header .button-icon {
+  width: 28px;
+  min-height: 36px;
+  margin-left: -7px;
+  padding: 0;
+}
+
+.onboarding-header h1 {
+  margin: 0;
+  color: var(--ink-deep);
+  font-size: clamp(31px, 8vw, 39px);
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 1;
+}
+
+.onboarding-copy {
+  max-width: 410px;
+  margin: 17px 0 28px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.58;
+}
+
+.consent-list {
+  display: grid;
+  gap: 12px;
+}
+
+.consent-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 82px;
+  padding: 14px;
+  box-shadow: var(--shadow-card);
+}
+
+.consent-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.consent-card label {
+  min-width: 0;
+  cursor: pointer;
+}
+
+.consent-card strong,
+.consent-card small {
+  display: block;
+}
+
+.consent-card strong {
+  color: var(--ink-deep);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.consent-card strong em {
+  color: var(--accent);
+  font-style: normal;
+}
+
+.consent-card small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.switch-root {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #e3dcda;
+  transition: background-color 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.switch-root[data-state="checked"] {
+  background: var(--accent);
+}
+
+.switch-thumb {
+  display: block;
+  width: 18px;
+  height: 18px;
+  transform: translateX(2px);
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 2px 7px rgba(54, 8, 2, 0.18);
+  transition: transform 160ms ease;
+}
+
+.switch-thumb[data-state="checked"] {
+  transform: translateX(18px);
+}
+
+.onboarding-footer {
+  flex: none;
+  padding: 14px 24px max(18px, env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(54, 8, 2, 0.07);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(18px);
+}
+
+.onboarding-footer .button {
+  min-height: 48px;
+}
+
+.onboarding-inline-error {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 16px 0 0;
+  color: var(--danger);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.phone-onboarding-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.phone-hero {
+  display: grid;
+  margin: 13px 0 28px;
+  place-items: center;
+}
+
+.phone-hero > span {
+  display: grid;
+  width: 82px;
+  height: 82px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.phone-source-card,
+.phone-error-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 15px;
+}
+
+.phone-source-card {
+  border-color: #f0d2cd;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+.phone-source-card > span,
+.phone-error-state > span {
+  display: grid;
+  gap: 4px;
+}
+
+.phone-source-card strong,
+.phone-error-state strong {
+  font-size: 10px;
+}
+
+.phone-source-card small,
+.phone-error-state small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.phone-error-state {
+  margin-top: 12px;
+  border-color: #efc6c1;
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+.phone-privacy-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 12px 13px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
 .loading-screen,
 .error-screen {
   justify-content: center;
@@ -1100,6 +1370,8 @@ button.service-status {
 }
 
 @media (max-width: 370px) {
+  .onboarding-content,
+  .onboarding-footer,
   .screen-content {
     padding-right: 20px;
     padding-left: 20px;
@@ -1130,6 +1402,8 @@ button.service-status {
 }
 
 @media (min-width: 700px) {
+  .onboarding-content,
+  .onboarding-footer,
   .screen-content {
     padding-right: 34px;
     padding-left: 34px;

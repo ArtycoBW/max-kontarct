@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   ConsentSource,
   ConsentType,
+  PhoneVerificationSource,
   PrismaClient,
 } from "@prisma/client";
 
@@ -179,6 +180,38 @@ describe("users/auth database foundation (integration)", () => {
           source: ConsentSource.MINI_APP,
           type: ConsentType.PERSONAL_DATA,
           userId: user.id,
+        },
+      }),
+    ).rejects.toMatchObject({ code: "P2002" });
+  });
+
+  it("stores a verified primary phone and keeps it globally unique", async () => {
+    const firstUser = await database.user.create({ data: {} });
+    const secondUser = await database.user.create({ data: {} });
+
+    const phone = await database.userPhone.create({
+      data: {
+        e164: "+79991234567",
+        isPrimary: true,
+        source: PhoneVerificationSource.MAX,
+        userId: firstUser.id,
+        verifiedAt: new Date(),
+      },
+    });
+
+    expect(phone).toMatchObject({
+      e164: "+79991234567",
+      isPrimary: true,
+      source: PhoneVerificationSource.MAX,
+      userId: firstUser.id,
+    });
+    await expect(
+      database.userPhone.create({
+        data: {
+          e164: "+79991234567",
+          source: PhoneVerificationSource.MAX,
+          userId: secondUser.id,
+          verifiedAt: new Date(),
         },
       }),
     ).rejects.toMatchObject({ code: "P2002" });

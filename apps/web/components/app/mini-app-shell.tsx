@@ -1,8 +1,12 @@
 "use client";
 
-import type { AuthUser } from "@max-contract/contracts";
+import type {
+  AuthUser,
+  OnboardingStateResponse,
+  VerifiedPhone,
+} from "@max-contract/contracts";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
   BriefcaseBusiness,
@@ -38,7 +42,9 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/components/providers/auth-provider";
+import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { getReadiness } from "@/lib/api/health";
+import { getOnboardingState } from "@/lib/api/onboarding";
 import { queryKeys } from "@/lib/api/query-keys";
 import {
   dealDraftSchema,
@@ -426,13 +432,22 @@ function DocumentsScreen() {
   );
 }
 
-function ProfileScreen({ user }: { user: AuthUser }) {
+function ProfileScreen({
+  phone,
+  user,
+}: {
+  phone: VerifiedPhone;
+  user: AuthUser;
+}) {
   const name = [user.maxAccount.firstName, user.maxAccount.lastName]
     .filter(Boolean)
     .join(" ");
   const identity = user.maxAccount.username
     ? `@${user.maxAccount.username}`
     : `MAX ID ${user.maxAccount.maxUserId}`;
+  const phoneStatus = `${formatPhone(phone.e164)} · ${
+    phone.source === "MAX" ? "подтверждён MAX" : "DEV-подтверждение"
+  }`;
 
   return (
     <div className="screen-content">
@@ -452,7 +467,7 @@ function ProfileScreen({ user }: { user: AuthUser }) {
       <div className="profile-list">
         {[
           [ShieldCheck, "Согласия", "Версии документов и настройки"],
-          [LockKeyhole, "Безопасность", "Телефон и активные сессии"],
+          [LockKeyhole, "Безопасность", phoneStatus],
           [FileCheck2, "Реквизиты", "Данные физического лица"],
         ].map(([RowIcon, title, copy]) => {
           const ItemIcon = RowIcon as Icon;
@@ -514,20 +529,30 @@ function BottomNavigation({
 function ActiveScreen({
   active,
   onNavigate,
+  phone,
   user,
 }: {
   active: AppTab;
   onNavigate: (tab: AppTab) => void;
+  phone: VerifiedPhone;
   user: AuthUser;
 }) {
   if (active === "home") return <HomeScreen onNavigate={onNavigate} />;
   if (active === "deals") return <DealsScreen onNavigate={onNavigate} />;
   if (active === "create") return <CreateDealScreen />;
   if (active === "documents") return <DocumentsScreen />;
-  return <ProfileScreen user={user} />;
+  return <ProfileScreen phone={phone} user={user} />;
 }
 
-function AuthenticationLoading() {
+function AuthenticationLoading({
+  copy = "Проверяем сессию и данные запуска приложения.",
+  eyebrow = "Безопасный вход",
+  title = "Подключаем MAX",
+}: {
+  copy?: string;
+  eyebrow?: string;
+  title?: string;
+} = {}) {
   return (
     <main className="app-viewport">
       <section className="mini-app loading-screen" aria-label="Вход через MAX">
@@ -535,9 +560,9 @@ function AuthenticationLoading() {
           <span className="auth-loading-mark">
             <ShieldCheck size={24} />
           </span>
-          <p className="screen-eyebrow">Безопасный вход</p>
-          <h1>Подключаем MAX</h1>
-          <p>Проверяем сессию и данные запуска приложения.</p>
+          <p className="screen-eyebrow">{eyebrow}</p>
+          <h1>{title}</h1>
+          <p>{copy}</p>
           <span className="auth-loading-line" aria-hidden="true" />
         </div>
       </section>
@@ -548,9 +573,11 @@ function AuthenticationLoading() {
 function AuthenticationError({
   error,
   onRetry,
+  title = "Не удалось войти через MAX",
 }: {
   error: Error | null;
   onRetry: () => void;
+  title?: string;
 }) {
   return (
     <main className="app-viewport">
@@ -559,7 +586,7 @@ function AuthenticationError({
           <span className="state-icon is-error">
             <CircleAlert size={31} />
           </span>
-          <h1>Не удалось войти через MAX</h1>
+          <h1>{title}</h1>
           <p>{error?.message ?? "Повторите попытку через несколько секунд."}</p>
           <Button onClick={onRetry}>
             <RefreshCw size={17} /> Повторить
@@ -576,14 +603,6 @@ export function MiniAppShell({
   showEnvironmentBadge: boolean;
 }) {
   const auth = useAuth();
-  const [active, setActive] = useState<AppTab>("deals");
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = 0;
-    }
-  }, [active]);
 
   if (auth.isPending) {
     return <AuthenticationLoading />;
@@ -592,6 +611,87 @@ export function MiniAppShell({
   if (auth.error || !auth.user) {
     return <AuthenticationError error={auth.error} onRetry={auth.retry} />;
   }
+
+  return (
+    <AuthenticatedMiniApp
+      showEnvironmentBadge={showEnvironmentBadge}
+      user={auth.user}
+    />
+  );
+}
+
+function AuthenticatedMiniApp({
+  showEnvironmentBadge,
+  user,
+}: {
+  showEnvironmentBadge: boolean;
+  user: AuthUser;
+}) {
+  const queryClient = useQueryClient();
+  const onboarding = useQuery({
+    queryFn: getOnboardingState,
+    queryKey: ["onboarding", "state"],
+    retry: false,
+  });
+
+  if (onboarding.isPending) {
+    return (
+      <AuthenticationLoading
+        copy="Проверяем согласия и подтверждение телефона."
+        eyebrow="Настройка профиля"
+        title="Готовим приложение"
+      />
+    );
+  }
+
+  if (onboarding.error || !onboarding.data) {
+    return (
+      <AuthenticationError
+        error={onboarding.error}
+        onRetry={() => void onboarding.refetch()}
+        title="Не удалось проверить профиль"
+      />
+    );
+  }
+
+  if (!onboarding.data.completed) {
+    return (
+      <OnboardingFlow
+        onStateChange={(nextState: OnboardingStateResponse) =>
+          queryClient.setQueryData(["onboarding", "state"], nextState)
+        }
+        showEnvironmentBadge={showEnvironmentBadge}
+        state={onboarding.data}
+      />
+    );
+  }
+
+  return (
+    <AppWorkspace
+      phone={onboarding.data.phone!}
+      showEnvironmentBadge={showEnvironmentBadge}
+      user={user}
+    />
+  );
+}
+
+function AppWorkspace({
+  phone,
+  showEnvironmentBadge,
+  user,
+}: {
+  phone: VerifiedPhone;
+  showEnvironmentBadge: boolean;
+  user: AuthUser;
+}) {
+  const [active, setActive] = useState<AppTab>("deals");
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+  }, [active]);
 
   return (
     <main className="app-viewport">
@@ -612,7 +712,8 @@ export function MiniAppShell({
               <ActiveScreen
                 active={active}
                 onNavigate={setActive}
-                user={auth.user}
+                phone={phone}
+                user={user}
               />
             </motion.div>
           </AnimatePresence>
@@ -621,4 +722,11 @@ export function MiniAppShell({
       </section>
     </main>
   );
+}
+
+function formatPhone(e164: string): string {
+  const russian = e164.match(/^\+7(\d{3})(\d{3})(\d{2})(\d{2})$/);
+  return russian
+    ? `+7 (${russian[1]}) ${russian[2]}-${russian[3]}-${russian[4]}`
+    : e164;
 }

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3000",
+    "dev": "next dev --webpack --port 3000",
     "build": "next build",
     "start": "next start --port 3000",
     "lint": "eslint . --max-warnings=0",
@@ -14,6 +14,7 @@
     "@max-contract/contracts": "0.1.0",
     "@radix-ui/react-select": "2.3.7",
     "@radix-ui/react-slot": "1.3.3",
+    "@radix-ui/react-switch": "1.3.7",
     "@tanstack/react-query": "5.102.8",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
