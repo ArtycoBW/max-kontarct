@@ -1,17 +1,26 @@
 import type { Metadata, Viewport } from "next";
+import { Manrope } from "next/font/google";
 import type { ReactNode } from "react";
+
+import { AppProviders } from "@/components/providers/app-providers";
 
 import "./globals.css";
 
+const manrope = Manrope({
+  display: "swap",
+  subsets: ["cyrillic", "latin"],
+  variable: "--font-manrope",
+});
+
 export const metadata: Metadata = {
-  title: "Max-Контракт",
+  title: "Макс-Контракт",
   description: "Mini App для договоров между физическими лицами",
 };
 
 export const viewport: Viewport = {
-  width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  width: "device-width",
 };
 
 type RootLayoutProps = Readonly<{
@@ -21,7 +30,9 @@ type RootLayoutProps = Readonly<{
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="ru">
-      <body>{children}</body>
+      <body className={manrope.variable}>
+        <AppProviders>{children}</AppProviders>
+      </body>
     </html>
   );
 }
