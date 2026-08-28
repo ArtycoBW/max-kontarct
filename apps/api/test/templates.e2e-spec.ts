@@ -12,6 +12,7 @@ import type {
   PublishedTemplateListRecord,
 } from "../src/templates/templates.repository";
 import { TemplatesRepository } from "../src/templates/templates.repository";
+import { TemplateSchemaValidator } from "../src/templates/template-schema.validator";
 import { TemplatesService } from "../src/templates/templates.service";
 
 const publishedAt = new Date("2026-08-28T12:00:00.000Z");
@@ -41,6 +42,7 @@ describe("templates API (e2e)", () => {
       controllers: [TemplatesController],
       providers: [
         TemplatesService,
+        TemplateSchemaValidator,
         {
           provide: TemplatesRepository,
           useValue: {
@@ -95,7 +97,11 @@ describe("templates API (e2e)", () => {
       documentRequirements: [
         expect.objectContaining({ key: "identity_document" }),
       ],
-      questionnaireSchema: { properties: {}, type: "object" },
+      questionnaireSchema: {
+        additionalProperties: false,
+        properties: {},
+        type: "object",
+      },
     });
   });
 
@@ -103,6 +109,49 @@ describe("templates API (e2e)", () => {
     await request(app.getHttpServer())
       .get(`/${API_PREFIX}/templates/draft-template`)
       .expect(404);
+  });
+
+  it("validates answers and returns the version snapshot", async () => {
+    const response = await request(app.getHttpServer())
+      .post(`/${API_PREFIX}/templates/demo-property-rental/validate`)
+      .send({
+        answers: {},
+        templateVersionId: "20000000-0000-4000-8000-000000000001",
+      })
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      answers: {},
+      snapshot: {
+        documentRequirements: [
+          expect.objectContaining({ key: "identity_document" }),
+        ],
+        templateSlug: "demo-property-rental",
+        templateVersionId: "20000000-0000-4000-8000-000000000001",
+        versionNumber: 1,
+      },
+      valid: true,
+    });
+  });
+
+  it("does not accept fields absent from the selected version", async () => {
+    await request(app.getHttpServer())
+      .post(`/${API_PREFIX}/templates/demo-property-rental/validate`)
+      .send({
+        answers: { vehicleRegistrationCertificate: "СТС" },
+        templateVersionId: "20000000-0000-4000-8000-000000000001",
+      })
+      .expect(400);
+  });
+
+  it("rejects validation after the published version changes", async () => {
+    await request(app.getHttpServer())
+      .post(`/${API_PREFIX}/templates/demo-property-rental/validate`)
+      .send({
+        answers: {},
+        templateVersionId: "20000000-0000-4000-8000-000000000099",
+      })
+      .expect(409);
   });
 
   it("validates the stable template identifier", async () => {
@@ -147,7 +196,11 @@ function detailsRecord(): PublishedTemplateDetailsRecord {
         ],
         id: "20000000-0000-4000-8000-000000000001",
         publishedAt,
-        questionnaireSchema: { properties: {}, type: "object" },
+        questionnaireSchema: {
+          additionalProperties: false,
+          properties: {},
+          type: "object",
+        },
         status: TemplateVersionStatus.PUBLISHED,
         versionNumber: 1,
       },

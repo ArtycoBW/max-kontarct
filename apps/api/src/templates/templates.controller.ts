@@ -1,10 +1,22 @@
 import type {
   ContractTemplateDetailsResponse,
   ContractTemplateListResponse,
+  ValidateTemplateAnswersResponse,
 } from "@max-contract/contracts";
-import { Controller, Get, Param, UseGuards } from "@nestjs/common";
 import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  UseGuards,
+} from "@nestjs/common";
+import {
+  ApiBadRequestResponse,
   ApiCookieAuth,
+  ApiConflictResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -14,6 +26,7 @@ import {
 
 import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { TemplateSlugParamsDto } from "./dto/template-slug-params.dto";
+import { ValidateTemplateAnswersDto } from "./dto/validate-template-answers.dto";
 import { TemplatesService } from "./templates.service";
 
 @Controller("templates")
@@ -39,5 +52,19 @@ export class TemplatesController {
     @Param() params: TemplateSlugParamsDto,
   ): Promise<ContractTemplateDetailsResponse> {
     return this.templates.getPublishedBySlug(params.slug);
+  }
+
+  @Post(":slug/validate")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Проверить ответы по версии шаблона" })
+  @ApiParam({ name: "slug", example: "demo-property-rental" })
+  @ApiOkResponse({ description: "Проверенные ответы и снимок версии шаблона" })
+  @ApiBadRequestResponse({ description: "Ответы не соответствуют анкете" })
+  @ApiConflictResponse({ description: "Опубликованная версия изменилась" })
+  validate(
+    @Param() params: TemplateSlugParamsDto,
+    @Body() body: ValidateTemplateAnswersDto,
+  ): Promise<ValidateTemplateAnswersResponse> {
+    return this.templates.validateAnswers(params.slug, body);
   }
 }

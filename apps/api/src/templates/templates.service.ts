@@ -3,8 +3,13 @@ import type {
   ContractTemplateListItem,
   ContractTemplateListResponse,
   ContractTemplateVersionSummary,
+  TemplateVersionSnapshot,
+  ValidateTemplateAnswersRequest,
+  ValidateTemplateAnswersResponse,
 } from "@max-contract/contracts";
 import {
+  BadRequestException,
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -13,10 +18,14 @@ import type { Prisma } from "@prisma/client";
 
 import type { PublishedTemplateListRecord } from "./templates.repository";
 import { TemplatesRepository } from "./templates.repository";
+import { TemplateSchemaValidator } from "./template-schema.validator";
 
 @Injectable()
 export class TemplatesService {
-  constructor(private readonly templates: TemplatesRepository) {}
+  constructor(
+    private readonly templates: TemplatesRepository,
+    private readonly schemaValidator: TemplateSchemaValidator,
+  ) {}
 
   async listPublished(): Promise<ContractTemplateListResponse> {
     const templates = await this.templates.findPublishedTemplates();
@@ -36,15 +45,65 @@ export class TemplatesService {
     }
 
     const version = requirePublishedVersion(template.versions[0]);
+    const questionnaireSchema = toSchemaObject(version.questionnaireSchema);
+    this.schemaValidator.assertSchema(version.id, questionnaireSchema);
     return {
       ...toTemplateBase(template),
       currentVersion: {
         ...toVersionSummary(version),
         documentRequirements: version.documentRequirements,
-        questionnaireSchema: toSchemaObject(version.questionnaireSchema),
+        questionnaireSchema,
       },
     };
   }
+
+  async validateAnswers(
+    slug: string,
+    request: ValidateTemplateAnswersRequest,
+  ): Promise<ValidateTemplateAnswersResponse> {
+    const template = await this.getPublishedBySlug(slug);
+    const version = template.currentVersion;
+
+    if (version.id !== request.templateVersionId) {
+      throw new ConflictException({
+        code: "TEMPLATE_VERSION_CHANGED",
+        message: "Версия шаблона изменилась. Обновите анкету",
+      });
+    }
+
+    const errors = this.schemaValidator.validateAnswers(
+      version.id,
+      version.questionnaireSchema,
+      request.answers,
+    );
+    if (errors.length > 0) {
+      throw new BadRequestException({
+        code: "TEMPLATE_ANSWERS_INVALID",
+        details: { errors },
+        message: "Проверьте заполнение анкеты",
+      });
+    }
+
+    return {
+      answers: request.answers,
+      snapshot: toVersionSnapshot(template),
+      valid: true,
+    };
+  }
+}
+
+function toVersionSnapshot(
+  template: ContractTemplateDetailsResponse,
+): TemplateVersionSnapshot {
+  return {
+    documentRequirements: template.currentVersion.documentRequirements,
+    questionnaireSchema: template.currentVersion.questionnaireSchema,
+    templateId: template.id,
+    templateSlug: template.slug,
+    templateTitle: template.title,
+    templateVersionId: template.currentVersion.id,
+    versionNumber: template.currentVersion.versionNumber,
+  };
 }
 
 function toListItem(

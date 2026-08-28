@@ -150,3 +150,29 @@ export interface ContractTemplateDetailsResponse
     questionnaireSchema: Record<string, unknown>;
   };
 }
+
+export interface TemplateAnswerValidationError {
+  message: string;
+  path: string;
+}
+
+export interface ValidateTemplateAnswersRequest {
+  answers: Record<string, unknown>;
+  templateVersionId: string;
+}
+
+export interface TemplateVersionSnapshot {
+  documentRequirements: TemplateDocumentRequirementResponse[];
+  questionnaireSchema: Record<string, unknown>;
+  templateId: string;
+  templateSlug: string;
+  templateTitle: string;
+  templateVersionId: string;
+  versionNumber: number;
+}
+
+export interface ValidateTemplateAnswersResponse {
+  answers: Record<string, unknown>;
+  snapshot: TemplateVersionSnapshot;
+  valid: true;
+}

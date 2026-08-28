@@ -352,6 +352,99 @@ describe("users/auth database foundation (integration)", () => {
     ).rejects.toMatchObject({ code: "P2002" });
   });
 
+  it("keeps document requirements isolated between unrelated templates", async () => {
+    await database.contractTemplate.create({
+      data: {
+        isDemo: true,
+        slug: "integration-animal-sale",
+        summary: "Демонстрационная продажа животного",
+        title: "ДЕМО: продажа животного",
+        versions: {
+          create: {
+            documentRequirements: {
+              create: {
+                key: "veterinary_passport",
+                required: true,
+                sortOrder: 10,
+                title: "ДЕМО: ветеринарный паспорт",
+              },
+            },
+            publishedAt: new Date("2026-08-28T12:00:00.000Z"),
+            questionnaireSchema: {
+              additionalProperties: false,
+              properties: {},
+              type: "object",
+            },
+            status: TemplateVersionStatus.PUBLISHED,
+            versionNumber: 1,
+          },
+        },
+      },
+    });
+    await database.contractTemplate.create({
+      data: {
+        isDemo: true,
+        slug: "integration-vehicle-sale",
+        summary: "Демонстрационная продажа автомобиля",
+        title: "ДЕМО: продажа автомобиля",
+        versions: {
+          create: {
+            documentRequirements: {
+              create: [
+                {
+                  key: "vehicle_passport",
+                  required: true,
+                  sortOrder: 10,
+                  title: "ДЕМО: ПТС",
+                },
+                {
+                  key: "vehicle_registration_certificate",
+                  required: true,
+                  sortOrder: 20,
+                  title: "ДЕМО: СТС",
+                },
+              ],
+            },
+            publishedAt: new Date("2026-08-28T12:00:00.000Z"),
+            questionnaireSchema: {
+              additionalProperties: false,
+              properties: {},
+              type: "object",
+            },
+            status: TemplateVersionStatus.PUBLISHED,
+            versionNumber: 1,
+          },
+        },
+      },
+    });
+
+    const repository = new TemplatesRepository(
+      database as unknown as PrismaService,
+    );
+    const animal = await repository.findPublishedTemplateBySlug(
+      "integration-animal-sale",
+    );
+    const vehicle = await repository.findPublishedTemplateBySlug(
+      "integration-vehicle-sale",
+    );
+    const animalKeys =
+      animal?.versions[0]?.documentRequirements.map(({ key }) => key) ?? [];
+    const vehicleKeys =
+      vehicle?.versions[0]?.documentRequirements.map(({ key }) => key) ?? [];
+
+    expect(animalKeys).toEqual(["veterinary_passport"]);
+    expect(animalKeys).not.toEqual(
+      expect.arrayContaining([
+        "vehicle_passport",
+        "vehicle_registration_certificate",
+      ]),
+    );
+    expect(vehicleKeys).toEqual([
+      "vehicle_passport",
+      "vehicle_registration_certificate",
+    ]);
+  });
+
   it("rejects invalid template lifecycle data at the database boundary", async () => {
     const template = await database.contractTemplate.create({
       data: {

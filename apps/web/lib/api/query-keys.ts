@@ -15,6 +15,11 @@ export const queryKeys = {
     all: ["profile"] as const,
     current: () => [...queryKeys.profile.all, "current"] as const,
   },
+  templates: {
+    all: ["templates"] as const,
+    detail: (slug: string) => [...queryKeys.templates.all, "detail", slug] as const,
+    list: () => [...queryKeys.templates.all, "list"] as const,
+  },
   admin: {
     all: ["admin"] as const,
     audit: () => [...queryKeys.admin.all, "audit"] as const,

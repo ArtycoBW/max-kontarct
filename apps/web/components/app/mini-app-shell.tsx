@@ -2,10 +2,11 @@
 
 import type {
   OnboardingStateResponse,
+  TemplateAnswerValidationError,
+  TemplateDocumentRequirementResponse,
   VerifiedPhone,
 } from "@max-contract/contracts";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
   BriefcaseBusiness,
@@ -26,12 +27,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import type { FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -39,17 +39,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/components/providers/auth-provider";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { ProfileScreen } from "@/components/profile/profile-screen";
+import {
+  parseQuestionnaireSchema,
+  TemplateQuestionnaire,
+} from "@/components/templates/template-questionnaire";
+import { ApiError } from "@/lib/api/client";
 import { getReadiness } from "@/lib/api/health";
 import { getOnboardingState } from "@/lib/api/onboarding";
 import { queryKeys } from "@/lib/api/query-keys";
 import {
-  dealDraftSchema,
-  type DealDraftInput,
-} from "@/lib/validation/deal-draft";
+  getTemplate,
+  getTemplates,
+  validateTemplateAnswers,
+} from "@/lib/api/templates";
+import { normalizeQuestionnaireAnswers } from "@/lib/validation/questionnaire-answers";
 import { cn } from "@/lib/utils";
 
 type AppTab = "home" | "deals" | "create" | "documents" | "profile";
@@ -282,126 +288,278 @@ function DealsScreen({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
   );
 }
 
-function FieldError({ id, message }: { id: string; message?: string }) {
-  if (!message) {
-    return null;
-  }
-
-  return (
-    <span className="field-error" id={id} role="alert">
-      <CircleAlert size={13} /> {message}
-    </span>
-  );
-}
-
 function CreateDealScreen() {
-  const [validated, setValidated] = useState(false);
-  const {
-    control,
-    formState: { errors, isSubmitting },
-    handleSubmit,
-    register,
-  } = useForm<DealDraftInput>({
-    defaultValues: { description: "", title: "", type: "rent" },
-    resolver: zodResolver(dealDraftSchema),
+  const [answers, setAnswers] = useState<Record<string, unknown>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [selectedSlug, setSelectedSlug] = useState("");
+  const templates = useQuery({
+    queryFn: getTemplates,
+    queryKey: queryKeys.templates.list(),
   });
-  const description = useWatch({ control, name: "description" });
-  const descriptionLength = description.length;
+  const template = useQuery({
+    enabled: selectedSlug.length > 0,
+    queryFn: () => getTemplate(selectedSlug),
+    queryKey: queryKeys.templates.detail(selectedSlug),
+  });
+  const definition = useMemo(
+    () =>
+      template.data
+        ? parseQuestionnaireSchema(
+            template.data.currentVersion.questionnaireSchema,
+          )
+        : null,
+    [template.data],
+  );
+  const questionnaireAnswers = useMemo(
+    () => ({
+      ...Object.fromEntries(
+        (definition?.fields ?? [])
+          .filter((field) => field.type === "boolean")
+          .map((field) => [field.key, false]),
+      ),
+      ...answers,
+    }),
+    [answers, definition],
+  );
+  const validation = useMutation({
+    mutationFn: (payload: { answers: Record<string, unknown>; versionId: string }) =>
+      validateTemplateAnswers(selectedSlug, {
+        answers: payload.answers,
+        templateVersionId: payload.versionId,
+      }),
+  });
 
-  const onSubmit = () => {
-    setValidated(true);
+  const changeAnswer = (key: string, value: unknown) => {
+    setAnswers((current) => {
+      if (value === undefined) {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      }
+      return { ...current, [key]: value };
+    });
+    setFieldErrors((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    validation.reset();
+  };
+
+  const submitQuestionnaire = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!definition || !template.data) return;
+
+    const normalized = normalizeQuestionnaireAnswers(
+      definition,
+      questionnaireAnswers,
+    );
+    setFieldErrors(normalized.errors);
+    if (Object.keys(normalized.errors).length > 0) return;
+
+    try {
+      await validation.mutateAsync({
+        answers: normalized.answers,
+        versionId: template.data.currentVersion.id,
+      });
+    } catch (error) {
+      setFieldErrors(extractTemplateFieldErrors(error));
+    }
   };
 
   return (
     <div className="screen-content">
-      <ScreenHeader eyebrow="Новая сделка · шаг 1" title="Опишите договорённость" />
+      <ScreenHeader eyebrow="Новая сделка · анкета" title="Выберите шаблон" />
       <p className="screen-copy">
-        Пишите обычными словами: укажите стороны, предмет сделки, сумму и сроки.
+        Анкета и комплект документов формируются по выбранной версии договора.
       </p>
 
-      <form className="deal-form" onSubmit={handleSubmit(onSubmit)} noValidate>
+      <form className="deal-form" onSubmit={submitQuestionnaire} noValidate>
         <div className="form-field">
-          <label id="deal-type-label">Тип сделки</label>
-          <Controller
-            control={control}
-            name="type"
-            render={({ field }) => (
-              <Select
-                name={field.name}
-                value={field.value}
-                onValueChange={(value) => {
-                  field.onChange(value);
-                  setValidated(false);
-                }}
-              >
-                <SelectTrigger
-                  ref={field.ref}
-                  aria-labelledby="deal-type-label"
-                  aria-describedby={errors.type ? "type-error" : undefined}
-                  aria-invalid={Boolean(errors.type)}
-                  onBlur={field.onBlur}
-                >
-                  <SelectValue placeholder="Выберите тип сделки" />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  <SelectItem value="rent">Аренда</SelectItem>
-                  <SelectItem value="services">Услуги</SelectItem>
-                  <SelectItem value="sale">Купля-продажа</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          />
-          <FieldError id="type-error" message={errors.type?.message} />
+          <label id="template-label">Шаблон договора</label>
+          <Select
+            disabled={templates.isPending || templates.isError}
+            value={selectedSlug}
+            onValueChange={(value) => {
+              validation.reset();
+              setAnswers({});
+              setFieldErrors({});
+              setSelectedSlug(value);
+            }}
+          >
+            <SelectTrigger aria-labelledby="template-label">
+              <SelectValue
+                placeholder={
+                  templates.isPending ? "Загружаем шаблоны" : "Выберите шаблон"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent position="popper">
+              {templates.data?.items.map((item) => (
+                <SelectItem key={item.id} value={item.slug}>
+                  {item.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        <label className="form-field">
-          <span>Название</span>
-          <Input
-            placeholder="Например, аренда офиса"
-            aria-invalid={Boolean(errors.title)}
-            aria-describedby={errors.title ? "title-error" : undefined}
-            {...register("title", { onChange: () => setValidated(false) })}
+        {templates.isError ? (
+          <RequestErrorCard
+            message={templates.error.message}
+            onRetry={() => templates.refetch()}
           />
-          <FieldError id="title-error" message={errors.title?.message} />
-        </label>
+        ) : null}
 
-        <label className="form-field">
-          <span>Краткое описание</span>
-          <Textarea
-            placeholder="Что передаётся, на какой срок и на каких условиях"
-            maxLength={500}
-            aria-invalid={Boolean(errors.description)}
-            aria-describedby={errors.description ? "description-error" : undefined}
-            {...register("description", {
-              onChange: () => setValidated(false),
-            })}
+        {templates.data?.items.length === 0 ? (
+          <Card className="form-message">
+            <strong>Нет опубликованных шаблонов</strong>
+            <span>Добавьте опубликованную версию в панели управления.</span>
+          </Card>
+        ) : null}
+
+        {template.isPending && selectedSlug ? (
+          <Card className="form-message" role="status">
+            <strong>Загружаем анкету</strong>
+            <span>Проверяем опубликованную версию шаблона.</span>
+          </Card>
+        ) : null}
+
+        {template.isError ? (
+          <RequestErrorCard
+            message={template.error.message}
+            onRetry={() => template.refetch()}
           />
-          <span className="field-meta">{descriptionLength}/500</span>
-          <FieldError id="description-error" message={errors.description?.message} />
-        </label>
+        ) : null}
 
-        <Card className="form-hint">
-          <ShieldCheck size={18} />
-          <span>
-            <strong>Данные пока не отправляются</strong>
-            <small>
-              На этом этапе проверяем интерфейс и локальную валидацию формы.
-            </small>
-          </span>
-        </Card>
+        {template.data && definition ? (
+          <>
+            <div className="questionnaire-heading">
+              <span>Версия {template.data.currentVersion.versionNumber}</span>
+              <h2>{definition.title ?? template.data.title}</h2>
+              <p>{template.data.summary}</p>
+            </div>
+            <TemplateQuestionnaire
+              answers={questionnaireAnswers}
+              definition={definition}
+              errors={fieldErrors}
+              onChange={changeAnswer}
+            />
+            <TemplateDocuments
+              requirements={
+                template.data.currentVersion.documentRequirements
+              }
+            />
+          </>
+        ) : null}
 
-        {validated ? (
+        {template.data && !definition ? (
+          <Card className="form-message is-error">
+            <strong>Не удалось прочитать анкету</strong>
+            <span>Проверьте схему опубликованной версии шаблона.</span>
+          </Card>
+        ) : null}
+
+        {validation.isError && Object.keys(fieldErrors).length === 0 ? (
+          <RequestErrorCard message={validation.error.message} />
+        ) : null}
+
+        {validation.data ? (
           <div className="validation-success" role="status">
-            <Check size={16} /> Данные формы прошли проверку.
+            <Check size={16} /> Анкета проверена по версии {validation.data.snapshot.versionNumber}.
           </div>
         ) : null}
 
-        <Button className="full-width" disabled={isSubmitting} type="submit">
-          Проверить форму
-        </Button>
+        {template.data && definition ? (
+          <Button className="full-width" disabled={validation.isPending} type="submit">
+            {validation.isPending ? "Проверяем анкету" : "Проверить анкету"}
+          </Button>
+        ) : null}
       </form>
     </div>
   );
+}
+
+function TemplateDocuments({
+  requirements,
+}: {
+  requirements: TemplateDocumentRequirementResponse[];
+}) {
+  return (
+    <Card className="template-documents">
+      <div className="template-documents-heading">
+        <FileCheck2 size={18} />
+        <span>
+          <strong>Документы по шаблону</strong>
+          <small>Состав определён выбранной версией</small>
+        </span>
+      </div>
+      {requirements.length > 0 ? (
+        <ul>
+          {requirements.map((requirement) => (
+            <li key={requirement.id}>
+              <span>
+                <strong>{requirement.title}</strong>
+                {requirement.description ? (
+                  <small>{requirement.description}</small>
+                ) : null}
+              </span>
+              <em>{requirement.required ? "Обязательный" : "Дополнительный"}</em>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>Дополнительные документы не требуются.</p>
+      )}
+    </Card>
+  );
+}
+
+function RequestErrorCard({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <Card className="form-message is-error" role="alert">
+      <strong>Не удалось выполнить запрос</strong>
+      <span>{message}</span>
+      {onRetry ? (
+        <Button onClick={onRetry} size="sm" type="button" variant="outline">
+          Повторить
+        </Button>
+      ) : null}
+    </Card>
+  );
+}
+
+function extractTemplateFieldErrors(error: unknown): Record<string, string> {
+  if (!(error instanceof ApiError) || !isRecord(error.details)) return {};
+  const errors = error.details.errors;
+  if (!Array.isArray(errors)) return {};
+
+  return Object.fromEntries(
+    errors
+      .filter(isTemplateAnswerValidationError)
+      .map((item) => [item.path, item.message]),
+  );
+}
+
+function isTemplateAnswerValidationError(
+  value: unknown,
+): value is TemplateAnswerValidationError {
+  return (
+    isRecord(value) &&
+    typeof value.message === "string" &&
+    typeof value.path === "string"
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function DocumentsScreen() {

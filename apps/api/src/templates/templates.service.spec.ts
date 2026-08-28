@@ -1,4 +1,8 @@
-import { NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from "@nestjs/common";
 import { TemplateVersionStatus } from "@prisma/client";
 
 import type {
@@ -6,6 +10,7 @@ import type {
   PublishedTemplateListRecord,
 } from "./templates.repository";
 import { TemplatesRepository } from "./templates.repository";
+import { TemplateSchemaValidator } from "./template-schema.validator";
 import { TemplatesService } from "./templates.service";
 
 const publishedAt = new Date("2026-08-28T12:00:00.000Z");
@@ -23,7 +28,10 @@ describe("TemplatesService", () => {
     findPublishedTemplateBySlug,
     findPublishedTemplates,
   } as unknown as TemplatesRepository;
-  const service = new TemplatesService(repository);
+  const service = new TemplatesService(
+    repository,
+    new TemplateSchemaValidator(),
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -69,6 +77,70 @@ describe("TemplatesService", () => {
       service.getPublishedBySlug("draft-template"),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
+
+  it("validates answers and returns the exact version snapshot", async () => {
+    findPublishedTemplateBySlug.mockResolvedValue(templateDetailsRecord());
+
+    await expect(
+      service.validateAnswers("demo-property-rental", {
+        answers: {},
+        templateVersionId: "20000000-0000-4000-8000-000000000001",
+      }),
+    ).resolves.toMatchObject({
+      answers: {},
+      snapshot: {
+        documentRequirements: [
+          expect.objectContaining({ key: "identity_document" }),
+        ],
+        templateSlug: "demo-property-rental",
+        templateVersionId: "20000000-0000-4000-8000-000000000001",
+        versionNumber: 2,
+      },
+      valid: true,
+    });
+  });
+
+  it("rejects answers for a stale template version", async () => {
+    findPublishedTemplateBySlug.mockResolvedValue(templateDetailsRecord());
+
+    await expect(
+      service.validateAnswers("demo-property-rental", {
+        answers: {},
+        templateVersionId: "20000000-0000-4000-8000-000000000099",
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it("rejects answers that do not match the questionnaire", async () => {
+    const details = templateDetailsRecord();
+    const version = details.versions[0];
+    if (!version) {
+      throw new Error("Test fixture must contain a published version");
+    }
+    findPublishedTemplateBySlug.mockResolvedValue({
+      ...details,
+      versions: [
+        {
+          ...version,
+          questionnaireSchema: {
+            additionalProperties: false,
+            properties: {
+              subject: { minLength: 1, title: "Предмет", type: "string" },
+            },
+            required: ["subject"],
+            type: "object",
+          },
+        },
+      ],
+    });
+
+    await expect(
+      service.validateAnswers("demo-property-rental", {
+        answers: {},
+        templateVersionId: "20000000-0000-4000-8000-000000000001",
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
 });
 
 function templateListRecord(): PublishedTemplateListRecord {
@@ -106,7 +178,11 @@ function templateDetailsRecord(): PublishedTemplateDetailsRecord {
         ],
         id: "20000000-0000-4000-8000-000000000001",
         publishedAt,
-        questionnaireSchema: { properties: {}, type: "object" },
+        questionnaireSchema: {
+          additionalProperties: false,
+          properties: {},
+          type: "object",
+        },
         status: TemplateVersionStatus.PUBLISHED,
         versionNumber: 2,
       },

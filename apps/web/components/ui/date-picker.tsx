@@ -34,15 +34,21 @@ const FIRST_YEAR = 1900;
 
 export function DatePicker({
   "aria-invalid": ariaInvalid,
+  allowFuture = false,
   className,
+  fromYear = FIRST_YEAR,
   id,
   onChange,
+  toYear,
   value,
 }: {
   "aria-invalid"?: boolean;
+  allowFuture?: boolean;
   className?: string;
+  fromYear?: number;
   id?: string;
   onChange: (value: string) => void;
+  toYear?: number;
   value: string;
 }) {
   const selected = useMemo(() => parseDateOnly(value), [value]);
@@ -50,9 +56,10 @@ export function DatePicker({
   const initialMonth = selected ?? new Date(now.getFullYear() - 30, 0, 1);
   const [open, setOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(initialMonth);
+  const lastYear = toYear ?? now.getFullYear();
   const years = useMemo(
-    () => Array.from({ length: now.getFullYear() - FIRST_YEAR + 1 }, (_, index) => now.getFullYear() - index),
-    [now],
+    () => Array.from({ length: lastYear - fromYear + 1 }, (_, index) => lastYear - index),
+    [fromYear, lastYear],
   );
 
   const setMonth = (month: number) => {
@@ -107,7 +114,10 @@ export function DatePicker({
         </div>
         <Calendar
           classNames={{ month_caption: "calendar-caption is-visually-hidden" }}
-          disabled={{ after: now, before: new Date(FIRST_YEAR, 0, 1) }}
+          disabled={{
+            after: allowFuture ? new Date(lastYear, 11, 31) : now,
+            before: new Date(fromYear, 0, 1),
+          }}
           hideNavigation
           locale={ru}
           mode="single"

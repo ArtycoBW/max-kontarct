@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "isolatedModules": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "types": ["jest", "node"]
+  },
+  "exclude": ["node_modules"],
+  "include": ["lib/**/*.ts"]
+}
