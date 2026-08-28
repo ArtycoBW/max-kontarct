@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+dist/
+build/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Test and runtime artifacts
+playwright-report/
+test-results/
+*.log
+npm-debug.log*
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local task instructions and agent state
+CODEX_MASTER_SPEC_Max-Contract_MVP.md
+AGENTS.md
+**/AGENTS.md
+CLAUDE.md
+**/CLAUDE.md
+.agents/
+**/.agents/
+.claude/
+**/.claude/
+.codex/
+**/.codex/
+
+# Source archives are local references only
+*.rar

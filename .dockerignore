@@ -1,0 +1,16 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+**/node_modules
+**/.next
+**/dist
+**/coverage
+**/*.log
+playwright-report
+test-results
+*.rar
+CODEX_MASTER_SPEC_Max-Contract_MVP.md
+**/AGENTS.md
+**/CLAUDE.md

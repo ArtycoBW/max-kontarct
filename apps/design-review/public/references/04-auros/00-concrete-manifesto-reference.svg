@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">Big Picture typographic manifesto direction</title>
+  <desc id="desc">Black and white editorial contract application with monumental typography, hairline rules, and paper surfaces.</desc>
+  <rect width="1600" height="1000" fill="#fff"/>
+  <path d="M48 96h1504M48 870h1504M600 96v774M1170 96v774" stroke="#121212"/>
+  <text x="48" y="66" fill="#121212" font-family="monospace" font-size="16">[ 04-N / DIGITAL CONTRACT ]</text>
+  <text x="1240" y="66" fill="#121212" font-family="Arial" font-size="16" font-weight="700">MAX - КОНТРАКТ</text>
+  <text x="48" y="226" fill="#121212" font-family="Arial,sans-serif" font-size="126" font-weight="700" letter-spacing="-7">ДОГОВОР</text>
+  <text x="48" y="344" fill="#121212" font-family="Arial,sans-serif" font-size="126" font-weight="700" letter-spacing="-7">ПОД КОНТРОЛЕМ.</text>
+  <text x="48" y="408" fill="#121212" font-family="Arial" font-size="18">Строгий цифровой процесс без визуального шума.</text>
+  <g transform="translate(48 474)">
+    <rect width="504" height="348" rx="20" fill="#f1f1f1" stroke="#121212"/>
+    <text x="28" y="42" fill="#121212" font-family="monospace" font-size="13">[ AGREEMENT / 2089 ]</text>
+    <text x="28" y="92" fill="#121212" font-family="Arial" font-size="28" font-weight="700">Аренда помещения</text>
+    <path d="M28 121h448" stroke="#121212"/>
+    <text x="28" y="160" fill="#686868" font-family="Arial" font-size="14">СТОРОНЫ</text><text x="360" y="160" fill="#121212" font-family="Arial" font-size="16" font-weight="700">2 / 2</text>
+    <path d="M28 183h448" stroke="#e1e1e1"/>
+    <text x="28" y="220" fill="#686868" font-family="Arial" font-size="14">ДОКУМЕНТЫ</text><text x="360" y="220" fill="#121212" font-family="Arial" font-size="16" font-weight="700">ГОТОВЫ</text>
+    <path d="M28 243h448" stroke="#e1e1e1"/>
+    <rect x="28" y="274" width="448" height="50" rx="20" fill="#121212"/>
+    <text x="166" y="305" fill="#fff" font-family="Arial" font-size="14" font-weight="700">ОТКРЫТЬ ДОГОВОР</text>
+  </g>
+  <g transform="translate(648 474)">
+    <text x="0" y="34" fill="#121212" font-family="monospace" font-size="14">[ SYSTEM PRINCIPLES ]</text>
+    <text x="0" y="96" fill="#121212" font-family="Arial" font-size="42" font-weight="700" letter-spacing="-2">ТИПОГРАФИКА</text>
+    <text x="0" y="140" fill="#121212" font-family="Arial" font-size="42" font-weight="700" letter-spacing="-2">ВМЕСТО ДЕКОРА</text>
+    <path d="M0 176h474" stroke="#121212"/>
+    <text x="0" y="220" fill="#686868" font-family="Arial" font-size="16">Белая бумага. Чёрная типографика.</text>
+    <text x="0" y="248" fill="#686868" font-family="Arial" font-size="16">Точные границы. Никаких теней.</text>
+    <g transform="translate(0 284)" fill="#121212"><path d="M12 0c0 8 4 12 12 12-8 0-12 4-12 12 0-8-4-12-12-12 8 0 12-4 12-12Z"/><path transform="translate(92)" d="M12 0c0 8 4 12 12 12-8 0-12 4-12 12 0-8-4-12-12-12 8 0 12-4 12-12Z"/><path transform="translate(184)" d="M12 0c0 8 4 12 12 12-8 0-12 4-12 12 0-8-4-12-12-12 8 0 12-4 12-12Z"/><path transform="translate(276)" d="M12 0c0 8 4 12 12 12-8 0-12 4-12 12 0-8-4-12-12-12 8 0 12-4 12-12Z"/><path transform="translate(368)" d="M12 0c0 8 4 12 12 12-8 0-12 4-12 12 0-8-4-12-12-12 8 0 12-4 12-12Z"/></g>
+  </g>
+  <g transform="translate(1218 474)">
+    <rect width="334" height="348" rx="20" fill="#fff" stroke="#121212"/>
+    <text x="24" y="42" fill="#121212" font-family="monospace" font-size="12">[ PALETTE / 00 ]</text>
+    <rect x="24" y="76" width="286" height="52" fill="#121212"/><rect x="24" y="140" width="286" height="52" fill="#f1f1f1"/><rect x="24" y="204" width="286" height="52" fill="#e1e1e1"/><rect x="24" y="268" width="286" height="52" fill="#fff" stroke="#121212"/>
+  </g>
+  <text x="48" y="928" fill="#121212" font-family="monospace" font-size="14">NO COLOR · NO SHADOW · HAIRLINE STRUCTURE · EDITORIAL SCALE</text>
+  <path d="M1528 900c0 16 8 24 24 24-16 0-24 8-24 24 0-16-8-24-24-24 16 0 24-8 24-24Z" fill="#121212"/>
+</svg>

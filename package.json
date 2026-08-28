@@ -1,0 +1,28 @@
+{
+  "name": "max-contract",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20.9.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail --names design,web,api --prefix-colors blue,green,magenta \"npm run dev:design\" \"npm run dev:web\" \"npm run dev:api\"",
+    "dev:design": "npm run dev --workspace @max-contract/design-review",
+    "dev:web": "npm run dev --workspace @max-contract/web",
+    "dev:api": "npm run dev --workspace @max-contract/api",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "infra:up": "docker compose -f docker-compose.dev.yml up -d",
+    "infra:down": "docker compose -f docker-compose.dev.yml down",
+    "infra:ps": "docker compose -f docker-compose.dev.yml ps"
+  },
+  "devDependencies": {
+    "concurrently": "10.0.5"
+  }
+}

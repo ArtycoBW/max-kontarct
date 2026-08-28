@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">Тёплая редакционная система Макс-Контракт</title>
+  <desc id="desc">Премиальная система на тёплой бумаге с выразительной антиквой, персиковыми поверхностями и округлыми карточками.</desc>
+  <rect width="1200" height="760" fill="#f6f0e9"/>
+  <g font-family="Inter, Arial, sans-serif" fill="#1c1714">
+    <text x="70" y="74" font-size="17" font-weight="700">МАКС-КОНТРАКТ</text>
+    <text x="1010" y="74" font-size="13" font-weight="600" fill="#8b5a47">НАПРАВЛЕНИЕ 04</text>
+    <line x1="70" y1="102" x2="1130" y2="102" stroke="#d8c8be"/>
+
+    <text x="70" y="182" font-family="Georgia, Times New Roman, serif" font-size="62" letter-spacing="-3">Спокойный способ</text>
+    <text x="70" y="244" font-family="Georgia, Times New Roman, serif" font-size="62" letter-spacing="-3">договориться</text>
+    <text x="74" y="289" font-size="18" fill="#776a62">Договор как ценный документ, а не как ещё одна форма.</text>
+
+    <rect x="70" y="340" width="410" height="304" rx="32" fill="#fbe1d1"/>
+    <text x="100" y="382" font-size="13" font-weight="650" fill="#8b5a47">ПОРТФЕЛЬ ДОГОВОРОВ</text>
+    <text x="405" y="390" font-family="Georgia, Times New Roman, serif" font-size="42" fill="#3d241b">03</text>
+    <text x="100" y="490" font-family="Georgia, Times New Roman, serif" font-size="82" letter-spacing="-5" fill="#3d241b">3</text>
+    <text x="100" y="524" font-size="16" fill="#3d241b">активные сделки</text>
+    <line x1="100" y1="558" x2="450" y2="558" stroke="#d8b9a8"/>
+    <circle cx="108" cy="589" r="6" fill="#c87854"/>
+    <text x="126" y="595" font-size="14">На согласовании</text>
+    <text x="425" y="595" font-size="16" font-weight="700">2</text>
+    <circle cx="108" cy="622" r="6" fill="#2f805a"/>
+    <text x="126" y="628" font-size="14">Готово к подписи</text>
+    <text x="425" y="628" font-size="16" font-weight="700">1</text>
+
+    <rect x="516" y="340" width="614" height="142" rx="28" fill="#fffaf6" stroke="#e6d8cf"/>
+    <text x="546" y="378" font-size="12" font-weight="650" fill="#8b5a47">ПРОЕКТ ДОГОВОРА</text>
+    <text x="546" y="424" font-family="Georgia, Times New Roman, serif" font-size="31" fill="#3d241b">Аренда помещения</text>
+    <rect x="956" y="373" width="144" height="43" rx="22" fill="#3d241b"/>
+    <text x="990" y="400" font-size="14" font-weight="650" fill="#fffaf6">Проверить</text>
+    <line x1="546" y1="449" x2="1100" y2="449" stroke="#eaded6"/>
+    <text x="546" y="469" font-size="12" fill="#776a62">Условия, приложения и реквизиты собраны в одном месте</text>
+
+    <rect x="516" y="506" width="294" height="138" rx="28" fill="#fffaf6" stroke="#e6d8cf"/>
+    <circle cx="556" cy="548" r="19" fill="#fbe1d1"/>
+    <path d="M548 548h16M556 540v16" stroke="#7b3f2a" stroke-width="2.2" stroke-linecap="round"/>
+    <text x="586" y="544" font-size="16" font-weight="700">Новая сделка</text>
+    <text x="586" y="568" font-size="13" fill="#776a62">Подготовить договор</text>
+    <text x="546" y="616" font-family="Georgia, Times New Roman, serif" font-size="18" fill="#8b5a47">Начать с ясных условий →</text>
+
+    <rect x="836" y="506" width="294" height="138" rx="28" fill="#fbe1d1"/>
+    <text x="866" y="546" font-size="12" font-weight="650" fill="#8b5a47">СЛЕДУЮЩИЙ ШАГ</text>
+    <text x="866" y="585" font-family="Georgia, Times New Roman, serif" font-size="23" fill="#3d241b">Пригласить</text>
+    <text x="866" y="612" font-family="Georgia, Times New Roman, serif" font-size="23" fill="#3d241b">вторую сторону</text>
+  </g>
+</svg>
