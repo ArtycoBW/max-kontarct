@@ -54,6 +54,11 @@ export function configureApplication(app: INestApplication): void {
     .setTitle("Max-Контракт API")
     .setDescription("REST API production Mini App")
     .setVersion("1.0")
+    .addCookieAuth(
+      "max_contract_session",
+      undefined,
+      "max_contract_session",
+    )
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
 

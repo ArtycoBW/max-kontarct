@@ -18,7 +18,7 @@ export class MaxContactBridgeError extends Error {
 
 export function getMaxInitData(): string {
   if (typeof window === "undefined") {
-    throw new Error("MAX Bridge недоступен на сервере");
+    throw new Error("Не удалось связаться с MAX");
   }
 
   const initData = window.WebApp?.initData?.trim();

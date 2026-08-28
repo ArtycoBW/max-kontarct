@@ -2,7 +2,9 @@
 
 Production monorepo для MAX Mini App по созданию, согласованию и подписанию договоров между физическими лицами.
 
-На текущем этапе подключена только локальная инфраструктура. Реальные MAX, YandexGPT, DaData и SMSC API не используются.
+На текущем этапе реализовано ядро Mini App: MAX/dev-авторизация, согласия,
+подтверждённый телефон, профиль физлица и RBAC-оболочка администрирования.
+YandexGPT, DaData и SMSC API пока не подключены.
 
 ## Требования
 
@@ -37,6 +39,7 @@ npm run dev
 Приложения:
 
 - Web: http://localhost:3000
+- Admin shell: http://localhost:3000/admin
 - API liveness: http://localhost:3001/api/v1/health/live
 - API readiness: http://localhost:3001/api/v1/health/ready
 - Swagger UI: http://localhost:3001/api/docs
@@ -68,6 +71,20 @@ npm run infra:down
 ```
 
 Именованные Docker volumes сохраняются после остановки Compose.
+
+## Роли в локальной разработке
+
+Текущий dev-пользователь по умолчанию имеет роль `USER`. После первого входа
+роль можно переключить для проверки `/admin`:
+
+```powershell
+npm run dev:role -- ADMIN
+npm run dev:role -- SUPPORT
+npm run dev:role -- USER
+```
+
+После команды обновите страницу. Helper принимает только `USER`, `ADMIN` или
+`SUPPORT`, пишет audit event и полностью запрещён при `NODE_ENV=production`.
 
 ## Локальная база данных
 

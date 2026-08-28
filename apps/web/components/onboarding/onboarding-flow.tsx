@@ -121,7 +121,7 @@ export function OnboardingFlow({
     <main className="app-viewport">
       <section className="mini-app onboarding-shell" aria-label="Настройка профиля">
         {showEnvironmentBadge ? (
-          <span className="environment-badge">LOCAL</span>
+          <span className="environment-badge">ТЕСТ</span>
         ) : null}
         {step === "consents" ? (
           <ConsentScreen
@@ -200,8 +200,7 @@ function ConsentScreen({
       <div className="onboarding-content">
         <OnboardingHeader eyebrow="Шаг 1 из 2" title="Согласия" />
         <p className="onboarding-copy">
-          Для начала работы подтвердите обязательные условия. Настройки можно
-          изменить позже.
+          Для начала работы подтвердите обязательные условия и выберите необходимые уведомления.
         </p>
 
         <div className="consent-list">

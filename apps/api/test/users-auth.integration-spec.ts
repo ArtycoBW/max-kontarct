@@ -124,6 +124,7 @@ describe("users/auth database foundation (integration)", () => {
           create: {
             firstName: "Иван",
             lastName: "Тестовый",
+            email: "ivan@example.ru",
             locale: "ru-RU",
             timezone: "Europe/Moscow",
           },
@@ -135,8 +136,21 @@ describe("users/auth database foundation (integration)", () => {
     expect(user.profile).toMatchObject({
       firstName: "Иван",
       lastName: "Тестовый",
+      email: "ivan@example.ru",
       userId: user.id,
     });
+  });
+
+  it("persists all supported RBAC roles", async () => {
+    const adminUser = await database.user.create({
+      data: { role: "ADMIN" },
+    });
+    const supportUser = await database.user.create({
+      data: { role: "SUPPORT" },
+    });
+
+    expect(adminUser.role).toBe("ADMIN");
+    expect(supportUser.role).toBe("SUPPORT");
   });
 
   it("stores independent consent document versions", async () => {

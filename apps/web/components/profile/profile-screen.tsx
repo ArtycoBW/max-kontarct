@@ -1,0 +1,324 @@
+"use client";
+
+import type { UpdateUserProfileRequest, VerifiedPhone } from "@max-contract/contracts";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Check,
+  CircleAlert,
+  LockKeyhole,
+  Mail,
+  RefreshCw,
+  Save,
+  ShieldCheck,
+  UserRound,
+} from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { z } from "zod";
+
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { getProfile, updateProfile } from "@/lib/api/profile";
+import { queryKeys } from "@/lib/api/query-keys";
+
+const PERSON_NAME = /^[\p{L}][\p{L}\p{M}' -]*$/u;
+const profileSchema = z.object({
+  birthDate: z.string().refine(
+    (value) => !value || (value >= "1900-01-01" && value <= today()),
+    "Укажите корректную дату рождения",
+  ),
+  email: z
+    .string()
+    .trim()
+    .max(254, "Не более 254 символов")
+    .refine(
+      (value) => !value || z.string().email().safeParse(value).success,
+      "Проверьте адрес электронной почты",
+    ),
+  firstName: personName("имя"),
+  lastName: personName("фамилию"),
+  middleName: z
+    .string()
+    .trim()
+    .max(100, "Не более 100 символов")
+    .refine((value) => !value || PERSON_NAME.test(value), "Проверьте отчество"),
+});
+
+type ProfileFormValues = z.infer<typeof profileSchema>;
+
+const emptyProfile: ProfileFormValues = {
+  birthDate: "",
+  email: "",
+  firstName: "",
+  lastName: "",
+  middleName: "",
+};
+
+export function ProfileScreen({
+  fallbackPhone,
+}: {
+  fallbackPhone: VerifiedPhone;
+}) {
+  const queryClient = useQueryClient();
+  const [saved, setSaved] = useState(false);
+  const profile = useQuery({
+    queryFn: getProfile,
+    queryKey: queryKeys.profile.current(),
+    retry: false,
+  });
+  const form = useForm<ProfileFormValues>({
+    defaultValues: emptyProfile,
+    mode: "onBlur",
+    resolver: zodResolver(profileSchema),
+  });
+  const mutation = useMutation({
+    mutationFn: (body: UpdateUserProfileRequest) => updateProfile(body),
+    onSuccess: (nextProfile) => {
+      queryClient.setQueryData(queryKeys.profile.current(), nextProfile);
+      form.reset(toFormValues(nextProfile));
+      setSaved(true);
+    },
+  });
+
+  useEffect(() => {
+    if (profile.data) {
+      form.reset(toFormValues(profile.data));
+    }
+  }, [form, profile.data]);
+
+  useEffect(() => {
+    if (!saved) return;
+    const timeout = window.setTimeout(() => setSaved(false), 3_000);
+    return () => window.clearTimeout(timeout);
+  }, [saved]);
+
+  if (profile.isPending) {
+    return <ProfileLoading />;
+  }
+
+  if (profile.error || !profile.data) {
+    return (
+      <div className="screen-content">
+        <header className="screen-header">
+          <div>
+            <p className="screen-eyebrow">Личные данные</p>
+            <h1>Профиль</h1>
+          </div>
+        </header>
+        <Card className="profile-query-error">
+          <CircleAlert size={24} />
+          <div>
+            <strong>Не удалось загрузить профиль</strong>
+            <p>{profile.error?.message}</p>
+          </div>
+          <Button type="button" variant="outline" onClick={() => profile.refetch()}>
+            <RefreshCw size={15} /> Повторить
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  const data = profile.data;
+  const displayName = [data.firstName, data.lastName].filter(Boolean).join(" ");
+  const identity = data.maxUsername
+    ? `@${data.maxUsername}`
+    : "Аккаунт MAX";
+  const phone = data.phone ?? fallbackPhone;
+
+  return (
+    <div className="screen-content profile-screen">
+      <header className="screen-header">
+        <div>
+          <p className="screen-eyebrow">Личные данные</p>
+          <h1>Профиль</h1>
+        </div>
+      </header>
+
+      <Card className="profile-card">
+        <span className="profile-avatar"><UserRound size={27} /></span>
+        <div>
+          <span className="profile-connection"><Check size={12} /> MAX подключён</span>
+          <h2>{displayName || "Пользователь MAX"}</h2>
+          <p>{identity}</p>
+        </div>
+      </Card>
+
+      <form
+        className="profile-form"
+        onChange={() => setSaved(false)}
+        onSubmit={form.handleSubmit((values) =>
+          mutation.mutate({
+            birthDate: values.birthDate || null,
+            email: values.email || null,
+            firstName: values.firstName,
+            lastName: values.lastName,
+            middleName: values.middleName || null,
+          }),
+        )}
+      >
+        <div className="profile-form-heading">
+          <div>
+            <span>Физическое лицо</span>
+            <h2>Основные данные</h2>
+          </div>
+          <ShieldCheck size={20} />
+        </div>
+
+        <ProfileField error={form.formState.errors.lastName?.message} inputId="profile-last-name" label="Фамилия">
+          <Input
+            {...form.register("lastName")}
+            aria-invalid={Boolean(form.formState.errors.lastName)}
+            autoComplete="family-name"
+            id="profile-last-name"
+          />
+        </ProfileField>
+        <ProfileField error={form.formState.errors.firstName?.message} inputId="profile-first-name" label="Имя">
+          <Input
+            {...form.register("firstName")}
+            aria-invalid={Boolean(form.formState.errors.firstName)}
+            autoComplete="given-name"
+            id="profile-first-name"
+          />
+        </ProfileField>
+        <ProfileField error={form.formState.errors.middleName?.message} inputId="profile-middle-name" label="Отчество">
+          <Input
+            {...form.register("middleName")}
+            aria-invalid={Boolean(form.formState.errors.middleName)}
+            autoComplete="additional-name"
+            id="profile-middle-name"
+            placeholder="Если есть"
+          />
+        </ProfileField>
+        <ProfileField error={form.formState.errors.birthDate?.message} inputId="profile-birth-date" label="Дата рождения">
+          <Controller
+            control={form.control}
+            name="birthDate"
+            render={({ field }) => (
+              <DatePicker
+                aria-invalid={Boolean(form.formState.errors.birthDate)}
+                id="profile-birth-date"
+                onChange={(value) => {
+                  field.onChange(value);
+                  setSaved(false);
+                }}
+                value={field.value}
+              />
+            )}
+          />
+        </ProfileField>
+        <ProfileField error={form.formState.errors.email?.message} inputId="profile-email" label="Электронная почта">
+          <div className="input-with-icon">
+            <Mail size={16} />
+            <Input
+              {...form.register("email")}
+              aria-invalid={Boolean(form.formState.errors.email)}
+              autoComplete="email"
+              id="profile-email"
+              inputMode="email"
+              placeholder="name@example.ru"
+              type="email"
+            />
+          </div>
+        </ProfileField>
+
+        <Card className="verified-contact-card">
+          <LockKeyhole size={18} />
+          <span>
+            <strong>{formatPhone(phone.e164)}</strong>
+            <small>
+              {phone.source === "MAX"
+                ? "Номер подтверждён MAX"
+                : "Номер подтверждён"}
+            </small>
+          </span>
+        </Card>
+
+        {mutation.error ? (
+          <p className="profile-submit-error" role="alert">
+            <CircleAlert size={14} /> {mutation.error.message}
+          </p>
+        ) : null}
+        {saved ? (
+          <p className="validation-success" role="status">
+            <Check size={14} /> Изменения сохранены
+          </p>
+        ) : null}
+        <Button className="full-width" disabled={mutation.isPending} type="submit">
+          <Save size={16} /> {mutation.isPending ? "Сохраняем…" : "Сохранить профиль"}
+        </Button>
+      </form>
+    </div>
+  );
+}
+
+function ProfileField({
+  children,
+  error,
+  inputId,
+  label,
+}: {
+  children: ReactNode;
+  error?: string;
+  inputId: string;
+  label: string;
+}) {
+  return (
+    <div className="form-field">
+      <label htmlFor={inputId}>{label}</label>
+      {children}
+      {error ? <small className="field-error">{error}</small> : null}
+    </div>
+  );
+}
+
+function ProfileLoading() {
+  return (
+    <div className="screen-content profile-screen">
+      <p className="screen-eyebrow">Личные данные</p>
+      <h1 className="profile-loading-title">Профиль</h1>
+      <Skeleton className="profile-loading-card" />
+      <Skeleton className="profile-loading-form" />
+    </div>
+  );
+}
+
+function personName(label: string) {
+  return z
+    .string()
+    .trim()
+    .min(1, `Укажите ${label}`)
+    .max(100, "Не более 100 символов")
+    .regex(PERSON_NAME, `Проверьте ${label}`);
+}
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function toFormValues(profile: {
+  birthDate: string | null;
+  email: string | null;
+  firstName: string;
+  lastName: string;
+  middleName: string | null;
+}): ProfileFormValues {
+  return {
+    birthDate: profile.birthDate ?? "",
+    email: profile.email ?? "",
+    firstName: profile.firstName,
+    lastName: profile.lastName,
+    middleName: profile.middleName ?? "",
+  };
+}
+
+function formatPhone(e164: string): string {
+  const russian = e164.match(/^\+7(\d{3})(\d{3})(\d{2})(\d{2})$/);
+  return russian
+    ? `+7 (${russian[1]}) ${russian[2]}-${russian[3]}-${russian[4]}`
+    : e164;
+}

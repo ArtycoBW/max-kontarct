@@ -13,7 +13,7 @@ export default function ErrorBoundary({ reset }: { reset: () => void }) {
             <CircleAlert size={31} />
           </span>
           <h1>Не удалось открыть приложение</h1>
-          <p>Попробуйте ещё раз. Если ошибка повторится, вернитесь позже.</p>
+          <p>Повторите попытку или перезапустите приложение.</p>
           <Button onClick={reset}>
             <RefreshCw size={17} /> Повторить
           </Button>

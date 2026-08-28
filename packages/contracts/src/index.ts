@@ -59,3 +59,51 @@ export interface MaxContactRequest {
   hash: string;
   phone: string;
 }
+
+export interface UserProfileResponse {
+  birthDate: string | null;
+  email: string | null;
+  firstName: string;
+  lastName: string;
+  maxUsername: string | null;
+  middleName: string | null;
+  phone: VerifiedPhone | null;
+  updatedAt: string | null;
+}
+
+export interface UpdateUserProfileRequest {
+  birthDate: string | null;
+  email: string | null;
+  firstName: string;
+  lastName: string;
+  middleName: string | null;
+}
+
+export interface AdminUserListItem {
+  createdAt: string;
+  displayName: string;
+  id: string;
+  lastSeenAt: string | null;
+  profileCompleted: boolean;
+  role: AuthUserRole;
+}
+
+export interface AdminUserListResponse {
+  items: AdminUserListItem[];
+  total: number;
+}
+
+export interface AdminAuditEvent {
+  actorUserId: string | null;
+  createdAt: string;
+  entityId: string | null;
+  entityType: string | null;
+  eventType: string;
+  id: string;
+  requestId: string | null;
+}
+
+export interface AdminAuditListResponse {
+  items: AdminAuditEvent[];
+  total: number;
+}

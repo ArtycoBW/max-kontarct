@@ -1,7 +1,6 @@
 "use client";
 
 import type {
-  AuthUser,
   OnboardingStateResponse,
   VerifiedPhone,
 } from "@max-contract/contracts";
@@ -43,6 +42,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/components/providers/auth-provider";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
+import { ProfileScreen } from "@/components/profile/profile-screen";
 import { getReadiness } from "@/lib/api/health";
 import { getOnboardingState } from "@/lib/api/onboarding";
 import { queryKeys } from "@/lib/api/query-keys";
@@ -248,7 +248,7 @@ function DealsScreen({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
         <span className="state-icon">
           <FolderOpen size={31} />
         </span>
-        <h2>Здесь появятся ваши сделки</h2>
+        <h2>Сделок пока нет</h2>
         <p>
           Создайте первый договор — подскажем, что заполнить и какие документы
           подготовить.
@@ -316,8 +316,7 @@ function CreateDealScreen() {
     <div className="screen-content">
       <ScreenHeader eyebrow="Новая сделка · шаг 1" title="Опишите договорённость" />
       <p className="screen-copy">
-        Пишите обычными словами. Юридическую структуру и шаблоны подключим на
-        следующих шагах.
+        Пишите обычными словами: укажите стороны, предмет сделки, сумму и сроки.
       </p>
 
       <form className="deal-form" onSubmit={handleSubmit(onSubmit)} noValidate>
@@ -393,8 +392,7 @@ function CreateDealScreen() {
 
         {validated ? (
           <div className="validation-success" role="status">
-            <Check size={16} /> Форма заполнена корректно и сохранила введённые
-            данные.
+            <Check size={16} /> Данные формы прошли проверку.
           </div>
         ) : null}
 
@@ -411,15 +409,14 @@ function DocumentsScreen() {
     <div className="screen-content">
       <ScreenHeader eyebrow="Защищённое хранилище" title="Документы" />
       <p className="screen-copy">
-        Файлы появятся здесь после создания сделки и будут доступны только её
-        участникам.
+        Здесь хранятся файлы выбранной сделки. Доступ есть только у её участников.
       </p>
       <Card className="center-state">
         <span className="state-icon">
           <Files size={31} />
         </span>
         <h2>Пока нет документов</h2>
-        <p>Требования к файлам будут показаны для выбранного типа договора.</p>
+        <p>Состав документов определяется выбранным типом договора.</p>
       </Card>
       <Card className="security-note">
         <LockKeyhole size={18} />
@@ -428,68 +425,6 @@ function DocumentsScreen() {
           <small>Доступ проверяется сервером перед каждым скачиванием.</small>
         </span>
       </Card>
-    </div>
-  );
-}
-
-function ProfileScreen({
-  phone,
-  user,
-}: {
-  phone: VerifiedPhone;
-  user: AuthUser;
-}) {
-  const name = [user.maxAccount.firstName, user.maxAccount.lastName]
-    .filter(Boolean)
-    .join(" ");
-  const identity = user.maxAccount.username
-    ? `@${user.maxAccount.username}`
-    : `MAX ID ${user.maxAccount.maxUserId}`;
-  const phoneStatus = `${formatPhone(phone.e164)} · ${
-    phone.source === "MAX" ? "подтверждён MAX" : "DEV-подтверждение"
-  }`;
-
-  return (
-    <div className="screen-content">
-      <ScreenHeader eyebrow="Личные данные" title="Профиль" />
-      <Card className="profile-card">
-        <span className="profile-avatar">
-          <UserRound size={27} />
-        </span>
-        <div>
-          <span className="profile-connection">
-            <Check size={12} /> MAX подключён
-          </span>
-          <h2>{name || "Пользователь MAX"}</h2>
-          <p>{identity}</p>
-        </div>
-      </Card>
-      <div className="profile-list">
-        {[
-          [ShieldCheck, "Согласия", "Версии документов и настройки"],
-          [LockKeyhole, "Безопасность", phoneStatus],
-          [FileCheck2, "Реквизиты", "Данные физического лица"],
-        ].map(([RowIcon, title, copy]) => {
-          const ItemIcon = RowIcon as Icon;
-          return (
-            <Button
-              type="button"
-              variant="unstyled"
-              key={title as string}
-              disabled
-            >
-              <span className="icon-tile">
-                <ItemIcon size={17} />
-              </span>
-              <span>
-                <strong>{title as string}</strong>
-                <small>{copy as string}</small>
-              </span>
-              <ChevronRight size={16} />
-            </Button>
-          );
-        })}
-      </div>
     </div>
   );
 }
@@ -530,18 +465,16 @@ function ActiveScreen({
   active,
   onNavigate,
   phone,
-  user,
 }: {
   active: AppTab;
   onNavigate: (tab: AppTab) => void;
   phone: VerifiedPhone;
-  user: AuthUser;
 }) {
   if (active === "home") return <HomeScreen onNavigate={onNavigate} />;
   if (active === "deals") return <DealsScreen onNavigate={onNavigate} />;
   if (active === "create") return <CreateDealScreen />;
   if (active === "documents") return <DocumentsScreen />;
-  return <ProfileScreen phone={phone} user={user} />;
+  return <ProfileScreen fallbackPhone={phone} />;
 }
 
 function AuthenticationLoading({
@@ -613,19 +546,14 @@ export function MiniAppShell({
   }
 
   return (
-    <AuthenticatedMiniApp
-      showEnvironmentBadge={showEnvironmentBadge}
-      user={auth.user}
-    />
+    <AuthenticatedMiniApp showEnvironmentBadge={showEnvironmentBadge} />
   );
 }
 
 function AuthenticatedMiniApp({
   showEnvironmentBadge,
-  user,
 }: {
   showEnvironmentBadge: boolean;
-  user: AuthUser;
 }) {
   const queryClient = useQueryClient();
   const onboarding = useQuery({
@@ -639,7 +567,7 @@ function AuthenticatedMiniApp({
       <AuthenticationLoading
         copy="Проверяем согласия и подтверждение телефона."
         eyebrow="Настройка профиля"
-        title="Готовим приложение"
+        title="Проверяем профиль"
       />
     );
   }
@@ -670,7 +598,6 @@ function AuthenticatedMiniApp({
     <AppWorkspace
       phone={onboarding.data.phone!}
       showEnvironmentBadge={showEnvironmentBadge}
-      user={user}
     />
   );
 }
@@ -678,11 +605,9 @@ function AuthenticatedMiniApp({
 function AppWorkspace({
   phone,
   showEnvironmentBadge,
-  user,
 }: {
   phone: VerifiedPhone;
   showEnvironmentBadge: boolean;
-  user: AuthUser;
 }) {
   const [active, setActive] = useState<AppTab>("deals");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -697,7 +622,7 @@ function AppWorkspace({
     <main className="app-viewport">
       <section className="mini-app" aria-label="Макс-Контракт">
         {showEnvironmentBadge ? (
-          <span className="environment-badge">LOCAL</span>
+          <span className="environment-badge">ТЕСТ</span>
         ) : null}
         <div className="mini-app-scroll" ref={scrollRef}>
           <AnimatePresence mode="wait" initial={false}>
@@ -713,7 +638,6 @@ function AppWorkspace({
                 active={active}
                 onNavigate={setActive}
                 phone={phone}
-                user={user}
               />
             </motion.div>
           </AnimatePresence>
@@ -722,11 +646,4 @@ function AppWorkspace({
       </section>
     </main>
   );
-}
-
-function formatPhone(e164: string): string {
-  const russian = e164.match(/^\+7(\d{3})(\d{3})(\d{2})(\d{2})$/);
-  return russian
-    ? `+7 (${russian[1]}) ${russian[2]}-${russian[3]}-${russian[4]}`
-    : e164;
 }
