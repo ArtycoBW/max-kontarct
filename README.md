@@ -29,6 +29,8 @@ Copy-Item .env.example .env
 npm ci
 npm run infra:up
 npm run infra:ps
+npm run prisma:migrate:deploy
+npm run prisma:seed
 npm run dev
 ```
 
@@ -53,6 +55,7 @@ npm run lint
 npm run typecheck
 npm test
 npm run test:e2e
+npm run test:integration
 npm run build
 docker compose -f docker-compose.dev.yml config
 docker compose -f docker-compose.dev.yml ps
@@ -65,3 +68,17 @@ npm run infra:down
 ```
 
 Именованные Docker volumes сохраняются после остановки Compose.
+
+## Локальная база данных
+
+`prisma:migrate:deploy` применяет versioned migrations и не использует `db push`.
+`prisma:seed` добавляет только явно помеченного mock-пользователя и запрещён при
+`NODE_ENV=production`. Seed идемпотентен и предназначен только для локальной
+разработки. Обе команды явно читают корневые `.env.local`/`.env`; без них в
+local development используется конфигурация Docker из `.env.example`, но в
+production `DATABASE_URL` всегда обязателен.
+
+Integration-тесты создают отдельную случайную PostgreSQL-базу, накатывают в неё
+все migrations с нуля и удаляют её после проверки. Локальная dev-база при этом
+не изменяется. Для отдельного тестового сервера используется
+`TEST_DATABASE_URL`; тесты не запускаются при `NODE_ENV=production`.

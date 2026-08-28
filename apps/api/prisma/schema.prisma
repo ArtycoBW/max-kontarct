@@ -6,3 +6,156 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPPORT
+
+  @@map("user_role")
+}
+
+enum PhoneVerificationSource {
+  MAX
+  DEV
+
+  @@map("phone_verification_source")
+}
+
+enum ConsentType {
+  PERSONAL_DATA
+  TERMS_OF_USE
+  STATUS_NOTIFICATIONS
+  ELECTRONIC_SIGNATURE
+
+  @@map("consent_type")
+}
+
+enum ConsentSource {
+  MINI_APP
+  DEV_SEED
+
+  @@map("consent_source")
+}
+
+model User {
+  id         String    @id @default(uuid()) @db.Uuid
+  role       UserRole  @default(USER)
+  lastSeenAt DateTime? @map("last_seen_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  auditEvents AuditEvent[]  @relation("AuditActor")
+  consents    UserConsent[]
+  maxAccount  MaxAccount?
+  phones      UserPhone[]
+  profile     UserProfile?
+  sessions    UserSession[]
+
+  @@index([role], map: "users_role_idx")
+  @@map("users")
+}
+
+model MaxAccount {
+  id                  String    @id @default(uuid()) @db.Uuid
+  userId              String    @unique(map: "max_accounts_user_id_key") @map("user_id") @db.Uuid
+  maxUserId           String    @unique(map: "max_accounts_max_user_id_key") @map("max_user_id") @db.VarChar(128)
+  username            String?   @db.VarChar(128)
+  firstName           String?   @map("first_name") @db.VarChar(128)
+  lastName            String?   @map("last_name") @db.VarChar(128)
+  languageCode        String?   @map("language_code") @db.VarChar(16)
+  lastAuthenticatedAt DateTime? @map("last_authenticated_at") @db.Timestamptz(3)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("max_accounts")
+}
+
+model UserSession {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  sessionHash String    @unique(map: "user_sessions_session_hash_key") @map("session_hash") @db.Char(64)
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(3)
+  lastSeenAt  DateTime? @map("last_seen_at") @db.Timestamptz(3)
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt], map: "user_sessions_expires_at_idx")
+  @@index([userId, revokedAt], map: "user_sessions_user_id_revoked_at_idx")
+  @@map("user_sessions")
+}
+
+model UserPhone {
+  id         String                  @id @default(uuid()) @db.Uuid
+  userId     String                  @map("user_id") @db.Uuid
+  e164       String                  @unique(map: "user_phones_e164_key") @db.VarChar(16)
+  source     PhoneVerificationSource
+  verifiedAt DateTime                @map("verified_at") @db.Timestamptz(3)
+  isPrimary  Boolean                 @default(false) @map("is_primary")
+  createdAt  DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "user_phones_user_id_idx")
+  @@map("user_phones")
+}
+
+model UserProfile {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @unique(map: "user_profiles_user_id_key") @map("user_id") @db.Uuid
+  firstName  String    @map("first_name") @db.VarChar(100)
+  lastName   String    @map("last_name") @db.VarChar(100)
+  middleName String?   @map("middle_name") @db.VarChar(100)
+  birthDate  DateTime? @map("birth_date") @db.Date
+  locale     String?   @db.VarChar(16)
+  timezone   String?   @db.VarChar(64)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model UserConsent {
+  id              String        @id @default(uuid()) @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  type            ConsentType
+  documentVersion String        @map("document_version") @db.VarChar(64)
+  documentHash    String?       @map("document_hash") @db.Char(64)
+  granted         Boolean
+  source          ConsentSource
+  recordedAt      DateTime      @default(now()) @map("recorded_at") @db.Timestamptz(3)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, documentVersion], map: "user_consents_user_type_version_key")
+  @@index([userId, type, createdAt], map: "user_consents_user_type_created_at_idx")
+  @@map("user_consents")
+}
+
+model AuditEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  eventType   String   @map("event_type") @db.VarChar(128)
+  entityType  String?  @map("entity_type") @db.VarChar(64)
+  entityId    String?  @map("entity_id") @db.VarChar(128)
+  requestId   String?  @map("request_id") @db.VarChar(128)
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt], map: "audit_events_actor_created_at_idx")
+  @@index([entityType, entityId, createdAt], map: "audit_events_entity_created_at_idx")
+  @@index([eventType, createdAt], map: "audit_events_type_created_at_idx")
+  @@index([requestId], map: "audit_events_request_id_idx")
+  @@map("audit_events")
+}
