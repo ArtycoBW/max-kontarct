@@ -7,7 +7,11 @@ import {
   ConsentType,
   PhoneVerificationSource,
   PrismaClient,
+  TemplateVersionStatus,
 } from "@prisma/client";
+
+import { PrismaService } from "../src/database/prisma.service";
+import { TemplatesRepository } from "../src/templates/templates.repository";
 
 const DEFAULT_DATABASE_URL =
   "postgresql://max_contract:max_contract_dev@localhost:5434/max_contract";
@@ -93,12 +97,15 @@ describe("users/auth database foundation (integration)", () => {
       expect.arrayContaining([
         "_prisma_migrations",
         "audit_events",
+        "contract_template_versions",
+        "contract_templates",
         "max_accounts",
         "user_consents",
         "user_phones",
         "user_profiles",
         "user_sessions",
         "users",
+        "template_document_requirements",
       ]),
     );
   });
@@ -250,5 +257,119 @@ describe("users/auth database foundation (integration)", () => {
       entityType: "User",
       eventType: "USER_PROFILE_CREATED",
     });
+  });
+
+  it("stores versioned template schemas and version-specific document requirements", async () => {
+    const template = await database.contractTemplate.create({
+      data: {
+        isDemo: true,
+        slug: "integration-rental",
+        summary: "Демонстрационный шаблон для integration-теста",
+        title: "ДЕМО: аренда",
+        versions: {
+          create: [
+            {
+              questionnaireSchema: { properties: {}, type: "object" },
+              status: TemplateVersionStatus.DRAFT,
+              versionNumber: 1,
+            },
+            {
+              documentRequirements: {
+                create: {
+                  key: "identity_document",
+                  required: true,
+                  sortOrder: 10,
+                  title: "ДЕМО: документ",
+                },
+              },
+              publishedAt: new Date("2026-08-28T12:00:00.000Z"),
+              questionnaireSchema: {
+                properties: { subject: { type: "string" } },
+                type: "object",
+              },
+              status: TemplateVersionStatus.PUBLISHED,
+              versionNumber: 2,
+            },
+          ],
+        },
+      },
+      include: {
+        versions: {
+          include: { documentRequirements: true },
+          orderBy: { versionNumber: "asc" },
+        },
+      },
+    });
+
+    expect(template.versions).toHaveLength(2);
+    expect(template.versions[1]).toMatchObject({
+      status: TemplateVersionStatus.PUBLISHED,
+      versionNumber: 2,
+    });
+    expect(template.versions[1]?.documentRequirements).toEqual([
+      expect.objectContaining({ key: "identity_document", sortOrder: 10 }),
+    ]);
+
+    await database.contractTemplate.create({
+      data: {
+        slug: "integration-draft-only",
+        summary: "Черновик не должен попадать в пользовательский API",
+        title: "ДЕМО: только черновик",
+        versions: {
+          create: {
+            questionnaireSchema: { properties: {}, type: "object" },
+            versionNumber: 1,
+          },
+        },
+      },
+    });
+
+    const repository = new TemplatesRepository(
+      database as unknown as PrismaService,
+    );
+    const published = await repository.findPublishedTemplates();
+    const details = await repository.findPublishedTemplateBySlug(
+      "integration-rental",
+    );
+
+    expect(published.map(({ slug }) => slug)).toContain("integration-rental");
+    expect(published.map(({ slug }) => slug)).not.toContain(
+      "integration-draft-only",
+    );
+    expect(details?.versions[0]).toMatchObject({
+      status: TemplateVersionStatus.PUBLISHED,
+      versionNumber: 2,
+    });
+
+    await expect(
+      database.contractTemplateVersion.create({
+        data: {
+          questionnaireSchema: { type: "object" },
+          templateId: template.id,
+          versionNumber: 2,
+        },
+      }),
+    ).rejects.toMatchObject({ code: "P2002" });
+  });
+
+  it("rejects invalid template lifecycle data at the database boundary", async () => {
+    const template = await database.contractTemplate.create({
+      data: {
+        slug: "integration-invalid-lifecycle",
+        summary: "Проверка ограничений жизненного цикла",
+        title: "ДЕМО: проверка ограничений",
+      },
+    });
+
+    await expect(
+      database.contractTemplateVersion.create({
+        data: {
+          questionnaireSchema: { type: "object" },
+          status: TemplateVersionStatus.PUBLISHED,
+          templateId: template.id,
+          versionNumber: 1,
+        },
+      }),
+    ).rejects.toBeDefined();
   });
 });

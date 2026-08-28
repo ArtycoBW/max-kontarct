@@ -15,6 +15,7 @@ import { OnboardingModule } from "./onboarding/onboarding.module";
 import { ProfileModule } from "./profile/profile.module";
 import { RedisModule } from "./redis/redis.module";
 import { StorageModule } from "./storage/storage.module";
+import { TemplatesModule } from "./templates/templates.module";
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { StorageModule } from "./storage/storage.module";
     OnboardingModule,
     ProfileModule,
     AdminModule,
+    TemplatesModule,
   ],
   providers: [
     {

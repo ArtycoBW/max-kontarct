@@ -107,3 +107,46 @@ export interface AdminAuditListResponse {
   items: AdminAuditEvent[];
   total: number;
 }
+
+export type ContractTemplateVersionStatus =
+  | "DRAFT"
+  | "PUBLISHED"
+  | "ARCHIVED";
+
+export interface ContractTemplateVersionSummary {
+  id: string;
+  publishedAt: string;
+  status: "PUBLISHED";
+  versionNumber: number;
+}
+
+export interface ContractTemplateListItem {
+  currentVersion: ContractTemplateVersionSummary;
+  id: string;
+  isDemo: boolean;
+  slug: string;
+  summary: string;
+  title: string;
+}
+
+export interface ContractTemplateListResponse {
+  items: ContractTemplateListItem[];
+  total: number;
+}
+
+export interface TemplateDocumentRequirementResponse {
+  description: string | null;
+  id: string;
+  key: string;
+  required: boolean;
+  sortOrder: number;
+  title: string;
+}
+
+export interface ContractTemplateDetailsResponse
+  extends ContractTemplateListItem {
+  currentVersion: ContractTemplateVersionSummary & {
+    documentRequirements: TemplateDocumentRequirementResponse[];
+    questionnaireSchema: Record<string, unknown>;
+  };
+}

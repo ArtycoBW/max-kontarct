@@ -38,6 +38,14 @@ enum ConsentSource {
   @@map("consent_source")
 }
 
+enum TemplateVersionStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+
+  @@map("template_version_status")
+}
+
 model User {
   id         String    @id @default(uuid()) @db.Uuid
   role       UserRole  @default(USER)
@@ -159,4 +167,57 @@ model AuditEvent {
   @@index([eventType, createdAt], map: "audit_events_type_created_at_idx")
   @@index([requestId], map: "audit_events_request_id_idx")
   @@map("audit_events")
+}
+
+model ContractTemplate {
+  id        String   @id @default(uuid()) @db.Uuid
+  slug      String   @unique(map: "contract_templates_slug_key") @db.VarChar(100)
+  title     String   @db.VarChar(160)
+  summary   String   @db.VarChar(500)
+  isDemo    Boolean  @default(false) @map("is_demo")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  versions ContractTemplateVersion[]
+
+  @@index([isDemo, title], map: "contract_templates_demo_title_idx")
+  @@map("contract_templates")
+}
+
+model ContractTemplateVersion {
+  id                  String                @id @default(uuid()) @db.Uuid
+  templateId          String                @map("template_id") @db.Uuid
+  versionNumber       Int                   @map("version_number")
+  status              TemplateVersionStatus @default(DRAFT)
+  questionnaireSchema Json                  @map("questionnaire_schema")
+  publishedAt         DateTime?             @map("published_at") @db.Timestamptz(3)
+  archivedAt          DateTime?             @map("archived_at") @db.Timestamptz(3)
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  documentRequirements TemplateDocumentRequirement[]
+  template             ContractTemplate              @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, versionNumber], map: "contract_template_versions_template_version_key")
+  @@index([status, publishedAt], map: "contract_template_versions_status_published_idx")
+  @@index([templateId, status, versionNumber], map: "contract_template_versions_template_status_version_idx")
+  @@map("contract_template_versions")
+}
+
+model TemplateDocumentRequirement {
+  id                String   @id @default(uuid()) @db.Uuid
+  templateVersionId String   @map("template_version_id") @db.Uuid
+  key               String   @db.VarChar(64)
+  title             String   @db.VarChar(160)
+  description       String?  @db.VarChar(500)
+  required          Boolean  @default(true)
+  sortOrder         Int      @default(0) @map("sort_order")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  templateVersion ContractTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([templateVersionId, key], map: "template_document_requirements_version_key_key")
+  @@index([templateVersionId, sortOrder], map: "template_document_requirements_version_sort_idx")
+  @@map("template_document_requirements")
 }
