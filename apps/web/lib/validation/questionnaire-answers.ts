@@ -13,13 +13,30 @@ export interface QuestionnaireField {
   maximum?: number;
   minLength?: number;
   minimum?: number;
+  pattern?: string;
   required: boolean;
   title: string;
   type: QuestionnaireFieldType;
 }
 
+export type QuestionnaireRule =
+  | {
+      endField: string;
+      kind: "dateOrder";
+      message?: string;
+      startField: string;
+    }
+  | {
+      dependsOn: string;
+      equals: boolean | number | string;
+      field: string;
+      kind: "requiredWhen";
+      message?: string;
+    };
+
 export interface QuestionnaireDefinition {
   fields: QuestionnaireField[];
+  rules: QuestionnaireRule[];
   title: string | null;
 }
 
@@ -64,10 +81,92 @@ export function normalizeQuestionnaireAnswers(
       continue;
     }
 
-    answers[field.key] = rawValue;
+    if (field.type === "boolean") {
+      if (typeof rawValue !== "boolean") {
+        errors[field.key] = "Выберите да или нет";
+      } else {
+        answers[field.key] = rawValue;
+      }
+      continue;
+    }
+
+    if (typeof rawValue !== "string") {
+      errors[field.key] = "Введите текстовое значение";
+      continue;
+    }
+    const normalizedValue = rawValue.trim();
+    if (field.minLength !== undefined && normalizedValue.length < field.minLength) {
+      errors[field.key] = `Введите не менее ${field.minLength} символов`;
+    } else if (
+      field.maxLength !== undefined &&
+      normalizedValue.length > field.maxLength
+    ) {
+      errors[field.key] = `Введите не более ${field.maxLength} символов`;
+    } else if (field.enum && !field.enum.includes(normalizedValue)) {
+      errors[field.key] = "Выберите значение из списка";
+    } else if (field.format === "date" && !isDateOnly(normalizedValue)) {
+      errors[field.key] = "Укажите корректную дату";
+    } else if (field.format === "email" && !isEmail(normalizedValue)) {
+      errors[field.key] = "Укажите корректный email";
+    } else if (field.pattern && !matchesPattern(normalizedValue, field.pattern)) {
+      errors[field.key] = "Введите значение в указанном формате";
+    } else {
+      answers[field.key] = normalizedValue;
+    }
   }
 
+  applyCrossFieldRules(definition, rawAnswers, answers, errors);
+
   return { answers, errors };
+}
+
+function applyCrossFieldRules(
+  definition: QuestionnaireDefinition,
+  rawAnswers: Record<string, unknown>,
+  answers: Record<string, unknown>,
+  errors: Record<string, string>,
+): void {
+  for (const rule of definition.rules) {
+    if (rule.kind === "dateOrder") {
+      const start = answers[rule.startField];
+      const end = answers[rule.endField];
+      if (
+        typeof start === "string" &&
+        typeof end === "string" &&
+        isDateOnly(start) &&
+        isDateOnly(end) &&
+        end < start
+      ) {
+        errors[rule.endField] =
+          rule.message ?? "Дата окончания не может быть раньше даты начала";
+      }
+      continue;
+    }
+    if (
+      rawAnswers[rule.dependsOn] === rule.equals &&
+      isEmptyValue(rawAnswers[rule.field])
+    ) {
+      errors[rule.field] = rule.message ?? "Заполните обязательное поле";
+    }
+  }
+}
+
+function isDateOnly(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(value);
+}
+
+function isEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function matchesPattern(value: string, pattern: string): boolean {
+  try {
+    return new RegExp(pattern, "u").test(value);
+  } catch {
+    return false;
+  }
 }
 
 function normalizeNumber(
@@ -112,5 +211,9 @@ function validateNumber(
 }
 
 function isEmptyValue(value: unknown): boolean {
-  return value === undefined || value === null || value === "";
+  return (
+    value === undefined ||
+    value === null ||
+    (typeof value === "string" && value.trim() === "")
+  );
 }

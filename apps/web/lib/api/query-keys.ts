@@ -18,6 +18,8 @@ export const queryKeys = {
   templates: {
     all: ["templates"] as const,
     detail: (slug: string) => [...queryKeys.templates.all, "detail", slug] as const,
+    generation: (sessionId: string) =>
+      [...queryKeys.templates.all, "generation", sessionId] as const,
     list: () => [...queryKeys.templates.all, "list"] as const,
   },
   admin: {

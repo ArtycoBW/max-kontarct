@@ -33,30 +33,47 @@ const MONTHS = [
 const FIRST_YEAR = 1900;
 
 export function DatePicker({
+  "aria-describedby": ariaDescribedBy,
   "aria-invalid": ariaInvalid,
   allowFuture = false,
   className,
   fromYear = FIRST_YEAR,
   id,
+  maximumValue,
+  minimumValue,
   onChange,
   toYear,
   value,
 }: {
+  "aria-describedby"?: string;
   "aria-invalid"?: boolean;
   allowFuture?: boolean;
   className?: string;
   fromYear?: number;
   id?: string;
+  maximumValue?: string;
+  minimumValue?: string;
   onChange: (value: string) => void;
   toYear?: number;
   value: string;
 }) {
   const selected = useMemo(() => parseDateOnly(value), [value]);
   const now = useMemo(() => new Date(), []);
-  const initialMonth = selected ?? new Date(now.getFullYear() - 30, 0, 1);
+  const lastYear = toYear ?? now.getFullYear();
+  const firstAllowedDate = useMemo(
+    () => parseDateOnly(minimumValue ?? "") ?? new Date(fromYear, 0, 1),
+    [fromYear, minimumValue],
+  );
+  const lastAllowedDate = useMemo(() => {
+    const configuredMaximum =
+      parseDateOnly(maximumValue ?? "") ?? new Date(lastYear, 11, 31);
+    return allowFuture
+      ? configuredMaximum
+      : earlierDate(configuredMaximum, now);
+  }, [allowFuture, lastYear, maximumValue, now]);
+  const initialMonth = clampDate(selected ?? now, firstAllowedDate, lastAllowedDate);
   const [open, setOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(initialMonth);
-  const lastYear = toYear ?? now.getFullYear();
   const years = useMemo(
     () => Array.from({ length: lastYear - fromYear + 1 }, (_, index) => lastYear - index),
     [fromYear, lastYear],
@@ -73,12 +90,17 @@ export function DatePicker({
     <Popover
       open={open}
       onOpenChange={(nextOpen) => {
-        if (nextOpen && selected) setVisibleMonth(selected);
+        if (nextOpen) {
+          setVisibleMonth(
+            clampDate(selected ?? now, firstAllowedDate, lastAllowedDate),
+          );
+        }
         setOpen(nextOpen);
       }}
     >
       <PopoverTrigger asChild>
         <Button
+          aria-describedby={ariaDescribedBy}
           aria-invalid={ariaInvalid}
           className={cn("date-picker-trigger", !selected && "is-placeholder", className)}
           id={id}
@@ -115,8 +137,8 @@ export function DatePicker({
         <Calendar
           classNames={{ month_caption: "calendar-caption is-visually-hidden" }}
           disabled={{
-            after: allowFuture ? new Date(lastYear, 11, 31) : now,
-            before: new Date(fromYear, 0, 1),
+            after: lastAllowedDate,
+            before: firstAllowedDate,
           }}
           hideNavigation
           locale={ru}
@@ -156,7 +178,22 @@ function parseDateOnly(value: string): Date | undefined {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return undefined;
   const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  return Number.isNaN(date.getTime()) ? undefined : date;
+  return !Number.isNaN(date.getTime()) &&
+    date.getFullYear() === Number(match[1]) &&
+    date.getMonth() === Number(match[2]) - 1 &&
+    date.getDate() === Number(match[3])
+    ? date
+    : undefined;
+}
+
+function clampDate(date: Date, minimum: Date, maximum: Date): Date {
+  if (date < minimum) return minimum;
+  if (date > maximum) return maximum;
+  return date;
+}
+
+function earlierDate(first: Date, second: Date): Date {
+  return first < second ? first : second;
 }
 
 function toDateOnly(date: Date): string {

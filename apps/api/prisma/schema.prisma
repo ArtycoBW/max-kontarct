@@ -49,6 +49,10 @@ enum TemplateVersionStatus {
 enum AiGenerationStatus {
   NEED_MORE_INFO
   READY_TO_GENERATE
+  QUEUED
+  GENERATING
+  COMPLETED
+  FAILED
 
   @@map("ai_generation_status")
 }
@@ -224,6 +228,12 @@ model AiGeneration {
   providerMetadata     Json               @map("provider_metadata")
   promptId             String             @map("prompt_id") @db.VarChar(64)
   promptVersion        String             @map("prompt_version") @db.VarChar(32)
+  structuredDraft      Json?              @map("structured_draft")
+  failureCode          String?            @map("failure_code") @db.VarChar(64)
+  attemptCount         Int                @default(0) @map("attempt_count")
+  queuedAt             DateTime?          @map("queued_at") @db.Timestamptz(3)
+  startedAt            DateTime?          @map("started_at") @db.Timestamptz(3)
+  failedAt             DateTime?          @map("failed_at") @db.Timestamptz(3)
   completedAt          DateTime?          @map("completed_at") @db.Timestamptz(3)
   createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -232,6 +242,7 @@ model AiGeneration {
   templateVersion ContractTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
 
   @@index([userId, createdAt], map: "ai_generations_user_created_at_idx")
+  @@index([userId, status, updatedAt], map: "ai_generations_user_status_updated_idx")
   @@index([templateVersionId, status], map: "ai_generations_template_status_idx")
   @@map("ai_generations")
 }

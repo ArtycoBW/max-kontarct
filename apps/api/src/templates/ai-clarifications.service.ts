@@ -81,7 +81,7 @@ export class AiClarificationsService {
         message: "Сессия уточняющих вопросов не найдена",
       });
     }
-    if (session.status === AiGenerationStatus.READY_TO_GENERATE) {
+    if (session.status !== AiGenerationStatus.NEED_MORE_INFO) {
       throw new ConflictException({
         code: "AI_CLARIFICATION_ALREADY_READY",
         message: "Уточняющие вопросы уже завершены",
@@ -298,26 +298,42 @@ function parseQuestions(value: Prisma.JsonValue): AiClarificationQuestion[] {
 }
 
 function toResponse(record: AiClarificationRecord): AiClarificationSessionResponse {
+  const status = toClarificationStatus(record.status);
   return {
     answers: record.clarificationAnswers
       ? toJsonObject(record.clarificationAnswers)
       : {},
     createdAt: record.createdAt.toISOString(),
     id: record.id,
-    questions: parseQuestionsForStatus(record.questions, record.status),
-    status: record.status,
+    questions: parseQuestionsForStatus(record.questions, status),
+    status,
     updatedAt: record.updatedAt.toISOString(),
   };
 }
 
 function parseQuestionsForStatus(
   value: Prisma.JsonValue,
-  status: AiGenerationStatus,
+  status: AiClarificationStatus,
 ): AiClarificationQuestion[] {
   if (!Array.isArray(value)) throw storedDataInvalid();
   const questions = value as unknown as AiClarificationQuestion[];
   assertClarificationOutput({ questions, status });
   return questions;
+}
+
+function toClarificationStatus(
+  status: AiGenerationStatus,
+): AiClarificationStatus {
+  if (
+    status === AiGenerationStatus.NEED_MORE_INFO ||
+    status === AiGenerationStatus.READY_TO_GENERATE
+  ) {
+    return status;
+  }
+  throw new ConflictException({
+    code: "AI_CLARIFICATION_ALREADY_READY",
+    message: "Уточняющие вопросы уже завершены",
+  });
 }
 
 function toDatabaseStatus(status: AiClarificationStatus): AiGenerationStatus {

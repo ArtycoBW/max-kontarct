@@ -70,6 +70,21 @@ describe("YandexAiProvider", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+  it("supports a larger bounded response for a contract draft", async () => {
+    const fetcher = jest.fn<ReturnType<AiFetch>, Parameters<AiFetch>>();
+    fetcher.mockResolvedValue(successResponse());
+    const request = baseRequest();
+    request.maxTokens = 4_000;
+
+    await createProvider(fetcher).generateStructured(request);
+
+    const serializedBody = fetcher.mock.calls[0]?.[1]?.body;
+    expect(typeof serializedBody).toBe("string");
+    expect(JSON.parse(serializedBody as string)).toMatchObject({
+      max_completion_tokens: 4_000,
+    });
+  });
+
   it("does not retry a timeout or an HTTP response", async () => {
     const timeoutFetcher = jest.fn<ReturnType<AiFetch>, Parameters<AiFetch>>();
     const timeout = new Error("timeout");

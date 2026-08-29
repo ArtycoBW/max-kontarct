@@ -2637,6 +2637,202 @@ button.service-status {
   line-height: 1.55;
 }
 
+.contract-generation-screen {
+  gap: 20px;
+}
+
+.generation-state {
+  display: flex;
+  min-height: 470px;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 36px 20px;
+  text-align: center;
+}
+
+.generation-state h2 {
+  max-width: 290px;
+  margin: 25px 0 10px;
+  color: var(--ink-deep);
+  font-size: 27px;
+  font-weight: 500;
+  letter-spacing: -0.05em;
+  line-height: 1.05;
+}
+
+.generation-state p {
+  max-width: 305px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.generation-state.is-failed .state-icon {
+  color: var(--danger);
+  background: var(--danger-tint);
+}
+
+.generation-state.is-failed .button {
+  margin-top: 24px;
+}
+
+.generation-orbit {
+  position: relative;
+  width: 82px;
+  height: 82px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--accent-tint);
+}
+
+.generation-orbit::before,
+.generation-orbit::after {
+  position: absolute;
+  border-radius: inherit;
+  content: "";
+  inset: 12px;
+  border: 1px solid rgba(255, 59, 39, 0.2);
+}
+
+.generation-orbit::after {
+  inset: 25px;
+  border: 0;
+  background: var(--accent);
+  box-shadow: 0 6px 18px rgba(255, 59, 39, 0.25);
+}
+
+.generation-orbit > span {
+  position: absolute;
+  z-index: 2;
+  top: -4px;
+  left: 35px;
+  width: 12px;
+  height: 12px;
+  border: 3px solid var(--surface);
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.generation-progress {
+  width: min(100%, 300px);
+  height: 6px;
+  overflow: hidden;
+  margin-top: 28px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.generation-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.generation-progress-value {
+  margin-top: 8px;
+  color: var(--accent);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.contract-draft {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 12px;
+}
+
+.contract-draft-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--success-tint);
+}
+
+.contract-draft-heading .state-icon {
+  width: 50px;
+  height: 50px;
+  color: var(--success);
+  background: var(--surface);
+}
+
+.contract-draft-heading span:not(.state-icon) {
+  color: var(--success);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.contract-draft-heading h2 {
+  margin: 4px 0 0;
+  color: var(--ink-deep);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+}
+
+.contract-draft-preamble {
+  margin: 0;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.contract-draft-section {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.contract-draft-section h3 {
+  margin: 0 0 10px;
+  color: var(--ink-deep);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.contract-draft-section ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.contract-draft-checklist {
+  padding: 16px;
+  border-color: var(--border-strong);
+  background: var(--accent-tint);
+}
+
+.contract-draft-checklist strong {
+  color: var(--ink-deep);
+  font-size: 11px;
+}
+
+.contract-draft-checklist ul {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0 0;
+  padding-left: 16px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
 .selected-template-summary {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

@@ -7,6 +7,7 @@ import Ajv2020 from "ajv/dist/2020";
 import addFormats from "ajv-formats";
 
 const SUPPORTED_FIELD_TYPES = new Set(["boolean", "integer", "number", "string"]);
+const PRESENTATION_KEYWORDS = ["x-fieldOrder", "x-rules"] as const;
 
 @Injectable()
 export class TemplateSchemaValidator {
@@ -23,6 +24,9 @@ export class TemplateSchemaValidator {
       removeAdditional: false,
       strict: true,
     });
+    for (const keyword of PRESENTATION_KEYWORDS) {
+      this.ajv.addKeyword({ keyword, valid: true });
+    }
     addFormats(this.ajv);
   }
 
@@ -39,7 +43,13 @@ export class TemplateSchemaValidator {
     answers: Record<string, unknown>,
   ): TemplateAnswerValidationError[] {
     const validate = this.getValidator(templateVersionId, schema);
-    return validate(answers) ? [] : mapValidationErrors(validate.errors ?? []);
+    const schemaErrors = validate(answers)
+      ? []
+      : mapValidationErrors(validate.errors ?? []);
+    return [
+      ...schemaErrors,
+      ...validateCrossFieldRules(schema, answers, schemaErrors),
+    ];
   }
 
   private getValidator(
@@ -73,7 +83,8 @@ function assertRenderableQuestionnaire(schema: Record<string, unknown>): void {
     throw invalidTemplateSchema();
   }
 
-  for (const field of Object.values(schema.properties)) {
+  const properties = schema.properties;
+  for (const field of Object.values(properties)) {
     if (
       !isRecord(field) ||
       typeof field.title !== "string" ||
@@ -94,6 +105,131 @@ function assertRenderableQuestionnaire(schema: Record<string, unknown>): void {
       throw invalidTemplateSchema();
     }
   }
+
+  assertFieldOrder(schema["x-fieldOrder"], properties);
+  assertCrossFieldRules(schema["x-rules"], properties);
+}
+
+function assertFieldOrder(
+  rawOrder: unknown,
+  properties: Record<string, unknown>,
+): void {
+  if (rawOrder === undefined) return;
+  if (
+    !Array.isArray(rawOrder) ||
+    rawOrder.length !== Object.keys(properties).length ||
+    rawOrder.some((key) => typeof key !== "string" || !(key in properties)) ||
+    new Set(rawOrder).size !== rawOrder.length
+  ) {
+    throw invalidTemplateSchema();
+  }
+}
+
+function assertCrossFieldRules(
+  rawRules: unknown,
+  properties: Record<string, unknown>,
+): void {
+  if (rawRules === undefined) return;
+  if (!Array.isArray(rawRules)) throw invalidTemplateSchema();
+
+  for (const rule of rawRules) {
+    if (!isRecord(rule) || typeof rule.kind !== "string") {
+      throw invalidTemplateSchema();
+    }
+    if (rule.kind === "dateOrder") {
+      if (
+        typeof rule.startField !== "string" ||
+        typeof rule.endField !== "string" ||
+        !isDateField(properties[rule.startField]) ||
+        !isDateField(properties[rule.endField]) ||
+        (rule.message !== undefined && typeof rule.message !== "string")
+      ) {
+        throw invalidTemplateSchema();
+      }
+      continue;
+    }
+    if (rule.kind === "requiredWhen") {
+      if (
+        typeof rule.field !== "string" ||
+        typeof rule.dependsOn !== "string" ||
+        !(rule.field in properties) ||
+        !(rule.dependsOn in properties) ||
+        !["boolean", "number", "string"].includes(typeof rule.equals) ||
+        (rule.message !== undefined && typeof rule.message !== "string")
+      ) {
+        throw invalidTemplateSchema();
+      }
+      continue;
+    }
+    throw invalidTemplateSchema();
+  }
+}
+
+function validateCrossFieldRules(
+  schema: Record<string, unknown>,
+  answers: Record<string, unknown>,
+  schemaErrors: TemplateAnswerValidationError[],
+): TemplateAnswerValidationError[] {
+  const rules = schema["x-rules"];
+  if (!Array.isArray(rules)) return [];
+  const invalidPaths = new Set(schemaErrors.map(({ path }) => path));
+  const errors: TemplateAnswerValidationError[] = [];
+
+  for (const rawRule of rules) {
+    if (!isRecord(rawRule)) continue;
+    if (rawRule.kind === "dateOrder") {
+      const startField = String(rawRule.startField);
+      const endField = String(rawRule.endField);
+      const start = answers[startField];
+      const end = answers[endField];
+      if (
+        !invalidPaths.has(startField) &&
+        !invalidPaths.has(endField) &&
+        typeof start === "string" &&
+        typeof end === "string" &&
+        end < start
+      ) {
+        errors.push({
+          message:
+            typeof rawRule.message === "string"
+              ? rawRule.message
+              : "Дата окончания не может быть раньше даты начала",
+          path: endField,
+        });
+      }
+      continue;
+    }
+    if (rawRule.kind === "requiredWhen") {
+      const field = String(rawRule.field);
+      const dependsOn = String(rawRule.dependsOn);
+      if (
+        answers[dependsOn] === rawRule.equals &&
+        isEmptyValue(answers[field]) &&
+        !invalidPaths.has(field)
+      ) {
+        errors.push({
+          message:
+            typeof rawRule.message === "string"
+              ? rawRule.message
+              : "Заполните обязательное поле",
+          path: field,
+        });
+      }
+    }
+  }
+  return errors;
+}
+
+function isDateField(value: unknown): boolean {
+  return isRecord(value) && value.type === "string" && value.format === "date";
+}
+
+function isEmptyValue(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === null ||
+    (typeof value === "string" && value.trim() === "")
+  );
 }
 
 function mapValidationErrors(
@@ -140,6 +276,8 @@ function validationMessage(error: ErrorObject): string {
       return "Некорректный формат";
     case "enum":
       return "Выберите значение из списка";
+    case "pattern":
+      return "Введите значение в указанном формате";
     default:
       return "Некорректное значение";
   }

@@ -78,7 +78,7 @@ export class YandexAiProvider implements AiProvider {
     const redacted = this.piiRedactor.redact(request.userData, request.piiPaths);
     const modelUri = `gpt://${this.folderId}/${this.model}`;
     const body = {
-      max_completion_tokens: this.maxTokens,
+      max_completion_tokens: resolveMaxTokens(request.maxTokens, this.maxTokens),
       messages: buildAiMessages(request, redacted.data),
       model: modelUri,
       n: 1,
@@ -173,6 +173,17 @@ export class YandexAiProvider implements AiProvider {
       "Не удалось установить соединение с YandexGPT",
     );
   }
+}
+
+function resolveMaxTokens(requested: number | undefined, fallback: number): number {
+  if (requested === undefined) return fallback;
+  if (!Number.isInteger(requested) || requested < 64 || requested > 8_192) {
+    throw new AiProviderError(
+      "AI_REQUEST_INVALID",
+      "Некорректный лимит ответа AI",
+    );
+  }
+  return requested;
 }
 
 async function readProviderResponse(

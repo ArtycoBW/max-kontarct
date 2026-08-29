@@ -219,3 +219,31 @@ export interface AiClarificationSessionResponse {
   status: AiClarificationStatus;
   updatedAt: string;
 }
+
+export type ContractGenerationStatus =
+  | "QUEUED"
+  | "GENERATING"
+  | "COMPLETED"
+  | "FAILED";
+
+export interface ContractDraftSection {
+  clauses: string[];
+  heading: string;
+}
+
+export interface ContractStructuredDraft {
+  preamble: string;
+  sections: ContractDraftSection[];
+  title: string;
+  warnings: string[];
+}
+
+export interface ContractGenerationResponse {
+  createdAt: string;
+  draft: ContractStructuredDraft | null;
+  errorMessage: string | null;
+  id: string;
+  progress: number;
+  status: ContractGenerationStatus;
+  updatedAt: string;
+}

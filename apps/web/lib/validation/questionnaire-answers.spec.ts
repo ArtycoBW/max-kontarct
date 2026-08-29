@@ -65,6 +65,7 @@ describe("normalizeQuestionnaireAnswers", () => {
         { key: "amount", required: true, title: "Сумма", type: "number" },
         { key: "comment", required: false, title: "Комментарий", type: "string" },
       ],
+      rules: [],
       title: null,
     };
 
@@ -73,6 +74,63 @@ describe("normalizeQuestionnaireAnswers", () => {
     ).toEqual({
       answers: {},
       errors: { amount: "Заполните обязательное поле" },
+    });
+  });
+
+  it("trims strings and validates their length, format and enum", () => {
+    const definition: QuestionnaireDefinition = {
+      fields: [
+        { key: "subject", minLength: 5, maxLength: 20, required: true, title: "Предмет", type: "string" },
+        { key: "date", format: "date", required: true, title: "Дата", type: "string" },
+        { enum: ["Да", "Нет"], key: "choice", required: true, title: "Выбор", type: "string" },
+      ],
+      rules: [],
+      title: null,
+    };
+
+    expect(normalizeQuestionnaireAnswers(definition, {
+      choice: "Другое",
+      date: "2026-02-31",
+      subject: "  дом  ",
+    })).toEqual({
+      answers: {},
+      errors: {
+        choice: "Выберите значение из списка",
+        date: "Укажите корректную дату",
+        subject: "Введите не менее 5 символов",
+      },
+    });
+  });
+
+  it("validates date order and a conditionally required field", () => {
+    const definition: QuestionnaireDefinition = {
+      fields: [
+        { format: "date", key: "start", required: true, title: "Начало", type: "string" },
+        { format: "date", key: "end", required: true, title: "Окончание", type: "string" },
+        { enum: ["Без процентов", "С процентами"], key: "interestType", required: true, title: "Проценты", type: "string" },
+        { key: "interestRate", minimum: 0.01, required: false, title: "Ставка", type: "number" },
+      ],
+      rules: [
+        { endField: "end", kind: "dateOrder", startField: "start" },
+        { dependsOn: "interestType", equals: "С процентами", field: "interestRate", kind: "requiredWhen", message: "Укажите процентную ставку" },
+      ],
+      title: null,
+    };
+
+    expect(normalizeQuestionnaireAnswers(definition, {
+      end: "2026-08-29",
+      interestType: "С процентами",
+      start: "2026-08-30",
+    })).toEqual({
+      answers: {
+        end: "2026-08-29",
+        interestType: "С процентами",
+        start: "2026-08-30",
+      },
+      errors: {
+        end: "Дата окончания не может быть раньше даты начала",
+        interestRate: "Укажите процентную ставку",
+      },
     });
   });
 });
@@ -89,6 +147,7 @@ function numberDefinition(): QuestionnaireDefinition {
         type: "number",
       },
     ],
+    rules: [],
     title: null,
   };
 }
@@ -98,6 +157,7 @@ function unboundedNumberDefinition(): QuestionnaireDefinition {
     fields: [
       { key: "amount", required: true, title: "Сумма", type: "number" },
     ],
+    rules: [],
     title: null,
   };
 }
@@ -107,6 +167,7 @@ function integerDefinition(): QuestionnaireDefinition {
     fields: [
       { key: "count", required: true, title: "Количество", type: "integer" },
     ],
+    rules: [],
     title: null,
   };
 }

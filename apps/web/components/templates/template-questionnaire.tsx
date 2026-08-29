@@ -18,6 +18,7 @@ import type {
   QuestionnaireDefinition,
   QuestionnaireField,
   QuestionnaireFieldType,
+  QuestionnaireRule,
 } from "@/lib/validation/questionnaire-answers";
 
 export function TemplateQuestionnaire({
@@ -36,6 +37,7 @@ export function TemplateQuestionnaire({
       {definition.fields.map((field) => (
         <QuestionnaireFieldControl
           answers={answers}
+          definition={definition}
           error={errors[field.key]}
           field={field}
           key={field.key}
@@ -48,11 +50,13 @@ export function TemplateQuestionnaire({
 
 function QuestionnaireFieldControl({
   answers,
+  definition,
   error,
   field,
   onChange,
 }: {
   answers: Record<string, unknown>;
+  definition: QuestionnaireDefinition;
   error?: string;
   field: QuestionnaireField;
   onChange: (key: string, value: unknown) => void;
@@ -63,7 +67,9 @@ function QuestionnaireFieldControl({
   const label = (
     <>
       {field.title}
-      {field.required ? <span aria-hidden="true"> *</span> : null}
+      {isFieldRequired(field, definition, answers) ? (
+        <span aria-hidden="true"> *</span>
+      ) : null}
     </>
   );
 
@@ -116,14 +122,18 @@ function QuestionnaireFieldControl({
   }
 
   if (field.type === "string" && field.format === "date") {
+    const boundaries = getDateBoundaries(definition.rules, answers, field.key);
     return (
       <div className="form-field">
-        <label id={labelId}>{label}</label>
+        <label htmlFor={field.key} id={labelId}>{label}</label>
         <DatePicker
+          aria-describedby={error ? errorId : undefined}
           aria-invalid={Boolean(error)}
           allowFuture
           fromYear={new Date().getFullYear() - 20}
           id={field.key}
+          maximumValue={boundaries.maximumValue}
+          minimumValue={boundaries.minimumValue}
           onChange={(nextValue) => onChange(field.key, nextValue)}
           toYear={new Date().getFullYear() + 20}
           value={typeof value === "string" ? value : ""}
@@ -208,7 +218,7 @@ export function parseQuestionnaireSchema(
       ? schema.required.filter((value): value is string => typeof value === "string")
       : [],
   );
-  const fields: QuestionnaireField[] = [];
+  const fieldsByKey = new Map<string, QuestionnaireField>();
 
   for (const [key, rawField] of Object.entries(schema.properties)) {
     if (
@@ -222,7 +232,7 @@ export function parseQuestionnaireSchema(
       ? rawField.enum.filter((value): value is string => typeof value === "string")
       : undefined;
 
-    fields.push({
+    fieldsByKey.set(key, {
       description:
         typeof rawField.description === "string" ? rawField.description : undefined,
       enum: enumValues,
@@ -232,16 +242,109 @@ export function parseQuestionnaireSchema(
       maximum: numberKeyword(rawField.maximum),
       minLength: numberKeyword(rawField.minLength),
       minimum: numberKeyword(rawField.minimum),
+      pattern: typeof rawField.pattern === "string" ? rawField.pattern : undefined,
       required: required.has(key),
       title: rawField.title,
       type: rawField.type,
     });
   }
 
+  const fieldOrder = parseFieldOrder(schema["x-fieldOrder"], fieldsByKey);
+  const rules = parseRules(schema["x-rules"], fieldsByKey);
+
   return {
-    fields,
+    fields: fieldOrder.map((key) => fieldsByKey.get(key)!),
+    rules,
     title: typeof schema.title === "string" ? schema.title : null,
   };
+}
+
+function parseFieldOrder(
+  rawOrder: unknown,
+  fields: Map<string, QuestionnaireField>,
+): string[] {
+  if (!Array.isArray(rawOrder)) return [...fields.keys()];
+  const ordered = rawOrder.filter(
+    (key): key is string => typeof key === "string" && fields.has(key),
+  );
+  const unique = [...new Set(ordered)];
+  return unique.length === fields.size ? unique : [...fields.keys()];
+}
+
+function parseRules(
+  rawRules: unknown,
+  fields: Map<string, QuestionnaireField>,
+): QuestionnaireDefinition["rules"] {
+  if (!Array.isArray(rawRules)) return [];
+  const rules: QuestionnaireRule[] = [];
+  for (const rule of rawRules) {
+    if (!isRecord(rule) || typeof rule.kind !== "string") continue;
+    if (
+      rule.kind === "dateOrder" &&
+      typeof rule.startField === "string" &&
+      typeof rule.endField === "string" &&
+      fields.has(rule.startField) &&
+      fields.has(rule.endField)
+    ) {
+      rules.push({
+        endField: rule.endField,
+        kind: "dateOrder",
+        message: typeof rule.message === "string" ? rule.message : undefined,
+        startField: rule.startField,
+      });
+      continue;
+    }
+    if (
+      rule.kind === "requiredWhen" &&
+      typeof rule.field === "string" &&
+      typeof rule.dependsOn === "string" &&
+      fields.has(rule.field) &&
+      fields.has(rule.dependsOn) &&
+      ["boolean", "number", "string"].includes(typeof rule.equals)
+    ) {
+      rules.push({
+        dependsOn: rule.dependsOn,
+        equals: rule.equals as boolean | number | string,
+        field: rule.field,
+        kind: "requiredWhen",
+        message: typeof rule.message === "string" ? rule.message : undefined,
+      });
+    }
+  }
+  return rules;
+}
+
+function getDateBoundaries(
+  rules: QuestionnaireDefinition["rules"],
+  answers: Record<string, unknown>,
+  fieldKey: string,
+): { maximumValue?: string; minimumValue?: string } {
+  const result: { maximumValue?: string; minimumValue?: string } = {};
+  for (const rule of rules) {
+    if (rule.kind !== "dateOrder") continue;
+    const startValue = answers[rule.startField];
+    const endValue = answers[rule.endField];
+    if (rule.endField === fieldKey && typeof startValue === "string") {
+      result.minimumValue = startValue;
+    }
+    if (rule.startField === fieldKey && typeof endValue === "string") {
+      result.maximumValue = endValue;
+    }
+  }
+  return result;
+}
+
+function isFieldRequired(
+  field: QuestionnaireField,
+  definition: QuestionnaireDefinition,
+  answers: Record<string, unknown>,
+): boolean {
+  return field.required || definition.rules.some(
+    (rule) =>
+      rule.kind === "requiredWhen" &&
+      rule.field === field.key &&
+      answers[rule.dependsOn] === rule.equals,
+  );
 }
 
 function isFieldType(value: unknown): value is QuestionnaireFieldType {

@@ -1,6 +1,7 @@
 import type {
   AiClarificationSessionResponse,
   AnswerAiClarificationRequest,
+  ContractGenerationResponse,
   ContractTemplateDetailsResponse,
   ContractTemplateListResponse,
   StartAiClarificationRequest,
@@ -42,6 +43,25 @@ export function answerAiClarification(
       method: "POST",
       timeoutMs: 30_000,
     },
+  );
+}
+
+export function startContractGeneration(
+  slug: string,
+  sessionId: string,
+): Promise<ContractGenerationResponse> {
+  return apiRequest<ContractGenerationResponse>(
+    `templates/${encodeURIComponent(slug)}/clarifications/${encodeURIComponent(sessionId)}/generation`,
+    { method: "POST" },
+  );
+}
+
+export function getContractGeneration(
+  slug: string,
+  sessionId: string,
+): Promise<ContractGenerationResponse> {
+  return apiRequest<ContractGenerationResponse>(
+    `templates/${encodeURIComponent(slug)}/clarifications/${encodeURIComponent(sessionId)}/generation`,
   );
 }
 

@@ -145,7 +145,38 @@ describe("users/auth database foundation (integration)", () => {
         version?.id ?? "missing-version",
         version?.questionnaireSchema as Record<string, unknown>,
       );
+      const schema = version?.questionnaireSchema as Record<string, unknown>;
+      expect(schema["x-fieldOrder"]).toEqual(expect.any(Array));
     }
+    const propertyRental = templates.find(({ slug }) => slug === "property-rental");
+    expect(propertyRental?.versions[0]?.questionnaireSchema).toMatchObject({
+      "x-fieldOrder": [
+        "propertyDescription",
+        "startDate",
+        "endDate",
+        "paymentAmount",
+        "paymentFrequency",
+        "depositAmount",
+        "utilitiesIncluded",
+      ],
+      "x-rules": [
+        expect.objectContaining({
+          endField: "endDate",
+          kind: "dateOrder",
+          startField: "startDate",
+        }),
+      ],
+    });
+    const loan = templates.find(({ slug }) => slug === "personal-loan");
+    expect(loan?.versions[0]?.questionnaireSchema).toMatchObject({
+      "x-rules": [
+        expect.objectContaining({
+          dependsOn: "interestType",
+          field: "interestRate",
+          kind: "requiredWhen",
+        }),
+      ],
+    });
   });
 
   it("enforces a globally unique MAX user id", async () => {
@@ -442,6 +473,31 @@ describe("users/auth database foundation (integration)", () => {
       status: AiGenerationStatus.NEED_MORE_INFO,
       templateVersionId: version.id,
       userId: user.id,
+    });
+
+    const generated = await database.aiGeneration.update({
+      data: {
+        attemptCount: 2,
+        completedAt: new Date("2026-08-30T00:10:00.000Z"),
+        queuedAt: new Date("2026-08-30T00:08:00.000Z"),
+        startedAt: new Date("2026-08-30T00:09:00.000Z"),
+        status: AiGenerationStatus.COMPLETED,
+        structuredDraft: {
+          preamble: "Стороны заключили настоящий договор.",
+          sections: [
+            { clauses: ["Предмет согласован."], heading: "Предмет" },
+          ],
+          title: "Договор аренды",
+          warnings: [],
+        },
+      },
+      where: { id: session.id },
+    });
+
+    expect(generated).toMatchObject({
+      attemptCount: 2,
+      status: AiGenerationStatus.COMPLETED,
+      structuredDraft: expect.objectContaining({ title: "Договор аренды" }),
     });
   });
 

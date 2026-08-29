@@ -1,0 +1,25 @@
+[Unit]
+Description=MAX-Contract contract generation worker
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=maxcontract
+Group=maxcontract
+WorkingDirectory=/opt/max-contract/current/apps/api
+EnvironmentFile=/etc/max-contract/max-contract.env
+Environment=NODE_ENV=production
+Environment=NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+ExecStart=/usr/bin/node dist/worker.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

@@ -3,6 +3,7 @@
 import type {
   AiClarificationQuestion,
   AiClarificationSessionResponse,
+  ContractGenerationResponse,
   ContractTemplateListItem,
   OnboardingStateResponse,
   TemplateAnswerValidationError,
@@ -56,9 +57,11 @@ import { getOnboardingState } from "@/lib/api/onboarding";
 import { queryKeys } from "@/lib/api/query-keys";
 import {
   answerAiClarification,
+  getContractGeneration,
   getTemplate,
   getTemplates,
   startAiClarification,
+  startContractGeneration,
   validateTemplateAnswers,
 } from "@/lib/api/templates";
 import { normalizeQuestionnaireAnswers } from "@/lib/validation/questionnaire-answers";
@@ -229,7 +232,12 @@ function DealsScreen({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
   );
 }
 
-type CreateDealStep = "clarification" | "questionnaire" | "ready" | "type";
+type CreateDealStep =
+  | "clarification"
+  | "generation"
+  | "questionnaire"
+  | "ready"
+  | "type";
 
 function TemplateTypeIcon({
   size,
@@ -275,6 +283,7 @@ function getTemplateDisplaySummary(
 }
 
 function CreateDealScreen({ onBack }: { onBack: () => void }) {
+  const queryClient = useQueryClient();
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [clarificationAnswers, setClarificationAnswers] = useState<
     Record<string, unknown>
@@ -357,14 +366,46 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
         answers: payload.answers,
       }),
   });
+  const generationStart = useMutation({
+    mutationFn: (sessionId: string) =>
+      startContractGeneration(effectiveSelectedSlug, sessionId),
+  });
+  const generation = useQuery({
+    enabled: step === "generation" && Boolean(clarificationSession?.id),
+    queryFn: () =>
+      getContractGeneration(
+        effectiveSelectedSlug,
+        clarificationSession?.id ?? "",
+      ),
+    queryKey: queryKeys.templates.generation(clarificationSession?.id ?? ""),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === "COMPLETED" || status === "FAILED" ? false : 1_200;
+    },
+  });
 
   const resetClarification = () => {
     clarificationStart.reset();
     clarificationAnswer.reset();
+    generationStart.reset();
     setClarificationAnswers({});
     setClarificationError("");
     setClarificationSession(null);
     setQuestionIndex(0);
+  };
+
+  const beginGeneration = async () => {
+    if (!clarificationSession) return;
+    try {
+      const next = await generationStart.mutateAsync(clarificationSession.id);
+      queryClient.setQueryData(
+        queryKeys.templates.generation(clarificationSession.id),
+        next,
+      );
+      setStep("generation");
+    } catch {
+      // Запрос отображается на экране готовности без технических деталей.
+    }
   };
 
   const selectTemplate = (slug: string) => {
@@ -626,11 +667,34 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
           </p>
         </div>
         <div className="create-flow-action">
-          <Button className="full-width" onClick={onBack} type="button">
-            К сделкам
+          {generationStart.isError ? (
+            <RequestErrorCard message={generationStart.error.message} />
+          ) : null}
+          <Button
+            className="full-width"
+            disabled={generationStart.isPending}
+            onClick={() => void beginGeneration()}
+            type="button"
+          >
+            {generationStart.isPending
+              ? "Запускаем подготовку"
+              : "Подготовить договор"}
           </Button>
         </div>
       </div>
+    );
+  }
+
+  if (step === "generation" && clarificationSession) {
+    return (
+      <ContractGenerationScreen
+        generation={generation.data ?? null}
+        isLoading={generation.isPending}
+        onBack={() => setStep("ready")}
+        onDone={onBack}
+        onRetry={() => void beginGeneration()}
+        requestError={generation.isError ? generation.error.message : undefined}
+      />
     );
   }
 
@@ -698,12 +762,6 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
           />
         ) : null}
 
-        {validation.data ? (
-          <div className="validation-success" role="status">
-            <Check size={16} /> Анкета заполнена и проверена.
-          </div>
-        ) : null}
-
         {template.data && definition ? (
           <Button
             className="full-width"
@@ -718,6 +776,138 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
           </Button>
         ) : null}
       </form>
+    </div>
+  );
+}
+
+function ContractGenerationScreen({
+  generation,
+  isLoading,
+  onBack,
+  onDone,
+  onRetry,
+  requestError,
+}: {
+  generation: ContractGenerationResponse | null;
+  isLoading: boolean;
+  onBack: () => void;
+  onDone: () => void;
+  onRetry: () => void;
+  requestError?: string;
+}) {
+  const status = generation?.status;
+  const draft = status === "COMPLETED" ? generation?.draft : null;
+  const isComplete = Boolean(draft);
+  const isFailed = status === "FAILED";
+
+  return (
+    <div className="screen-content create-deal-screen contract-generation-screen">
+      <FlowHeader
+        eyebrow="Шаг 4 из 4"
+        onBack={onBack}
+        title={isComplete ? "Проект договора" : "Подготовка договора"}
+      />
+
+      {draft ? (
+        <article className="contract-draft" aria-label="Подготовленный проект договора">
+          <div className="contract-draft-heading">
+            <span className="state-icon">
+              <FileCheck2 size={28} />
+            </span>
+            <div>
+              <span>Проект подготовлен</span>
+              <h2>{draft.title}</h2>
+            </div>
+          </div>
+          <p className="contract-draft-preamble">{draft.preamble}</p>
+          {draft.sections.map((section, sectionIndex) => (
+            <section className="contract-draft-section" key={`${section.heading}-${sectionIndex}`}>
+              <h3>
+                {sectionIndex + 1}. {section.heading}
+              </h3>
+              <ol>
+                {section.clauses.map((clause, clauseIndex) => (
+                  <li key={`${sectionIndex}-${clauseIndex}`}>{clause}</li>
+                ))}
+              </ol>
+            </section>
+          ))}
+          {draft.warnings.length > 0 ? (
+            <Card className="contract-draft-checklist">
+              <strong>Проверьте перед подписанием</strong>
+              <ul>
+                {draft.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
+        </article>
+      ) : isFailed ? (
+        <div className="generation-state is-failed">
+          <span className="state-icon">
+            <CircleAlert size={30} />
+          </span>
+          <h2>Не удалось подготовить договор</h2>
+          <p>{generation?.errorMessage}</p>
+          <Button onClick={onRetry} type="button">
+            <RefreshCw size={16} /> Повторить
+          </Button>
+        </div>
+      ) : (
+        <div className="generation-state" role="status" aria-live="polite">
+          <motion.div
+            animate={{ rotate: 360 }}
+            className="generation-orbit"
+            transition={{ duration: 2.4, ease: "linear", repeat: Infinity }}
+          >
+            <span />
+          </motion.div>
+          <h2>
+            {status === "GENERATING"
+              ? "Собираем условия договора"
+              : "Ставим задачу в очередь"}
+          </h2>
+          <p>
+            Проверяем ответы, формулируем обязательства сторон и структуру
+            документа.
+          </p>
+          <div
+            aria-label="Прогресс подготовки договора"
+            aria-valuemax={100}
+            aria-valuemin={0}
+            aria-valuenow={generation?.progress ?? 5}
+            className="generation-progress"
+            role="progressbar"
+          >
+            <motion.span
+              animate={{ width: `${generation?.progress ?? 5}%` }}
+              transition={{ duration: 0.55, ease: "easeOut" }}
+            />
+          </div>
+          <strong className="generation-progress-value">
+            {generation?.progress ?? 5}%
+          </strong>
+        </div>
+      )}
+
+      {requestError ? (
+        <RequestErrorCard message={requestError} onRetry={onRetry} />
+      ) : null}
+      {isLoading && !generation ? (
+        <Card className="form-message" role="status">
+          <strong>Получаем статус</strong>
+          <span>Проверяем очередь подготовки договора.</span>
+        </Card>
+      ) : null}
+
+      {isComplete ? (
+        <div className="create-flow-action">
+          <Button className="full-width" onClick={onDone} type="button">
+            Вернуться к сделкам
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

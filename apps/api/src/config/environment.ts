@@ -7,6 +7,7 @@ const DEVELOPMENT_DEFAULTS = {
   CONSENT_PERSONAL_DATA_VERSION: "dev-v1",
   CONSENT_STATUS_NOTIFICATIONS_VERSION: "dev-v1",
   CONSENT_TERMS_VERSION: "dev-v1",
+  CONTRACT_GENERATION_QUEUE_PREFIX: "max-contract",
   CORS_ORIGINS: "http://localhost:3000,http://localhost:3002",
   DATABASE_URL:
     "postgresql://max_contract:max_contract_dev@localhost:5434/max_contract",
@@ -205,6 +206,10 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
     CONSENT_TERMS_VERSION: readString(
       input.CONSENT_TERMS_VERSION,
       DEVELOPMENT_DEFAULTS.CONSENT_TERMS_VERSION,
+    ),
+    CONTRACT_GENERATION_QUEUE_PREFIX: readString(
+      input.CONTRACT_GENERATION_QUEUE_PREFIX,
+      DEVELOPMENT_DEFAULTS.CONTRACT_GENERATION_QUEUE_PREFIX,
     ),
     DATABASE_URL: readString(
       input.DATABASE_URL,

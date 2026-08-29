@@ -18,6 +18,7 @@ export interface AiResponseSchema {
 }
 
 export interface AiStructuredRequest {
+  maxTokens?: number;
   output: AiResponseSchema;
   piiPaths?: string[];
   prompt: AiPromptDefinition;

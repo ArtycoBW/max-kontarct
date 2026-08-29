@@ -7,6 +7,7 @@ import request from "supertest";
 import { SessionAuthGuard } from "../src/auth/session-auth.guard";
 import { API_PREFIX } from "../src/bootstrap/configure-application";
 import { AiClarificationsService } from "../src/templates/ai-clarifications.service";
+import { ContractGenerationsService } from "../src/templates/contract-generations.service";
 import { TemplatesController } from "../src/templates/templates.controller";
 import type {
   PublishedTemplateDetailsRecord,
@@ -41,6 +42,10 @@ describe("templates API (e2e)", () => {
   const answerClarification = jest.fn(async () =>
     clarificationSession({ questions: [], status: "READY_TO_GENERATE" }),
   );
+  const startGeneration = jest.fn(async () => generationResponse("QUEUED", 15));
+  const getGeneration = jest.fn(async () =>
+    generationResponse("GENERATING", 65),
+  );
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
@@ -53,6 +58,13 @@ describe("templates API (e2e)", () => {
           useValue: {
             answer: answerClarification,
             start: startClarification,
+          },
+        },
+        {
+          provide: ContractGenerationsService,
+          useValue: {
+            get: getGeneration,
+            start: startGeneration,
           },
         },
         {
@@ -213,7 +225,44 @@ describe("templates API (e2e)", () => {
       { answers: { utilitiesPayer: "tenant" } },
     );
   });
+
+  it("queues contract generation for the authenticated owner", async () => {
+    const response = await request(app.getHttpServer())
+      .post(
+        `/${API_PREFIX}/templates/demo-property-rental/clarifications/10000000-0000-4000-8000-000000000001/generation`,
+      )
+      .expect(202);
+
+    expect(response.body).toMatchObject({ progress: 15, status: "QUEUED" });
+    expect(startGeneration).toHaveBeenLastCalledWith(
+      "demo-property-rental",
+      "10000000-0000-4000-8000-000000000001",
+      "00000000-0000-4000-8000-000000000001",
+    );
+  });
+
+  it("returns a polling-safe generation status", async () => {
+    const response = await request(app.getHttpServer())
+      .get(
+        `/${API_PREFIX}/templates/demo-property-rental/clarifications/10000000-0000-4000-8000-000000000001/generation`,
+      )
+      .expect(200);
+
+    expect(response.body).toMatchObject({ progress: 65, status: "GENERATING" });
+  });
 });
+
+function generationResponse(status: string, progress: number) {
+  return {
+    createdAt: "2026-08-30T00:00:00.000Z",
+    draft: null,
+    errorMessage: null,
+    id: "10000000-0000-4000-8000-000000000001",
+    progress,
+    status,
+    updatedAt: "2026-08-30T00:00:01.000Z",
+  };
+}
 
 function clarificationSession(
   overrides: Record<string, unknown> = {},
