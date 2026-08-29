@@ -13,6 +13,7 @@ import { API_PREFIX } from "../src/bootstrap/configure-application";
 import { PrismaService } from "../src/database/prisma.service";
 import { ProfileController } from "../src/profile/profile.controller";
 import { ProfileService } from "../src/profile/profile.service";
+import { TemplateSchemaValidator } from "../src/templates/template-schema.validator";
 
 const USER_ID = "00000000-0000-4000-8000-000000000001";
 const now = new Date("2026-08-28T12:00:00.000Z");
@@ -126,6 +127,7 @@ describe("profile and admin RBAC (e2e)", () => {
       providers: [
         AdminService,
         ProfileService,
+        TemplateSchemaValidator,
         RolesGuard,
         Reflector,
         { provide: PrismaService, useValue: prisma },

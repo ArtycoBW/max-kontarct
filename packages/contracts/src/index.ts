@@ -108,6 +108,73 @@ export interface AdminAuditListResponse {
   total: number;
 }
 
+export interface AdminTemplateVersion {
+  archivedAt: string | null;
+  createdAt: string;
+  documentRequirements: TemplateDocumentRequirementResponse[];
+  id: string;
+  publishedAt: string | null;
+  questionnaireSchema: Record<string, unknown>;
+  status: ContractTemplateVersionStatus;
+  updatedAt: string;
+  versionNumber: number;
+}
+
+export interface AdminContractTemplate {
+  createdAt: string;
+  id: string;
+  isDemo: boolean;
+  slug: string;
+  summary: string;
+  title: string;
+  updatedAt: string;
+  versions: AdminTemplateVersion[];
+}
+
+export interface AdminTemplateListResponse {
+  items: AdminContractTemplate[];
+  total: number;
+}
+
+export interface AdminTemplateDocumentRequirementInput {
+  description: string | null;
+  key: string;
+  required: boolean;
+  sortOrder: number;
+  title: string;
+}
+
+export interface UpdateAdminTemplateVersionRequest {
+  documentRequirements?: AdminTemplateDocumentRequirementInput[];
+  questionnaireSchema?: Record<string, unknown>;
+}
+
+export interface AdminAiGenerationMetadata {
+  attemptCount: number;
+  completedAt: string | null;
+  createdAt: string;
+  failedAt: string | null;
+  failureCode: string | null;
+  id: string;
+  model: string | null;
+  promptId: string;
+  promptVersion: string;
+  provider: string | null;
+  queuedAt: string | null;
+  redactedPiiCount: number | null;
+  startedAt: string | null;
+  status: AiGenerationStatus;
+  templateTitle: string;
+  templateVersion: number;
+  totalTokens: number | null;
+  updatedAt: string;
+}
+
+export interface AdminAiGenerationListResponse {
+  items: AdminAiGenerationMetadata[];
+  total: number;
+}
+
 export type ContractTemplateVersionStatus =
   | "DRAFT"
   | "PUBLISHED"
@@ -180,6 +247,13 @@ export interface ValidateTemplateAnswersResponse {
 export type AiClarificationStatus =
   | "NEED_MORE_INFO"
   | "READY_TO_GENERATE";
+
+export type AiGenerationStatus =
+  | AiClarificationStatus
+  | "QUEUED"
+  | "GENERATING"
+  | "COMPLETED"
+  | "FAILED";
 
 export type AiClarificationQuestionType =
   | "single_choice"

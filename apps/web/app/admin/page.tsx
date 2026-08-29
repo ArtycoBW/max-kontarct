@@ -8,8 +8,10 @@ import type {
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  Bot,
   Check,
   CircleAlert,
+  FileStack,
   RefreshCw,
   ScrollText,
   ShieldCheck,
@@ -19,6 +21,8 @@ import {
 import Link from "next/link";
 import { useState } from "react";
 
+import { AdminAiGenerationsView } from "@/components/admin/ai-generations-view";
+import { AdminTemplatesView } from "@/components/admin/templates-view";
 import { useAuth } from "@/components/providers/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -26,7 +30,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getAdminAuditEvents, getAdminUsers } from "@/lib/api/admin";
 import { queryKeys } from "@/lib/api/query-keys";
 
-type AdminTab = "users" | "audit";
+type AdminTab = "users" | "templates" | "generations" | "audit";
 
 export default function AdminPage() {
   const auth = useAuth();
@@ -88,6 +92,22 @@ export default function AdminPage() {
             <UsersRound size={17} /> Пользователи
           </Button>
           <Button
+            className={activeTab === "templates" ? "is-active" : undefined}
+            onClick={() => setActiveTab("templates")}
+            type="button"
+            variant="unstyled"
+          >
+            <FileStack size={17} /> Шаблоны
+          </Button>
+          <Button
+            className={activeTab === "generations" ? "is-active" : undefined}
+            onClick={() => setActiveTab("generations")}
+            type="button"
+            variant="unstyled"
+          >
+            <Bot size={17} /> Генерации AI
+          </Button>
+          <Button
             className={activeTab === "audit" ? "is-active" : undefined}
             onClick={() => setActiveTab("audit")}
             type="button"
@@ -111,17 +131,18 @@ export default function AdminPage() {
       <section className="admin-content">
         <header className="admin-header">
           <div>
-            <p>{activeTab === "users" ? "Доступы и профили" : "Контроль действий"}</p>
-            <h1>{activeTab === "users" ? "Пользователи" : "Журнал событий"}</h1>
+            <p>{tabCopy(activeTab)}</p>
+            <h1>{tabTitle(activeTab)}</h1>
           </div>
           <span className="admin-security-badge"><Check size={13} /> Доступ защищён</span>
         </header>
 
-        {activeTab === "users" ? (
-          <UsersView query={users} />
-        ) : (
-          <AuditView query={audit} />
-        )}
+        {activeTab === "users" ? <UsersView query={users} /> : null}
+        {activeTab === "templates" ? (
+          <AdminTemplatesView canManage={auth.user.role === "ADMIN"} />
+        ) : null}
+        {activeTab === "generations" ? <AdminAiGenerationsView /> : null}
+        {activeTab === "audit" ? <AuditView query={audit} /> : null}
       </section>
     </main>
   );
@@ -240,6 +261,24 @@ function roleLabel(role: AuthUserRole): string {
   return { ADMIN: "Администратор", SUPPORT: "Поддержка", USER: "Пользователь" }[role];
 }
 
+function tabTitle(tab: AdminTab): string {
+  return {
+    audit: "Журнал событий",
+    generations: "Генерации AI",
+    templates: "Шаблоны договоров",
+    users: "Пользователи",
+  }[tab];
+}
+
+function tabCopy(tab: AdminTab): string {
+  return {
+    audit: "Контроль действий",
+    generations: "Контроль подготовки документов",
+    templates: "Версии и требования",
+    users: "Доступы и профили",
+  }[tab];
+}
+
 const AUDIT_EVENT_LABELS: Record<string, string> = {
   AUTH_DEV_SUCCEEDED: "Вход в тестовую среду",
   AUTH_LOGOUT: "Выход из аккаунта",
@@ -247,6 +286,10 @@ const AUDIT_EVENT_LABELS: Record<string, string> = {
   DEV_PHONE_VERIFIED: "Телефон подтверждён в тестовой среде",
   DEV_USER_ROLE_CHANGED: "Роль пользователя изменена",
   DEV_USER_SEEDED: "Тестовый пользователь создан",
+  ADMIN_TEMPLATE_VERSION_ARCHIVED: "Версия шаблона перенесена в архив",
+  ADMIN_TEMPLATE_VERSION_CREATED: "Создана версия шаблона",
+  ADMIN_TEMPLATE_VERSION_PUBLISHED: "Опубликована версия шаблона",
+  ADMIN_TEMPLATE_VERSION_UPDATED: "Изменены требования к документам",
   MAX_PHONE_VERIFIED: "Телефон подтверждён через MAX",
   ONBOARDING_CONSENTS_RECORDED: "Согласия пользователя сохранены",
   USER_PROFILE_CREATED: "Профиль пользователя создан",
@@ -260,6 +303,7 @@ const AUDIT_ENTITY_LABELS: Record<string, string> = {
   UserPhone: "Телефон пользователя",
   UserProfile: "Профиль пользователя",
   UserSession: "Сеанс пользователя",
+  ContractTemplateVersion: "Версия шаблона договора",
 };
 
 function auditEventLabel(eventType: string): string {
