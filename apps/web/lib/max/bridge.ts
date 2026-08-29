@@ -16,6 +16,38 @@ export class MaxContactBridgeError extends Error {
   }
 }
 
+const MAX_BRIDGE_POLL_INTERVAL_MS = 25;
+const MAX_BRIDGE_TIMEOUT_MS = 5_000;
+
+export function waitForMaxWebApp(
+  timeoutMs = MAX_BRIDGE_TIMEOUT_MS,
+): Promise<MaxWebApp> {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Не удалось связаться с MAX"));
+  }
+
+  return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+
+    const checkBridge = (): void => {
+      const webApp = window.WebApp;
+      if (webApp) {
+        resolve(webApp);
+        return;
+      }
+
+      if (Date.now() - startedAt >= timeoutMs) {
+        reject(new Error("Откройте приложение внутри MAX и повторите попытку"));
+        return;
+      }
+
+      window.setTimeout(checkBridge, MAX_BRIDGE_POLL_INTERVAL_MS);
+    };
+
+    checkBridge();
+  });
+}
+
 export function getMaxInitData(): string {
   if (typeof window === "undefined") {
     throw new Error("Не удалось связаться с MAX");

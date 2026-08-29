@@ -8,5 +8,5 @@
     "types": ["jest", "node"]
   },
   "exclude": ["node_modules"],
-  "include": ["lib/**/*.ts"]
+  "include": ["lib/**/*.ts", "types/**/*.d.ts"]
 }

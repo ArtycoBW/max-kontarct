@@ -5,12 +5,14 @@ import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { LoggerModule } from "nestjs-pino";
 
 import { AdminModule } from "./admin/admin.module";
+import { AiModule } from "./ai/ai.module";
 import { AuthModule } from "./auth/auth.module";
 import { ApiExceptionFilter } from "./common/errors/api-exception.filter";
 import { createLoggerParams } from "./common/logging/logger.config";
 import { validateEnvironment } from "./config/environment";
 import { PrismaModule } from "./database/prisma.module";
 import { HealthModule } from "./health/health.module";
+import { MaxBotModule } from "./max-bot/max-bot.module";
 import { OnboardingModule } from "./onboarding/onboarding.module";
 import { ProfileModule } from "./profile/profile.module";
 import { RedisModule } from "./redis/redis.module";
@@ -41,8 +43,10 @@ import { TemplatesModule } from "./templates/templates.module";
     PrismaModule,
     RedisModule,
     StorageModule,
+    AiModule,
     HealthModule,
     AuthModule,
+    MaxBotModule,
     OnboardingModule,
     ProfileModule,
     AdminModule,

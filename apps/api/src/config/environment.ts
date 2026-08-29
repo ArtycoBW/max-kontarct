@@ -1,4 +1,5 @@
 const DEVELOPMENT_DEFAULTS = {
+  AI_PROVIDER: "fake",
   API_PORT: 3001,
   AUTH_COOKIE_NAME: "max_contract_session",
   AUTH_REDIS_PREFIX: "max-contract:auth",
@@ -16,11 +17,13 @@ const DEVELOPMENT_DEFAULTS = {
   DEV_MAX_USER_ID: "1000000000001",
   DEV_MAX_USERNAME: "dev_max_user",
   LOG_LEVEL: "info",
+  MAX_API_URL: "https://platform-api2.max.ru",
   MAX_BOT_TOKEN: "",
   MAX_CONTACT_FUTURE_SKEW_SECONDS: 30,
   MAX_CONTACT_TTL_SECONDS: 5 * 60,
   MAX_INIT_DATA_FUTURE_SKEW_SECONDS: 30,
   MAX_INIT_DATA_TTL_SECONDS: 60 * 60,
+  MAX_WEBHOOK_SECRET: "",
   MINIO_ACCESS_KEY: "max_contract",
   MINIO_AUTO_CREATE_BUCKET: true,
   MINIO_BUCKET: "max-contract-dev",
@@ -30,6 +33,14 @@ const DEVELOPMENT_DEFAULTS = {
   REDIS_URL: "redis://localhost:6381",
   THROTTLE_LIMIT: 120,
   THROTTLE_TTL_MS: 60_000,
+  YANDEX_AI_API_KEY: "",
+  YANDEX_AI_FOLDER_ID: "",
+  YANDEX_AI_MAX_RETRIES: 1,
+  YANDEX_AI_MAX_TOKENS: 1_200,
+  YANDEX_AI_MODEL: "yandexgpt-5.1",
+  YANDEX_AI_RETRY_DELAY_MS: 250,
+  YANDEX_AI_TEMPERATURE: 0.1,
+  YANDEX_AI_TIMEOUT_MS: 20_000,
 } as const;
 
 const REQUIRED_PRODUCTION_KEYS = [
@@ -43,6 +54,7 @@ const REQUIRED_PRODUCTION_KEYS = [
   "MINIO_ENDPOINT",
   "MINIO_SECRET_KEY",
   "MAX_BOT_TOKEN",
+  "MAX_WEBHOOK_SECRET",
   "REDIS_URL",
 ] as const;
 
@@ -60,6 +72,34 @@ function parseInteger(
     throw new Error(`${key} must be an integer greater than or equal to ${minimum}`);
   }
 
+  return parsed;
+}
+
+function parseBoundedInteger(
+  value: unknown,
+  fallback: number,
+  key: string,
+  minimum: number,
+  maximum: number,
+): number {
+  const parsed = parseInteger(value, fallback, key, minimum);
+  if (parsed > maximum) {
+    throw new Error(`${key} must be less than or equal to ${maximum}`);
+  }
+  return parsed;
+}
+
+function parseBoundedNumber(
+  value: unknown,
+  fallback: number,
+  key: string,
+  minimum: number,
+  maximum: number,
+): number {
+  const parsed = Number(value ?? fallback);
+  if (!Number.isFinite(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`${key} must be between ${minimum} and ${maximum}`);
+  }
   return parsed;
 }
 
@@ -102,8 +142,34 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
     }
   }
 
+  const aiProvider = readString(
+    input.AI_PROVIDER,
+    nodeEnv === "production" ? "yandex" : DEVELOPMENT_DEFAULTS.AI_PROVIDER,
+  );
+  if (aiProvider !== "fake" && aiProvider !== "yandex") {
+    throw new Error("AI_PROVIDER must be fake or yandex");
+  }
+  if (nodeEnv === "production" && aiProvider !== "yandex") {
+    throw new Error("AI_PROVIDER must be yandex in production");
+  }
+
+  const yandexAiApiKey = readString(
+    input.YANDEX_AI_API_KEY,
+    DEVELOPMENT_DEFAULTS.YANDEX_AI_API_KEY,
+  );
+  const yandexAiFolderId = readString(
+    input.YANDEX_AI_FOLDER_ID,
+    DEVELOPMENT_DEFAULTS.YANDEX_AI_FOLDER_ID,
+  );
+  if (aiProvider === "yandex" && (!yandexAiApiKey || !yandexAiFolderId)) {
+    throw new Error(
+      "YANDEX_AI_API_KEY and YANDEX_AI_FOLDER_ID are required for Yandex AI",
+    );
+  }
+
   return {
     ...input,
+    AI_PROVIDER: aiProvider,
     API_PORT: parseInteger(
       input.API_PORT,
       DEVELOPMENT_DEFAULTS.API_PORT,
@@ -169,6 +235,10 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
       DEVELOPMENT_DEFAULTS.DEV_MAX_USERNAME,
     ),
     LOG_LEVEL: readString(input.LOG_LEVEL, DEVELOPMENT_DEFAULTS.LOG_LEVEL),
+    MAX_API_URL: readString(
+      input.MAX_API_URL,
+      DEVELOPMENT_DEFAULTS.MAX_API_URL,
+    ),
     MAX_BOT_TOKEN: readString(
       input.MAX_BOT_TOKEN,
       DEVELOPMENT_DEFAULTS.MAX_BOT_TOKEN,
@@ -196,6 +266,10 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
       DEVELOPMENT_DEFAULTS.MAX_INIT_DATA_TTL_SECONDS,
       "MAX_INIT_DATA_TTL_SECONDS",
       60,
+    ),
+    MAX_WEBHOOK_SECRET: readString(
+      input.MAX_WEBHOOK_SECRET,
+      DEVELOPMENT_DEFAULTS.MAX_WEBHOOK_SECRET,
     ),
     MINIO_ACCESS_KEY: readString(
       input.MINIO_ACCESS_KEY ?? input.MINIO_ROOT_USER,
@@ -235,6 +309,47 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
       DEVELOPMENT_DEFAULTS.THROTTLE_TTL_MS,
       "THROTTLE_TTL_MS",
       1_000,
+    ),
+    YANDEX_AI_API_KEY: yandexAiApiKey,
+    YANDEX_AI_FOLDER_ID: yandexAiFolderId,
+    YANDEX_AI_MAX_RETRIES: parseBoundedInteger(
+      input.YANDEX_AI_MAX_RETRIES,
+      DEVELOPMENT_DEFAULTS.YANDEX_AI_MAX_RETRIES,
+      "YANDEX_AI_MAX_RETRIES",
+      0,
+      3,
+    ),
+    YANDEX_AI_MAX_TOKENS: parseBoundedInteger(
+      input.YANDEX_AI_MAX_TOKENS,
+      DEVELOPMENT_DEFAULTS.YANDEX_AI_MAX_TOKENS,
+      "YANDEX_AI_MAX_TOKENS",
+      64,
+      8_192,
+    ),
+    YANDEX_AI_MODEL: readString(
+      input.YANDEX_AI_MODEL,
+      DEVELOPMENT_DEFAULTS.YANDEX_AI_MODEL,
+    ),
+    YANDEX_AI_RETRY_DELAY_MS: parseBoundedInteger(
+      input.YANDEX_AI_RETRY_DELAY_MS,
+      DEVELOPMENT_DEFAULTS.YANDEX_AI_RETRY_DELAY_MS,
+      "YANDEX_AI_RETRY_DELAY_MS",
+      0,
+      5_000,
+    ),
+    YANDEX_AI_TEMPERATURE: parseBoundedNumber(
+      input.YANDEX_AI_TEMPERATURE,
+      DEVELOPMENT_DEFAULTS.YANDEX_AI_TEMPERATURE,
+      "YANDEX_AI_TEMPERATURE",
+      0,
+      0.3,
+    ),
+    YANDEX_AI_TIMEOUT_MS: parseBoundedInteger(
+      input.YANDEX_AI_TIMEOUT_MS,
+      DEVELOPMENT_DEFAULTS.YANDEX_AI_TIMEOUT_MS,
+      "YANDEX_AI_TIMEOUT_MS",
+      1_000,
+      120_000,
     ),
   };
 }

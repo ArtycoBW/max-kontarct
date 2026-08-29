@@ -15,7 +15,7 @@ import {
 } from "@/lib/api/auth";
 import { ApiError } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/query-keys";
-import { getMaxInitData } from "@/lib/max/bridge";
+import { getMaxInitData, waitForMaxWebApp } from "@/lib/max/bridge";
 
 interface AuthContextValue {
   error: Error | null;
@@ -27,6 +27,10 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function bootstrapSession() {
+  if (process.env.NODE_ENV === "production") {
+    await waitForMaxWebApp();
+  }
+
   try {
     return await getCurrentSession();
   } catch (error) {

@@ -164,7 +164,7 @@ export class AuthService {
       httpOnly: true,
       maxAge: this.sessionTtlSeconds * 1_000,
       path: "/",
-      sameSite: "lax",
+      sameSite: this.nodeEnv === "production" ? "none" : "lax",
       secure: this.nodeEnv === "production",
     };
   }
@@ -173,7 +173,7 @@ export class AuthService {
     return {
       httpOnly: true,
       path: "/",
-      sameSite: "lax",
+      sameSite: this.nodeEnv === "production" ? "none" : "lax",
       secure: this.nodeEnv === "production",
     };
   }

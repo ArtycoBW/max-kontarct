@@ -34,7 +34,12 @@ describe("AuthService production safeguards", () => {
   it("marks the production session cookie as HttpOnly and Secure", () => {
     expect(service.getCookieOptions()).toMatchObject({
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: "none",
+      secure: true,
+    });
+    expect(service.getClearCookieOptions()).toMatchObject({
+      httpOnly: true,
+      sameSite: "none",
       secure: true,
     });
   });

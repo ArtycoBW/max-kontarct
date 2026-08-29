@@ -1,6 +1,7 @@
 interface MaxWebApp {
   initData: string;
   platform?: "android" | "desktop" | "ios" | "web" | string;
+  ready?: () => void;
   requestContact?: () => Promise<
     | {
         authDate: string;
