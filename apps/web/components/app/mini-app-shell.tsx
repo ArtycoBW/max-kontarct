@@ -1,6 +1,7 @@
 "use client";
 
 import type {
+  ContractTemplateListItem,
   OnboardingStateResponse,
   TemplateAnswerValidationError,
   TemplateDocumentRequirementResponse,
@@ -8,37 +9,37 @@ import type {
 } from "@max-contract/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Bell,
+  ArrowLeft,
+  ArrowRight,
   BriefcaseBusiness,
+  Building2,
   Check,
-  ChevronRight,
+  CheckCircle2,
   CircleAlert,
+  CircleHelp,
   FileCheck2,
   Files,
-  FileSignature,
   FolderOpen,
+  Handshake,
   Home,
   LockKeyhole,
   PenLine,
   Plus,
   RefreshCw,
+  Search,
   ShieldCheck,
   UserRound,
+  WalletCards,
   type LucideIcon,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import Image from "next/image";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/components/providers/auth-provider";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { ProfileScreen } from "@/components/profile/profile-screen";
@@ -47,7 +48,6 @@ import {
   TemplateQuestionnaire,
 } from "@/components/templates/template-questionnaire";
 import { ApiError } from "@/lib/api/client";
-import { getReadiness } from "@/lib/api/health";
 import { getOnboardingState } from "@/lib/api/onboarding";
 import { queryKeys } from "@/lib/api/query-keys";
 import {
@@ -73,55 +73,6 @@ const navigation: Array<{
   { id: "profile", icon: UserRound, label: "Профиль" },
 ];
 
-function BrandMark() {
-  return (
-    <span className="brand-mark" aria-label="Макс-Контракт">
-      <span className="brand-mark-icon" aria-hidden="true">
-        <FileSignature size={18} />
-      </span>
-      <span className="brand-mark-copy">
-        <span>МАКС</span>
-        <span>КОНТРАКТ</span>
-      </span>
-    </span>
-  );
-}
-
-function ReadinessBadge() {
-  const readiness = useQuery({
-    queryFn: getReadiness,
-    queryKey: queryKeys.health.ready(),
-    refetchInterval: 60_000,
-  });
-
-  if (readiness.isPending) {
-    return (
-      <span className="service-status is-pending" role="status">
-        <span /> Проверяем сервис
-      </span>
-    );
-  }
-
-  if (readiness.isError) {
-    return (
-      <Button
-        type="button"
-        variant="unstyled"
-        className="service-status is-error"
-        onClick={() => readiness.refetch()}
-      >
-        <CircleAlert size={13} /> Нет связи · повторить
-      </Button>
-    );
-  }
-
-  return (
-    <span className="service-status is-ready" role="status">
-      <span /> Сервис готов
-    </span>
-  );
-}
-
 function ScreenHeader({
   action,
   eyebrow,
@@ -142,164 +93,175 @@ function ScreenHeader({
   );
 }
 
-function HomeScreen({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
+function FlowHeader({
+  eyebrow,
+  onBack,
+  title,
+}: {
+  eyebrow: string;
+  onBack: () => void;
+  title: string;
+}) {
   return (
-    <div className="screen-content">
-      <div className="shell-topline">
-        <BrandMark />
-        <ReadinessBadge />
+    <header className="flow-header">
+      <p className="screen-eyebrow">{eyebrow}</p>
+      <div>
+        <Button
+          aria-label="Назад"
+          className="flow-back-button"
+          onClick={onBack}
+          size="icon"
+          type="button"
+          variant="ghost"
+        >
+          <ArrowLeft size={21} />
+        </Button>
+        <h1>{title}</h1>
       </div>
-      <ScreenHeader eyebrow="Частные сделки" title="Всё важное — в одном процессе" />
-      <p className="screen-copy">
-        Подготовьте условия, соберите документы и проведите обе стороны до
-        подписи без лишней сложности.
-      </p>
-
-      <motion.section
-        className="editorial-hero"
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.24 }}
-      >
-        <span>Ясность / контроль / подпись</span>
-        <div>
-          <strong>01</strong>
-          <p>
-            понятный
-            <br /> сценарий сделки
-          </p>
-        </div>
-        <i aria-hidden="true" />
-      </motion.section>
-
-      <div className="feature-list">
-        {[
-          [PenLine, "Быстро", "Шаблоны и подсказки помогают начать"],
-          [ShieldCheck, "Безопасно", "Доступ только у участников сделки"],
-          [FileCheck2, "Под контролем", "Статусы и документы всегда на виду"],
-        ].map(([FeatureIcon, label, copy]) => {
-          const ItemIcon = FeatureIcon as Icon;
-          return (
-            <div className="feature-row" key={label as string}>
-              <span className="icon-tile">
-                <ItemIcon size={17} />
-              </span>
-              <span>
-                <strong>{label as string}</strong>
-                <small>{copy as string}</small>
-              </span>
-            </div>
-          );
-        })}
-      </div>
-
-      <Button className="full-width" onClick={() => onNavigate("create")}>
-        Создать первую сделку <ChevronRight size={17} />
-      </Button>
-    </div>
+    </header>
   );
+}
+
+function HomeScreen({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
+  return <DealsScreen onNavigate={onNavigate} />;
 }
 
 function DealsScreen({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
-  const [filter, setFilter] = useState("all");
-  const filters = [
-    { id: "all", label: "Все · 0" },
-    { id: "draft", label: "Черновики" },
-    { id: "signed", label: "Подписаны" },
-  ];
+  const [showInviteHint, setShowInviteHint] = useState(false);
 
   return (
-    <div className="screen-content">
-      <div className="shell-topline">
-        <ReadinessBadge />
-        <Button
-          className="round-action"
-          type="button"
-          variant="unstyled"
-          aria-label="Уведомления"
-        >
-          <Bell size={17} />
-        </Button>
-      </div>
-      <ScreenHeader eyebrow="Рабочее пространство" title="Мои сделки" />
-
-      <section className="portfolio-card">
-        <span>Портфель / сейчас</span>
-        <div>
-          <strong>00</strong>
-          <p>
-            сделок
-            <br /> в работе
-          </p>
-        </div>
-        <i aria-hidden="true" />
-      </section>
-
-      <div className="filter-row" aria-label="Фильтры сделок">
-        {filters.map(({ id, label }) => (
+    <div className="screen-content dashboard-empty-screen">
+      <ScreenHeader
+        action={
           <Button
+            aria-label="Создать сделку"
+            className="jeton-header-action"
+            onClick={() => onNavigate("create")}
+            size="icon"
             type="button"
             variant="unstyled"
-            key={id}
-            className={cn("filter-chip", filter === id && "is-active")}
-            onClick={() => setFilter(id)}
-            aria-pressed={filter === id}
           >
-            {label}
+            <Plus size={20} />
           </Button>
-        ))}
+        }
+        eyebrow="Рабочее пространство"
+        title="Мои сделки"
+      />
+
+      <div className="dashboard-empty-content">
+        <span className="state-icon dashboard-empty-icon">
+          <span>
+            <FolderOpen size={38} />
+            <PenLine size={18} />
+          </span>
+        </span>
+        <h2>У вас пока нет сделок</h2>
+        <p>
+          Создайте первую сделку — соберём договор, документы и подписи в одном
+          процессе.
+        </p>
+        <Card className="empty-flow-hint">
+          <CheckCircle2 size={17} />
+          <span>
+            <strong>До готового договора — несколько шагов</strong>
+            <small>Подскажем, что заполнить и какие документы приложить</small>
+          </span>
+        </Card>
       </div>
 
-      <Card className="empty-deals">
-        <span className="state-icon">
-          <FolderOpen size={31} />
-        </span>
-        <h2>Сделок пока нет</h2>
-        <p>
-          Создайте первый договор — подскажем, что заполнить и какие документы
-          подготовить.
-        </p>
-        <Button onClick={() => onNavigate("create")}>
-          <Plus size={17} /> Создать сделку
-        </Button>
-      </Card>
-
-      <div className="quick-actions">
-        <Button
-          type="button"
-          variant="unstyled"
-          onClick={() => onNavigate("create")}
-        >
-          <PenLine size={19} />
-          <strong>Новая сделка</strong>
-          <small>Заполнить условия</small>
+      <div className="dashboard-empty-actions">
+        <Button className="full-width" onClick={() => onNavigate("create")}>
+          <Plus size={18} /> Создать сделку
         </Button>
         <Button
+          className="full-width"
+          onClick={() => setShowInviteHint((visible) => !visible)}
           type="button"
-          variant="unstyled"
-          onClick={() => onNavigate("documents")}
+          variant="secondary"
         >
-          <Files size={19} />
-          <strong>Документы</strong>
-          <small>Открыть хранилище</small>
+          Принять приглашение
         </Button>
+        {showInviteHint ? (
+          <p className="invitation-hint" role="status">
+            Откройте ссылку приглашения из сообщения MAX.
+          </p>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function CreateDealScreen() {
+type CreateDealStep = "questionnaire" | "type";
+
+function TemplateTypeIcon({
+  size,
+  template,
+}: {
+  size: number;
+  template: ContractTemplateListItem;
+}) {
+  const searchable = `${template.title} ${template.summary}`;
+  if (/аренд/i.test(searchable)) return <Building2 size={size} />;
+  if (/услуг|консультац/i.test(searchable)) {
+    return <BriefcaseBusiness size={size} />;
+  }
+  if (/постав|товар/i.test(searchable)) return <Files size={size} />;
+  if (/подряд|работ/i.test(searchable)) return <PenLine size={size} />;
+  if (/за[её]м|деньг/i.test(searchable)) return <WalletCards size={size} />;
+  if (/купл|продаж/i.test(searchable)) return <Handshake size={size} />;
+  return <CircleHelp size={size} />;
+}
+
+function getTemplateDisplayTitle(title: string): string {
+  const normalized = title.replace(/^ДЕМО:\s*/i, "").trim();
+  return normalized
+    ? normalized.charAt(0).toLocaleUpperCase("ru") + normalized.slice(1)
+    : "Договор";
+}
+
+function getTemplateDisplaySummary(
+  template: ContractTemplateListItem,
+): string {
+  if (!/^Демонстрационная(?:\s|$)/i.test(template.summary.trim())) {
+    return template.summary;
+  }
+
+  const searchable = `${template.title} ${template.summary}`;
+  if (/аренд/i.test(searchable)) return "Договор найма имущества или помещения";
+  if (/услуг|консультац/i.test(searchable)) return "Условия оказания услуг и оплаты";
+  if (/постав|товар/i.test(searchable)) return "Поставка товара между сторонами";
+  if (/подряд|работ/i.test(searchable)) return "Выполнение работ и приёмка результата";
+  if (/за[её]м|деньг/i.test(searchable)) return "Передача денег и порядок возврата";
+  if (/купл|продаж/i.test(searchable)) return "Продажа имущества между сторонами";
+  return "Структура договора и обязательные условия";
+}
+
+function CreateDealScreen({ onBack }: { onBack: () => void }) {
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [query, setQuery] = useState("");
   const [selectedSlug, setSelectedSlug] = useState("");
+  const [step, setStep] = useState<CreateDealStep>("type");
   const templates = useQuery({
     queryFn: getTemplates,
     queryKey: queryKeys.templates.list(),
   });
+  const effectiveSelectedSlug =
+    selectedSlug || templates.data?.items[0]?.slug || "";
+  const selectedTemplate = templates.data?.items.find(
+    ({ slug }) => slug === effectiveSelectedSlug,
+  );
+  const visibleTemplates = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase("ru");
+    if (!normalizedQuery) return templates.data?.items ?? [];
+    return (templates.data?.items ?? []).filter(({ summary, title }) =>
+      `${title} ${summary}`.toLocaleLowerCase("ru").includes(normalizedQuery),
+    );
+  }, [query, templates.data?.items]);
   const template = useQuery({
-    enabled: selectedSlug.length > 0,
-    queryFn: () => getTemplate(selectedSlug),
-    queryKey: queryKeys.templates.detail(selectedSlug),
+    enabled: effectiveSelectedSlug.length > 0,
+    queryFn: () => getTemplate(effectiveSelectedSlug),
+    queryKey: queryKeys.templates.detail(effectiveSelectedSlug),
   });
   const definition = useMemo(
     () =>
@@ -322,12 +284,23 @@ function CreateDealScreen() {
     [answers, definition],
   );
   const validation = useMutation({
-    mutationFn: (payload: { answers: Record<string, unknown>; versionId: string }) =>
-      validateTemplateAnswers(selectedSlug, {
+    mutationFn: (payload: {
+      answers: Record<string, unknown>;
+      versionId: string;
+    }) =>
+      validateTemplateAnswers(effectiveSelectedSlug, {
         answers: payload.answers,
         templateVersionId: payload.versionId,
       }),
   });
+
+  const selectTemplate = (slug: string) => {
+    if (slug === effectiveSelectedSlug) return;
+    validation.reset();
+    setAnswers({});
+    setFieldErrors({});
+    setSelectedSlug(slug);
+  };
 
   const changeAnswer = (key: string, value: unknown) => {
     setAnswers((current) => {
@@ -368,42 +341,34 @@ function CreateDealScreen() {
     }
   };
 
-  return (
-    <div className="screen-content">
-      <ScreenHeader eyebrow="Новая сделка · анкета" title="Выберите шаблон" />
-      <p className="screen-copy">
-        Анкета и комплект документов формируются по выбранной версии договора.
-      </p>
+  if (step === "type") {
+    return (
+      <div className="screen-content create-deal-screen">
+        <FlowHeader
+          eyebrow="Шаг 1 из 4"
+          onBack={onBack}
+          title="Выберите тип сделки"
+        />
+        <p className="screen-copy">
+          Подберём структуру договора и уточняющие вопросы.
+        </p>
 
-      <form className="deal-form" onSubmit={submitQuestionnaire} noValidate>
-        <div className="form-field">
-          <label id="template-label">Шаблон договора</label>
-          <Select
-            disabled={templates.isPending || templates.isError}
-            value={selectedSlug}
-            onValueChange={(value) => {
-              validation.reset();
-              setAnswers({});
-              setFieldErrors({});
-              setSelectedSlug(value);
-            }}
-          >
-            <SelectTrigger aria-labelledby="template-label">
-              <SelectValue
-                placeholder={
-                  templates.isPending ? "Загружаем шаблоны" : "Выберите шаблон"
-                }
-              />
-            </SelectTrigger>
-            <SelectContent position="popper">
-              {templates.data?.items.map((item) => (
-                <SelectItem key={item.id} value={item.slug}>
-                  {item.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="deal-type-search">
+          <Search size={17} aria-hidden="true" />
+          <Input
+            aria-label="Поиск типа сделки"
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Найти тип сделки"
+            value={query}
+          />
         </div>
+
+        {templates.isPending ? (
+          <Card className="form-message" role="status">
+            <strong>Загружаем типы сделок</strong>
+            <span>Получаем опубликованные шаблоны договоров.</span>
+          </Card>
+        ) : null}
 
         {templates.isError ? (
           <RequestErrorCard
@@ -414,15 +379,84 @@ function CreateDealScreen() {
 
         {templates.data?.items.length === 0 ? (
           <Card className="form-message">
-            <strong>Нет опубликованных шаблонов</strong>
-            <span>Добавьте опубликованную версию в панели управления.</span>
+            <strong>Шаблоны договоров не найдены</strong>
+            <span>Обновите экран или обратитесь в поддержку.</span>
           </Card>
         ) : null}
 
-        {template.isPending && selectedSlug ? (
+        <div className="template-type-list">
+          {visibleTemplates.map((item) => {
+            const selected = effectiveSelectedSlug === item.slug;
+            return (
+              <Button
+                aria-pressed={selected}
+                className={cn(
+                  "template-type-option",
+                  selected && "is-selected",
+                )}
+                key={item.id}
+                onClick={() => selectTemplate(item.slug)}
+                type="button"
+                variant="unstyled"
+              >
+                <span className="template-type-icon">
+                  <TemplateTypeIcon size={18} template={item} />
+                </span>
+                <span>
+                  <strong>{getTemplateDisplayTitle(item.title)}</strong>
+                  <small>{getTemplateDisplaySummary(item)}</small>
+                </span>
+                {selected ? <Check size={16} /> : <ArrowRight size={15} />}
+              </Button>
+            );
+          })}
+        </div>
+
+        {templates.data && visibleTemplates.length === 0 ? (
+          <Card className="form-message">
+            <strong>Ничего не найдено</strong>
+            <span>Измените запрос, чтобы увидеть доступные типы сделок.</span>
+          </Card>
+        ) : null}
+
+        <div className="create-flow-action">
+          <Button
+            className="full-width"
+            disabled={
+              !visibleTemplates.some(
+                ({ slug }) => slug === effectiveSelectedSlug,
+              )
+            }
+            onClick={() => setStep("questionnaire")}
+            type="button"
+          >
+            Продолжить
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="screen-content create-deal-screen">
+      <FlowHeader
+        eyebrow="Шаг 2 из 4"
+        onBack={() => setStep("type")}
+        title="Параметры сделки"
+      />
+      <p className="screen-copy">
+        Ответьте на вопросы — по ним будет подготовлена структура договора.
+      </p>
+
+      <form className="deal-form" onSubmit={submitQuestionnaire} noValidate>
+        {selectedTemplate ? (
+          <SelectedTemplateSummary template={selectedTemplate} />
+        ) : null}
+
+        {template.isPending && effectiveSelectedSlug ? (
           <Card className="form-message" role="status">
             <strong>Загружаем анкету</strong>
-            <span>Проверяем опубликованную версию шаблона.</span>
+            <span>Получаем актуальные вопросы по выбранному договору.</span>
           </Card>
         ) : null}
 
@@ -435,11 +469,6 @@ function CreateDealScreen() {
 
         {template.data && definition ? (
           <>
-            <div className="questionnaire-heading">
-              <span>Версия {template.data.currentVersion.versionNumber}</span>
-              <h2>{definition.title ?? template.data.title}</h2>
-              <p>{template.data.summary}</p>
-            </div>
             <TemplateQuestionnaire
               answers={questionnaireAnswers}
               definition={definition}
@@ -456,8 +485,8 @@ function CreateDealScreen() {
 
         {template.data && !definition ? (
           <Card className="form-message is-error">
-            <strong>Не удалось прочитать анкету</strong>
-            <span>Проверьте схему опубликованной версии шаблона.</span>
+            <strong>Не удалось открыть анкету</strong>
+            <span>Повторите загрузку или обратитесь в поддержку.</span>
           </Card>
         ) : null}
 
@@ -467,17 +496,37 @@ function CreateDealScreen() {
 
         {validation.data ? (
           <div className="validation-success" role="status">
-            <Check size={16} /> Анкета проверена по версии {validation.data.snapshot.versionNumber}.
+            <Check size={16} /> Анкета заполнена и проверена.
           </div>
         ) : null}
 
         {template.data && definition ? (
-          <Button className="full-width" disabled={validation.isPending} type="submit">
+          <Button
+            className="full-width"
+            disabled={validation.isPending}
+            type="submit"
+          >
             {validation.isPending ? "Проверяем анкету" : "Проверить анкету"}
           </Button>
         ) : null}
       </form>
     </div>
+  );
+}
+
+function SelectedTemplateSummary({
+  template,
+}: {
+  template: ContractTemplateListItem;
+}) {
+  return (
+    <Card className="selected-template-summary">
+      <TemplateTypeIcon size={19} template={template} />
+      <span>
+        <strong>{getTemplateDisplayTitle(template.title)}</strong>
+        <small>{getTemplateDisplaySummary(template)}</small>
+      </span>
+    </Card>
   );
 }
 
@@ -500,9 +549,9 @@ function TemplateDocuments({
           {requirements.map((requirement) => (
             <li key={requirement.id}>
               <span>
-                <strong>{requirement.title}</strong>
+                <strong>{getDocumentDisplayTitle(requirement)}</strong>
                 {requirement.description ? (
-                  <small>{requirement.description}</small>
+                  <small>{getDocumentDisplayDescription(requirement)}</small>
                 ) : null}
               </span>
               <em>{requirement.required ? "Обязательный" : "Дополнительный"}</em>
@@ -514,6 +563,27 @@ function TemplateDocuments({
       )}
     </Card>
   );
+}
+
+function getDocumentDisplayTitle(
+  requirement: TemplateDocumentRequirementResponse,
+): string {
+  return getTemplateDisplayTitle(requirement.title);
+}
+
+function getDocumentDisplayDescription(
+  requirement: TemplateDocumentRequirementResponse,
+): string {
+  if (!/^Демонстрационное(?:\s|$)/i.test(requirement.description ?? "")) {
+    return requirement.description ?? "";
+  }
+  if (/identity|passport/i.test(requirement.key)) {
+    return "Паспорт или иной документ, удостоверяющий личность.";
+  }
+  if (/property|ownership/i.test(requirement.key)) {
+    return "Документ, подтверждающий право на имущество.";
+  }
+  return "Документ, подтверждающий сведения по договору.";
 }
 
 function RequestErrorCard({
@@ -630,9 +700,91 @@ function ActiveScreen({
 }) {
   if (active === "home") return <HomeScreen onNavigate={onNavigate} />;
   if (active === "deals") return <DealsScreen onNavigate={onNavigate} />;
-  if (active === "create") return <CreateDealScreen />;
+  if (active === "create") {
+    return <CreateDealScreen onBack={() => onNavigate("deals")} />;
+  }
   if (active === "documents") return <DocumentsScreen />;
   return <ProfileScreen fallbackPhone={phone} />;
+}
+
+function StartScreen({
+  onStart,
+  showEnvironmentBadge,
+}: {
+  onStart: () => void;
+  showEnvironmentBadge: boolean;
+}) {
+  return (
+    <main className="app-viewport">
+      <section className="mini-app start-screen" aria-label="Начало работы">
+        {showEnvironmentBadge ? (
+          <span className="environment-badge">ТЕСТ</span>
+        ) : null}
+        <div className="start-screen-layout">
+          <header className="start-screen-header">
+            <span className="start-screen-brand" aria-label="Макс-Контракт">
+              <span className="start-screen-brand-mark">
+                <PenLine size={17} />
+              </span>
+              <span>
+                МАКС
+                <br />
+                КОНТРАКТ
+              </span>
+            </span>
+            <span className="start-screen-sequence">01 / 04</span>
+          </header>
+
+          <div className="start-screen-media">
+            <Image
+              alt="Документы для подготовки частной сделки"
+              fill
+              priority
+              sizes="(max-width: 430px) 100vw, 430px"
+              src="/images/onboarding-start.webp"
+            />
+            <span className="start-screen-shade" aria-hidden="true" />
+            <span className="start-screen-media-note">
+              Ясность · Контроль · Подпись
+            </span>
+            <motion.div
+              animate={{ opacity: 1, y: 0 }}
+              className="start-screen-card"
+              initial={{ opacity: 0, y: 14 }}
+              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <p>Частные сделки без лишней сложности</p>
+              <h1>
+                Условия, которые
+                <br />
+                ведут к сделке.
+              </h1>
+              <span>
+                Подготовим договор, соберём документы и проведём обе стороны до
+                подписи.
+              </span>
+            </motion.div>
+          </div>
+
+          <footer className="start-screen-footer">
+            <span>Частные сделки</span>
+            <Button
+              aria-label="Начать работу с Макс-Контракт"
+              className="start-screen-action"
+              onClick={onStart}
+              type="button"
+              variant="unstyled"
+            >
+              <strong>Начать работу</strong>
+              <span>
+                <ArrowRight size={18} />
+              </span>
+            </Button>
+          </footer>
+        </div>
+      </section>
+    </main>
+  );
 }
 
 function AuthenticationLoading({
@@ -694,6 +846,16 @@ export function MiniAppShell({
   showEnvironmentBadge: boolean;
 }) {
   const auth = useAuth();
+  const [started, setStarted] = useState(false);
+
+  if (!started) {
+    return (
+      <StartScreen
+        onStart={() => setStarted(true)}
+        showEnvironmentBadge={showEnvironmentBadge}
+      />
+    );
+  }
 
   if (auth.isPending) {
     return <AuthenticationLoading />;
@@ -800,7 +962,9 @@ function AppWorkspace({
             </motion.div>
           </AnimatePresence>
         </div>
-        <BottomNavigation active={active} onChange={setActive} />
+        {active !== "create" ? (
+          <BottomNavigation active={active} onChange={setActive} />
+        ) : null}
       </section>
     </main>
   );

@@ -200,7 +200,8 @@ function ConsentScreen({
       <div className="onboarding-content">
         <OnboardingHeader eyebrow="Шаг 1 из 2" title="Согласия" />
         <p className="onboarding-copy">
-          Для начала работы подтвердите обязательные условия и выберите необходимые уведомления.
+          Для начала работы подтвердите обязательные условия. Настройки можно
+          изменить позже.
         </p>
 
         <div className="consent-list">
