@@ -510,10 +510,10 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
         ) : null}
 
         {templates.data?.items.length === 0 ? (
-          <Card className="form-message">
-            <strong>Шаблоны договоров не найдены</strong>
-            <span>Обновите экран или обратитесь в поддержку.</span>
-          </Card>
+          <RequestErrorCard
+            message="Каталог типов сделок не загрузился"
+            onRetry={() => templates.refetch()}
+          />
         ) : null}
 
         <div className="template-type-list">
@@ -544,7 +544,9 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
           })}
         </div>
 
-        {templates.data && visibleTemplates.length === 0 ? (
+        {templates.data &&
+        templates.data.items.length > 0 &&
+        visibleTemplates.length === 0 ? (
           <Card className="form-message">
             <strong>Ничего не найдено</strong>
             <span>Измените запрос, чтобы увидеть доступные типы сделок.</span>

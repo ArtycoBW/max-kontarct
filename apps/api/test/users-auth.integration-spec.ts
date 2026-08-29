@@ -13,6 +13,7 @@ import {
 
 import { PrismaService } from "../src/database/prisma.service";
 import { TemplatesRepository } from "../src/templates/templates.repository";
+import { TemplateSchemaValidator } from "../src/templates/template-schema.validator";
 
 const DEFAULT_DATABASE_URL =
   "postgresql://max_contract:max_contract_dev@localhost:5434/max_contract";
@@ -110,6 +111,41 @@ describe("users/auth database foundation (integration)", () => {
         "template_document_requirements",
       ]),
     );
+  });
+
+  it("publishes the production template catalog with valid questionnaires", async () => {
+    const templates = await database.contractTemplate.findMany({
+      include: {
+        versions: {
+          include: { documentRequirements: true },
+          where: { status: TemplateVersionStatus.PUBLISHED },
+        },
+      },
+      orderBy: { slug: "asc" },
+      where: { isDemo: false },
+    });
+    const validator = new TemplateSchemaValidator();
+
+    expect(templates.map(({ slug }) => slug)).toEqual([
+      "movable-property-sale",
+      "paid-services",
+      "personal-loan",
+      "property-rental",
+      "work-contract",
+    ]);
+    for (const template of templates) {
+      expect(template.versions).toHaveLength(1);
+      const version = template.versions[0];
+      expect(version).toMatchObject({
+        status: TemplateVersionStatus.PUBLISHED,
+        versionNumber: 1,
+      });
+      expect(version?.documentRequirements.length).toBeGreaterThan(0);
+      validator.assertSchema(
+        version?.id ?? "missing-version",
+        version?.questionnaireSchema as Record<string, unknown>,
+      );
+    }
   });
 
   it("enforces a globally unique MAX user id", async () => {
