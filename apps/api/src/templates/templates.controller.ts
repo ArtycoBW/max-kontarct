@@ -1,6 +1,9 @@
 import type {
+  AiClarificationSessionResponse,
+  AnswerAiClarificationRequest,
   ContractTemplateDetailsResponse,
   ContractTemplateListResponse,
+  StartAiClarificationRequest,
   ValidateTemplateAnswersResponse,
 } from "@max-contract/contracts";
 import {
@@ -11,6 +14,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Req,
   UseGuards,
 } from "@nestjs/common";
 import {
@@ -25,6 +29,11 @@ import {
 } from "@nestjs/swagger";
 
 import { SessionAuthGuard } from "../auth/session-auth.guard";
+import type { AuthenticatedRequest } from "../auth/auth.types";
+import { AiClarificationsService } from "./ai-clarifications.service";
+import { AiClarificationParamsDto } from "./dto/ai-clarification-params.dto";
+import { AnswerAiClarificationDto } from "./dto/answer-ai-clarification.dto";
+import { StartAiClarificationDto } from "./dto/start-ai-clarification.dto";
 import { TemplateSlugParamsDto } from "./dto/template-slug-params.dto";
 import { ValidateTemplateAnswersDto } from "./dto/validate-template-answers.dto";
 import { TemplatesService } from "./templates.service";
@@ -34,7 +43,10 @@ import { TemplatesService } from "./templates.service";
 @ApiTags("templates")
 @ApiCookieAuth("max_contract_session")
 export class TemplatesController {
-  constructor(private readonly templates: TemplatesService) {}
+  constructor(
+    private readonly clarifications: AiClarificationsService,
+    private readonly templates: TemplatesService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: "Получить опубликованные шаблоны договоров" })
@@ -66,5 +78,38 @@ export class TemplatesController {
     @Body() body: ValidateTemplateAnswersDto,
   ): Promise<ValidateTemplateAnswersResponse> {
     return this.templates.validateAnswers(params.slug, body);
+  }
+
+  @Post(":slug/clarifications")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Начать сессию уточняющих вопросов YandexGPT" })
+  @ApiOkResponse({ description: "Статус готовности и типизированные вопросы" })
+  startClarification(
+    @Param() params: TemplateSlugParamsDto,
+    @Body() body: StartAiClarificationDto,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<AiClarificationSessionResponse> {
+    return this.clarifications.start(
+      params.slug,
+      request.auth.user.id,
+      body satisfies StartAiClarificationRequest,
+    );
+  }
+
+  @Post(":slug/clarifications/:sessionId/answers")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Сохранить ответы на уточняющие вопросы" })
+  @ApiOkResponse({ description: "Обновлённый статус AI-сессии" })
+  answerClarification(
+    @Param() params: AiClarificationParamsDto,
+    @Body() body: AnswerAiClarificationDto,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<AiClarificationSessionResponse> {
+    return this.clarifications.answer(
+      params.slug,
+      params.sessionId,
+      request.auth.user.id,
+      body satisfies AnswerAiClarificationRequest,
+    );
   }
 }

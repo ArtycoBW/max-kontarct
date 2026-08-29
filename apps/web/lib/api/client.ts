@@ -1,6 +1,8 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
 const REQUEST_TIMEOUT_MS = 5_000;
 
+type ApiRequestOptions = RequestInit & { timeoutMs?: number };
+
 interface ApiErrorBody {
   code?: string;
   details?: unknown;
@@ -39,18 +41,19 @@ async function readJson(response: Response): Promise<unknown> {
 
 export async function apiRequest<T>(
   path: string,
-  init: RequestInit = {},
+  init: ApiRequestOptions = {},
 ): Promise<T> {
+  const { timeoutMs = REQUEST_TIMEOUT_MS, ...requestInit } = init;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(buildUrl(path), {
-      ...init,
+      ...requestInit,
       credentials: "include",
       headers: {
         Accept: "application/json",
-        ...init.headers,
+        ...requestInit.headers,
       },
       signal: controller.signal,
     });

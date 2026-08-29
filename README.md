@@ -5,7 +5,9 @@ Production monorepo для MAX Mini App по созданию, согласов�
 На текущем этапе реализовано ядро Mini App: MAX/dev-авторизация, согласия,
 подтверждённый телефон, профиль физлица, RBAC-оболочка администрирования и
 versioned API опубликованных шаблонов.
-YandexGPT подключён через server-side adapter. Интеграции DaData и SMSC
+YandexGPT подключён через server-side adapter: ответы анкеты проходят
+структурированную проверку, уточняющие вопросы сохраняются в пользовательской
+сессии и приводят её к статусу готовности договора. Интеграции DaData и SMSC
 относятся к этапам проверки данных и подписания.
 
 ## Требования
@@ -102,7 +104,10 @@ production `DATABASE_URL` всегда обязателен.
 только последнюю опубликованную версию:
 
 - `GET /api/v1/templates` — список;
-- `GET /api/v1/templates/:slug` — JSON Schema анкеты и требования к документам.
+- `GET /api/v1/templates/:slug` — JSON Schema анкеты и требования к документам;
+- `POST /api/v1/templates/:slug/clarifications` — начать AI-сессию;
+- `POST /api/v1/templates/:slug/clarifications/:sessionId/answers` — сохранить
+  типизированные ответы и получить следующий статус.
 
 Integration-тесты создают отдельную случайную PostgreSQL-базу, накатывают в неё
 все migrations с нуля и удаляют её после проверки. Локальная dev-база при этом

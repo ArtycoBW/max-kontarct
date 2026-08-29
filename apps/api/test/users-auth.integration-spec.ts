@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 import {
+  AiGenerationStatus,
   ConsentSource,
   ConsentType,
   PhoneVerificationSource,
@@ -97,6 +98,7 @@ describe("users/auth database foundation (integration)", () => {
       expect.arrayContaining([
         "_prisma_migrations",
         "audit_events",
+        "ai_generations",
         "contract_template_versions",
         "contract_templates",
         "max_accounts",
@@ -350,6 +352,61 @@ describe("users/auth database foundation (integration)", () => {
         },
       }),
     ).rejects.toMatchObject({ code: "P2002" });
+  });
+
+  it("persists an owned AI clarification session with versioned prompt data", async () => {
+    const user = await database.user.create({ data: {} });
+    const template = await database.contractTemplate.create({
+      data: {
+        slug: "integration-ai-session",
+        summary: "Шаблон для проверки AI-сессии",
+        title: "Аренда имущества",
+        versions: {
+          create: {
+            publishedAt: new Date("2026-08-29T12:00:00.000Z"),
+            questionnaireSchema: { properties: {}, type: "object" },
+            status: TemplateVersionStatus.PUBLISHED,
+            versionNumber: 1,
+          },
+        },
+      },
+      include: { versions: true },
+    });
+    const version = template.versions[0];
+    if (!version) throw new Error("Expected the published template version");
+
+    const session = await database.aiGeneration.create({
+      data: {
+        inputAnswers: { paymentAmount: 120_000 },
+        promptId: "contract-clarification",
+        promptVersion: "1.0.0",
+        providerMetadata: { model: "fake-yandexgpt", provider: "fake" },
+        questions: [
+          {
+            description: "Уточнение влияет на расходы.",
+            id: "utilitiesPayer",
+            label: "Кто оплачивает коммунальные услуги?",
+            options: [
+              { label: "Арендатор", value: "tenant" },
+              { label: "Арендодатель", value: "landlord" },
+            ],
+            required: true,
+            type: "single_choice",
+          },
+        ],
+        status: AiGenerationStatus.NEED_MORE_INFO,
+        templateVersionId: version.id,
+        userId: user.id,
+      },
+    });
+
+    expect(session).toMatchObject({
+      promptId: "contract-clarification",
+      promptVersion: "1.0.0",
+      status: AiGenerationStatus.NEED_MORE_INFO,
+      templateVersionId: version.id,
+      userId: user.id,
+    });
   });
 
   it("keeps document requirements isolated between unrelated templates", async () => {

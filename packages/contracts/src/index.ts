@@ -176,3 +176,46 @@ export interface ValidateTemplateAnswersResponse {
   snapshot: TemplateVersionSnapshot;
   valid: true;
 }
+
+export type AiClarificationStatus =
+  | "NEED_MORE_INFO"
+  | "READY_TO_GENERATE";
+
+export type AiClarificationQuestionType =
+  | "single_choice"
+  | "boolean"
+  | "short_text"
+  | "number"
+  | "date";
+
+export interface AiClarificationOption {
+  label: string;
+  value: string;
+}
+
+export interface AiClarificationQuestion {
+  description: string;
+  id: string;
+  label: string;
+  options: AiClarificationOption[];
+  required: boolean;
+  type: AiClarificationQuestionType;
+}
+
+export interface StartAiClarificationRequest {
+  answers: Record<string, unknown>;
+  templateVersionId: string;
+}
+
+export interface AnswerAiClarificationRequest {
+  answers: Record<string, unknown>;
+}
+
+export interface AiClarificationSessionResponse {
+  answers: Record<string, unknown>;
+  createdAt: string;
+  id: string;
+  questions: AiClarificationQuestion[];
+  status: AiClarificationStatus;
+  updatedAt: string;
+}

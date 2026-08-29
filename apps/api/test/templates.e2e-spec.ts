@@ -6,6 +6,7 @@ import request from "supertest";
 
 import { SessionAuthGuard } from "../src/auth/session-auth.guard";
 import { API_PREFIX } from "../src/bootstrap/configure-application";
+import { AiClarificationsService } from "../src/templates/ai-clarifications.service";
 import { TemplatesController } from "../src/templates/templates.controller";
 import type {
   PublishedTemplateDetailsRecord,
@@ -36,6 +37,10 @@ describe("templates API (e2e)", () => {
     async (slug: string): Promise<PublishedTemplateDetailsRecord | null> =>
       slug === "demo-property-rental" ? detailsRecord() : null,
   );
+  const startClarification = jest.fn(async () => clarificationSession());
+  const answerClarification = jest.fn(async () =>
+    clarificationSession({ questions: [], status: "READY_TO_GENERATE" }),
+  );
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
@@ -43,6 +48,13 @@ describe("templates API (e2e)", () => {
       providers: [
         TemplatesService,
         TemplateSchemaValidator,
+        {
+          provide: AiClarificationsService,
+          useValue: {
+            answer: answerClarification,
+            start: startClarification,
+          },
+        },
         {
           provide: TemplatesRepository,
           useValue: {
@@ -159,7 +171,75 @@ describe("templates API (e2e)", () => {
       .get(`/${API_PREFIX}/templates/INVALID%20SLUG`)
       .expect(400);
   });
+
+  it("starts an authenticated clarification session", async () => {
+    const response = await request(app.getHttpServer())
+      .post(`/${API_PREFIX}/templates/demo-property-rental/clarifications`)
+      .send({
+        answers: {},
+        templateVersionId: "20000000-0000-4000-8000-000000000001",
+      })
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      questions: [expect.objectContaining({ id: "utilitiesPayer" })],
+      status: "NEED_MORE_INFO",
+    });
+    expect(startClarification).toHaveBeenLastCalledWith(
+      "demo-property-rental",
+      "00000000-0000-4000-8000-000000000001",
+      expect.objectContaining({
+        templateVersionId: "20000000-0000-4000-8000-000000000001",
+      }),
+    );
+  });
+
+  it("saves answers only in the authenticated user's session", async () => {
+    const response = await request(app.getHttpServer())
+      .post(
+        `/${API_PREFIX}/templates/demo-property-rental/clarifications/10000000-0000-4000-8000-000000000001/answers`,
+      )
+      .send({ answers: { utilitiesPayer: "tenant" } })
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      questions: [],
+      status: "READY_TO_GENERATE",
+    });
+    expect(answerClarification).toHaveBeenLastCalledWith(
+      "demo-property-rental",
+      "10000000-0000-4000-8000-000000000001",
+      "00000000-0000-4000-8000-000000000001",
+      { answers: { utilitiesPayer: "tenant" } },
+    );
+  });
 });
+
+function clarificationSession(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    answers: {},
+    createdAt: "2026-08-29T18:00:00.000Z",
+    id: "10000000-0000-4000-8000-000000000001",
+    questions: [
+      {
+        description: "Уточнение влияет на расходы.",
+        id: "utilitiesPayer",
+        label: "Кто оплачивает коммунальные услуги?",
+        options: [
+          { label: "Арендатор", value: "tenant" },
+          { label: "Арендодатель", value: "landlord" },
+        ],
+        required: true,
+        type: "single_choice",
+      },
+    ],
+    status: "NEED_MORE_INFO",
+    updatedAt: "2026-08-29T18:00:00.000Z",
+    ...overrides,
+  };
+}
 
 function listRecord(): PublishedTemplateListRecord {
   return {

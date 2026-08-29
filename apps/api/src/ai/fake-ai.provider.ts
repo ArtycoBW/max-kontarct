@@ -24,7 +24,10 @@ export class FakeAiProvider implements AiProvider {
     assertAiRequest(request);
     this.outputValidator.assertSchema(request.output.name, request.output.schema);
     const redacted = this.piiRedactor.redact(request.userData, request.piiPaths);
-    const generated = generateFromSchema(request.output.schema);
+    const generated =
+      request.prompt.id === "contract-clarification"
+        ? generateClarification(redacted.data)
+        : generateFromSchema(request.output.schema);
 
     return Promise.resolve({
       data: this.outputValidator.validateObject<T>(
@@ -47,6 +50,32 @@ export class FakeAiProvider implements AiProvider {
       },
     });
   }
+}
+
+function generateClarification(userData: AiJsonObject): AiJsonObject {
+  const clarificationAnswers = isJsonObject(userData.clarificationAnswers)
+    ? userData.clarificationAnswers
+    : {};
+  if (Object.keys(clarificationAnswers).length > 0) {
+    return { questions: [], status: "READY_TO_GENERATE" };
+  }
+  return {
+    questions: [
+      {
+        description: "Уточнение влияет на распределение расходов по договору.",
+        id: "utilitiesPayer",
+        label: "Кто оплачивает коммунальные услуги?",
+        options: [
+          { label: "Арендатор", value: "tenant" },
+          { label: "Арендодатель", value: "landlord" },
+          { label: "Поровну", value: "equally" },
+        ],
+        required: true,
+        type: "single_choice",
+      },
+    ],
+    status: "NEED_MORE_INFO",
+  };
 }
 
 function generateFromSchema(schema: AiJsonObject): AiJsonValue {

@@ -31,6 +31,29 @@ describe("FakeAiProvider", () => {
       },
     });
   });
+
+  it("simulates the clarification lifecycle without calling YandexGPT", async () => {
+    const provider = new FakeAiProvider(
+      new AiOutputValidator(),
+      new PiiRedactor(),
+    );
+
+    const first = await provider.generateStructured(
+      clarificationRequest({}),
+    );
+    const completed = await provider.generateStructured(
+      clarificationRequest({ utilitiesPayer: "tenant" }),
+    );
+
+    expect(first.data).toMatchObject({
+      questions: [expect.objectContaining({ type: "single_choice" })],
+      status: "NEED_MORE_INFO",
+    });
+    expect(completed.data).toEqual({
+      questions: [],
+      status: "READY_TO_GENERATE",
+    });
+  });
 });
 
 function request(): AiStructuredRequest {
@@ -53,5 +76,75 @@ function request(): AiStructuredRequest {
       version: "1.0.0",
     },
     userData: { email: "client@example.com", purpose: "Аренда" },
+  };
+}
+
+function clarificationRequest(
+  clarificationAnswers: Record<string, string>,
+): AiStructuredRequest {
+  return {
+    output: {
+      name: "contract_clarification_v1",
+      schema: {
+        additionalProperties: false,
+        properties: {
+          questions: {
+            items: {
+              additionalProperties: false,
+              properties: {
+                description: { type: "string" },
+                id: { type: "string" },
+                label: { type: "string" },
+                options: {
+                  items: {
+                    additionalProperties: false,
+                    properties: {
+                      label: { type: "string" },
+                      value: { type: "string" },
+                    },
+                    required: ["label", "value"],
+                    type: "object",
+                  },
+                  type: "array",
+                },
+                required: { type: "boolean" },
+                type: {
+                  enum: [
+                    "single_choice",
+                    "boolean",
+                    "short_text",
+                    "number",
+                    "date",
+                  ],
+                  type: "string",
+                },
+              },
+              required: [
+                "description",
+                "id",
+                "label",
+                "options",
+                "required",
+                "type",
+              ],
+              type: "object",
+            },
+            type: "array",
+          },
+          status: {
+            enum: ["NEED_MORE_INFO", "READY_TO_GENERATE"],
+            type: "string",
+          },
+        },
+        required: ["questions", "status"],
+        type: "object",
+      },
+    },
+    prompt: {
+      id: "contract-clarification",
+      trustedInstruction: "Уточни условия договора.",
+      version: "1.0.0",
+    },
+    userData: { clarificationAnswers },
   };
 }

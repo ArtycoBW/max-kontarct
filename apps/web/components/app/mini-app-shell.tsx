@@ -1,6 +1,8 @@
 "use client";
 
 import type {
+  AiClarificationQuestion,
+  AiClarificationSessionResponse,
   ContractTemplateListItem,
   OnboardingStateResponse,
   TemplateAnswerValidationError,
@@ -15,6 +17,7 @@ import {
   Building2,
   Check,
   CheckCircle2,
+  ChevronsDown,
   CircleAlert,
   CircleHelp,
   FileCheck2,
@@ -33,13 +36,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import Image from "next/image";
 import type { FormEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/components/providers/auth-provider";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { ProfileScreen } from "@/components/profile/profile-screen";
@@ -51,8 +55,10 @@ import { ApiError } from "@/lib/api/client";
 import { getOnboardingState } from "@/lib/api/onboarding";
 import { queryKeys } from "@/lib/api/query-keys";
 import {
+  answerAiClarification,
   getTemplate,
   getTemplates,
+  startAiClarification,
   validateTemplateAnswers,
 } from "@/lib/api/templates";
 import { normalizeQuestionnaireAnswers } from "@/lib/validation/questionnaire-answers";
@@ -72,6 +78,33 @@ const navigation: Array<{
   { id: "documents", icon: Files, label: "Документы" },
   { id: "profile", icon: UserRound, label: "Профиль" },
 ];
+
+// The approved closing composition is source frame 154 from the design prototype.
+const START_SCREEN_FRAME_COUNT = 154;
+const startScreenFramePath = (index: number) =>
+  `/images/start-screen/frame-${String(index + 1).padStart(3, "0")}.webp`;
+const startScreenFrameCache: HTMLImageElement[] = [];
+let startScreenPreloadStarted = false;
+
+function preloadStartScreenFrames(): void {
+  if (typeof window === "undefined" || startScreenPreloadStarted) return;
+  startScreenPreloadStarted = true;
+
+  const preloadBatch = (start: number) => {
+    const end = Math.min(START_SCREEN_FRAME_COUNT, start + 15);
+    for (let index = start; index < end; index += 1) {
+      const image = new window.Image();
+      image.decoding = "async";
+      image.src = startScreenFramePath(index);
+      startScreenFrameCache.push(image);
+    }
+    if (end < START_SCREEN_FRAME_COUNT) {
+      window.setTimeout(() => preloadBatch(end), 60);
+    }
+  };
+
+  preloadBatch(0);
+}
 
 function ScreenHeader({
   action,
@@ -94,10 +127,12 @@ function ScreenHeader({
 }
 
 function FlowHeader({
+  action,
   eyebrow,
   onBack,
   title,
 }: {
+  action?: React.ReactNode;
   eyebrow: string;
   onBack: () => void;
   title: string;
@@ -105,18 +140,21 @@ function FlowHeader({
   return (
     <header className="flow-header">
       <p className="screen-eyebrow">{eyebrow}</p>
-      <div>
-        <Button
-          aria-label="Назад"
-          className="flow-back-button"
-          onClick={onBack}
-          size="icon"
-          type="button"
-          variant="ghost"
-        >
-          <ArrowLeft size={21} />
-        </Button>
-        <h1>{title}</h1>
+      <div className="flow-header-row">
+        <div className="flow-header-title">
+          <Button
+            aria-label="Назад"
+            className="flow-back-button"
+            onClick={onBack}
+            size="icon"
+            type="button"
+            variant="ghost"
+          >
+            <ArrowLeft size={21} />
+          </Button>
+          <h1>{title}</h1>
+        </div>
+        {action}
       </div>
     </header>
   );
@@ -191,7 +229,7 @@ function DealsScreen({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
   );
 }
 
-type CreateDealStep = "questionnaire" | "type";
+type CreateDealStep = "clarification" | "questionnaire" | "ready" | "type";
 
 function TemplateTypeIcon({
   size,
@@ -238,6 +276,13 @@ function getTemplateDisplaySummary(
 
 function CreateDealScreen({ onBack }: { onBack: () => void }) {
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
+  const [clarificationAnswers, setClarificationAnswers] = useState<
+    Record<string, unknown>
+  >({});
+  const [clarificationError, setClarificationError] = useState("");
+  const [clarificationSession, setClarificationSession] =
+    useState<AiClarificationSessionResponse | null>(null);
+  const [questionIndex, setQuestionIndex] = useState(0);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
   const [selectedSlug, setSelectedSlug] = useState("");
@@ -293,10 +338,39 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
         templateVersionId: payload.versionId,
       }),
   });
+  const clarificationStart = useMutation({
+    mutationFn: (payload: {
+      answers: Record<string, unknown>;
+      versionId: string;
+    }) =>
+      startAiClarification(effectiveSelectedSlug, {
+        answers: payload.answers,
+        templateVersionId: payload.versionId,
+      }),
+  });
+  const clarificationAnswer = useMutation({
+    mutationFn: (payload: {
+      answers: Record<string, unknown>;
+      sessionId: string;
+    }) =>
+      answerAiClarification(effectiveSelectedSlug, payload.sessionId, {
+        answers: payload.answers,
+      }),
+  });
+
+  const resetClarification = () => {
+    clarificationStart.reset();
+    clarificationAnswer.reset();
+    setClarificationAnswers({});
+    setClarificationError("");
+    setClarificationSession(null);
+    setQuestionIndex(0);
+  };
 
   const selectTemplate = (slug: string) => {
     if (slug === effectiveSelectedSlug) return;
     validation.reset();
+    resetClarification();
     setAnswers({});
     setFieldErrors({});
     setSelectedSlug(slug);
@@ -318,6 +392,7 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
       return next;
     });
     validation.reset();
+    resetClarification();
   };
 
   const submitQuestionnaire = async (event: FormEvent) => {
@@ -332,12 +407,69 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
     if (Object.keys(normalized.errors).length > 0) return;
 
     try {
-      await validation.mutateAsync({
+      const validated = await validation.mutateAsync({
         answers: normalized.answers,
         versionId: template.data.currentVersion.id,
       });
+      const session = await clarificationStart.mutateAsync({
+        answers: validated.answers,
+        versionId: validated.snapshot.templateVersionId,
+      });
+      openClarificationSession(session);
     } catch (error) {
       setFieldErrors(extractTemplateFieldErrors(error));
+    }
+  };
+
+  const openClarificationSession = (
+    session: AiClarificationSessionResponse,
+  ) => {
+    setClarificationSession(session);
+    setClarificationAnswers({});
+    setClarificationError("");
+    setQuestionIndex(0);
+    setStep(session.status === "READY_TO_GENERATE" ? "ready" : "clarification");
+  };
+
+  const changeClarificationAnswer = (key: string, value: unknown) => {
+    setClarificationAnswers((current) => ({ ...current, [key]: value }));
+    setClarificationError("");
+  };
+
+  const submitClarificationQuestion = async (skip = false) => {
+    if (!clarificationSession) return;
+    const question = clarificationSession.questions[questionIndex];
+    if (!question) return;
+
+    const prepared = prepareClarificationAnswer(
+      question,
+      clarificationAnswers[question.id],
+      skip,
+    );
+    if (prepared.error) {
+      setClarificationError(prepared.error);
+      return;
+    }
+
+    const nextAnswers = { ...clarificationAnswers };
+    if (prepared.omit) delete nextAnswers[question.id];
+    else nextAnswers[question.id] = prepared.value;
+    setClarificationAnswers(nextAnswers);
+
+    if (questionIndex < clarificationSession.questions.length - 1) {
+      setQuestionIndex((current) => current + 1);
+      setClarificationError("");
+      return;
+    }
+
+    try {
+      const session = await clarificationAnswer.mutateAsync({
+        answers: nextAnswers,
+        sessionId: clarificationSession.id,
+      });
+      openClarificationSession(session);
+    } catch {
+      // Ошибка запроса отображается в карточке под вопросом.
     }
   };
 
@@ -437,6 +569,69 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
     );
   }
 
+  if (step === "clarification" && clarificationSession) {
+    const question = clarificationSession.questions[questionIndex];
+    if (question) {
+      return (
+        <AiClarificationScreen
+          answer={clarificationAnswers[question.id]}
+          error={clarificationError}
+          isPending={clarificationAnswer.isPending}
+          onAnswer={(value) => changeClarificationAnswer(question.id, value)}
+          onBack={() => {
+            if (questionIndex > 0) {
+              setQuestionIndex((current) => current - 1);
+              setClarificationError("");
+              return;
+            }
+            resetClarification();
+            setStep("questionnaire");
+          }}
+          onNext={() => void submitClarificationQuestion(false)}
+          onSkip={() => void submitClarificationQuestion(true)}
+          question={question}
+          questionIndex={questionIndex}
+          requestError={
+            clarificationAnswer.isError
+              ? clarificationAnswer.error.message
+              : undefined
+          }
+          total={clarificationSession.questions.length}
+        />
+      );
+    }
+  }
+
+  if (step === "ready") {
+    return (
+      <div className="screen-content create-deal-screen clarification-ready-screen">
+        <FlowHeader
+          eyebrow="Шаг 3 из 4"
+          onBack={() => {
+            resetClarification();
+            setStep("questionnaire");
+          }}
+          title="Условия собраны"
+        />
+        <div className="clarification-ready-content">
+          <span className="state-icon">
+            <CheckCircle2 size={31} />
+          </span>
+          <h2>Можно готовить договор</h2>
+          <p>
+            Анкета и уточнения сохранены. Данных достаточно для подготовки
+            проекта договора.
+          </p>
+        </div>
+        <div className="create-flow-action">
+          <Button className="full-width" onClick={onBack} type="button">
+            К сделкам
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="screen-content create-deal-screen">
       <FlowHeader
@@ -490,8 +685,15 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
           </Card>
         ) : null}
 
-        {validation.isError && Object.keys(fieldErrors).length === 0 ? (
-          <RequestErrorCard message={validation.error.message} />
+        {(validation.isError || clarificationStart.isError) &&
+        Object.keys(fieldErrors).length === 0 ? (
+          <RequestErrorCard
+            message={
+              clarificationStart.isError
+                ? clarificationStart.error.message
+                : validation.error?.message ?? "Не удалось проверить анкету"
+            }
+          />
         ) : null}
 
         {validation.data ? (
@@ -503,15 +705,298 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
         {template.data && definition ? (
           <Button
             className="full-width"
-            disabled={validation.isPending}
+            disabled={validation.isPending || clarificationStart.isPending}
             type="submit"
           >
-            {validation.isPending ? "Проверяем анкету" : "Проверить анкету"}
+            {validation.isPending
+              ? "Проверяем анкету"
+              : clarificationStart.isPending
+                ? "Подготавливаем вопросы"
+                : "Продолжить"}
           </Button>
         ) : null}
       </form>
     </div>
   );
+}
+
+function AiClarificationScreen({
+  answer,
+  error,
+  isPending,
+  onAnswer,
+  onBack,
+  onNext,
+  onSkip,
+  question,
+  questionIndex,
+  requestError,
+  total,
+}: {
+  answer: unknown;
+  error: string;
+  isPending: boolean;
+  onAnswer: (value: unknown) => void;
+  onBack: () => void;
+  onNext: () => void;
+  onSkip: () => void;
+  question: AiClarificationQuestion;
+  questionIndex: number;
+  requestError?: string;
+  total: number;
+}) {
+  const errorId = `${question.id}-clarification-error`;
+  return (
+    <div className="screen-content create-deal-screen ai-clarification-screen">
+      <FlowHeader
+        action={<span className="ai-model-badge">Помощник</span>}
+        eyebrow={`Вопрос ${questionIndex + 1} из ${total}`}
+        onBack={onBack}
+        title="Уточним детали"
+      />
+      <p className="screen-copy">
+        Ответы помогут сделать условия точнее и понятнее обеим сторонам.
+      </p>
+      <div
+        aria-label={`Пройдено ${questionIndex + 1} из ${total}`}
+        className="clarification-progress"
+        role="progressbar"
+        aria-valuemax={total}
+        aria-valuemin={1}
+        aria-valuenow={questionIndex + 1}
+      >
+        <span
+          style={{ width: `${((questionIndex + 1) / total) * 100}%` }}
+        />
+      </div>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          initial={{ opacity: 0, y: 10 }}
+          key={question.id}
+          transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <Card className="ai-question-card">
+            <div className="ai-question-heading">
+              <h2>
+                {question.label}
+                {question.required ? <span aria-hidden="true"> *</span> : null}
+              </h2>
+              {question.description ? <p>{question.description}</p> : null}
+            </div>
+            <AiQuestionControl
+              answer={answer}
+              errorId={error ? errorId : undefined}
+              onAnswer={onAnswer}
+              question={question}
+            />
+            {error ? (
+              <span className="field-error" id={errorId} role="alert">
+                <CircleAlert size={13} /> {error}
+              </span>
+            ) : null}
+          </Card>
+        </motion.div>
+      </AnimatePresence>
+
+      {requestError ? (
+        <RequestErrorCard message={requestError} onRetry={onNext} />
+      ) : null}
+
+      {!question.required ? (
+        <Button
+          className="clarification-skip"
+          disabled={isPending}
+          onClick={onSkip}
+          type="button"
+          variant="ghost"
+        >
+          Пропустить вопрос
+        </Button>
+      ) : null}
+
+      <div className="create-flow-action">
+        <Button
+          className="full-width"
+          disabled={isPending}
+          onClick={onNext}
+          type="button"
+        >
+          {isPending
+            ? "Сохраняем ответы"
+            : questionIndex === total - 1
+              ? "Завершить"
+              : "Продолжить"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function AiQuestionControl({
+  answer,
+  errorId,
+  onAnswer,
+  question,
+}: {
+  answer: unknown;
+  errorId?: string;
+  onAnswer: (value: unknown) => void;
+  question: AiClarificationQuestion;
+}) {
+  if (question.type === "single_choice") {
+    return (
+      <div className="ai-options">
+        {question.options.map((option) => (
+          <Button
+            aria-describedby={errorId}
+            aria-pressed={answer === option.value}
+            className={cn(
+              "ai-option",
+              answer === option.value && "is-selected",
+            )}
+            key={option.value}
+            onClick={() => onAnswer(option.value)}
+            type="button"
+            variant="unstyled"
+          >
+            <span>{option.label}</span>
+            {answer === option.value ? <Check size={16} /> : null}
+          </Button>
+        ))}
+      </div>
+    );
+  }
+
+  if (question.type === "boolean") {
+    return (
+      <div className="ai-options is-two-column">
+        {[
+          { label: "Да", value: true },
+          { label: "Нет", value: false },
+        ].map((option) => (
+          <Button
+            aria-describedby={errorId}
+            aria-pressed={answer === option.value}
+            className={cn(
+              "ai-option is-boolean",
+              answer === option.value && "is-selected",
+            )}
+            key={option.label}
+            onClick={() => onAnswer(option.value)}
+            type="button"
+            variant="unstyled"
+          >
+            {option.label}
+          </Button>
+        ))}
+      </div>
+    );
+  }
+
+  if (question.type === "date") {
+    const currentYear = new Date().getFullYear();
+    return (
+      <DatePicker
+        aria-invalid={Boolean(errorId)}
+        allowFuture
+        fromYear={currentYear - 100}
+        id={question.id}
+        onChange={onAnswer}
+        toYear={currentYear + 50}
+        value={typeof answer === "string" ? answer : ""}
+      />
+    );
+  }
+
+  if (question.type === "number") {
+    return (
+      <Input
+        aria-describedby={errorId}
+        aria-invalid={Boolean(errorId)}
+        data-number-input="true"
+        id={question.id}
+        inputMode="decimal"
+        onChange={(event) => onAnswer(event.target.value)}
+        placeholder="Введите число"
+        type="text"
+        value={
+          typeof answer === "number" || typeof answer === "string" ? answer : ""
+        }
+      />
+    );
+  }
+
+  return (
+    <Textarea
+      aria-describedby={errorId}
+      aria-invalid={Boolean(errorId)}
+      id={question.id}
+      maxLength={1_000}
+      onChange={(event) => onAnswer(event.target.value)}
+      placeholder="Введите ответ"
+      value={typeof answer === "string" ? answer : ""}
+    />
+  );
+}
+
+function prepareClarificationAnswer(
+  question: AiClarificationQuestion,
+  rawValue: unknown,
+  skip: boolean,
+): { error?: string; omit?: boolean; value?: unknown } {
+  if (skip) {
+    return question.required
+      ? { error: "Ответьте на обязательный вопрос" }
+      : { omit: true };
+  }
+
+  const empty =
+    rawValue === undefined ||
+    rawValue === null ||
+    (typeof rawValue === "string" && rawValue.trim() === "");
+  if (empty) {
+    return question.required
+      ? { error: "Ответьте на обязательный вопрос" }
+      : { omit: true };
+  }
+
+  if (question.type === "single_choice") {
+    return typeof rawValue === "string" &&
+      question.options.some(({ value }) => value === rawValue)
+      ? { value: rawValue }
+      : { error: "Выберите один из вариантов" };
+  }
+  if (question.type === "boolean") {
+    return typeof rawValue === "boolean"
+      ? { value: rawValue }
+      : { error: "Выберите да или нет" };
+  }
+  if (question.type === "number") {
+    if (typeof rawValue !== "string" && typeof rawValue !== "number") {
+      return { error: "Укажите число" };
+    }
+    const normalized = String(rawValue).trim().replace(",", ".");
+    if (!/^-?(?:\d+|\d*\.\d+)$/.test(normalized)) {
+      return { error: "Укажите число без лишних символов" };
+    }
+    const number = Number(normalized);
+    return Number.isFinite(number)
+      ? { value: number }
+      : { error: "Укажите корректное число" };
+  }
+  if (question.type === "date") {
+    return typeof rawValue === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rawValue)
+      ? { value: rawValue }
+      : { error: "Укажите дату" };
+  }
+  if (typeof rawValue !== "string") return { error: "Введите ответ" };
+  const value = rawValue.trim();
+  return value.length <= 1_000
+    ? { value }
+    : { error: "Сократите ответ до 1000 символов" };
 }
 
 function SelectedTemplateSummary({
@@ -714,73 +1199,244 @@ function StartScreen({
   onStart: () => void;
   showEnvironmentBadge: boolean;
 }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const frameImageRef = useRef<HTMLImageElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
+  const progressValueRef = useRef<HTMLElement>(null);
+  const progressChapterRef = useRef<HTMLSpanElement>(null);
+
+  const updateParallax = (event: React.PointerEvent<HTMLDivElement>) => {
+    const root = rootRef.current;
+    if (!root) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = ((event.clientX - bounds.left) / bounds.width - 0.5) * 12;
+    const y = ((event.clientY - bounds.top) / bounds.height - 0.5) * 9;
+    root.style.setProperty("--start-screen-x", `${x.toFixed(2)}px`);
+    root.style.setProperty("--start-screen-y", `${y.toFixed(2)}px`);
+  };
+  const resetParallax = () => {
+    rootRef.current?.style.setProperty("--start-screen-x", "0px");
+    rootRef.current?.style.setProperty("--start-screen-y", "0px");
+  };
+
+  useEffect(() => {
+    const root = rootRef.current;
+    const frameImage = frameImageRef.current;
+    const scroller = root?.parentElement;
+    if (!root || !frameImage || !scroller) return;
+
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let animationFrame = 0;
+    let targetProgress = 0;
+    let displayedProgress = 0;
+    let displayedFrame = -1;
+
+    const measure = () => {
+      const viewportHeight = scroller.clientHeight;
+      root.style.height = `${Math.round(viewportHeight * 4.05)}px`;
+      root.style.setProperty(
+        "--start-screen-viewport-height",
+        `${viewportHeight}px`,
+      );
+    };
+    const renderFrame = () => {
+      animationFrame = 0;
+      const distance = targetProgress - displayedProgress;
+      displayedProgress =
+        Math.abs(distance) < 0.0006
+          ? targetProgress
+          : displayedProgress + distance * 0.085;
+      const percent = Math.round(displayedProgress * 100);
+      const chapter =
+        displayedProgress < 0.34
+          ? "УСЛОВИЯ"
+          : displayedProgress < 0.68
+            ? "СОГЛАСОВАНИЕ"
+            : "ПОДПИСЬ";
+      const hintOpacity = Math.max(0, 1 - displayedProgress * 9);
+      const nextFrame = mediaQuery.matches
+        ? 0
+        : Math.min(
+            START_SCREEN_FRAME_COUNT - 1,
+            Math.round(displayedProgress * (START_SCREEN_FRAME_COUNT - 1)),
+          );
+
+      root.style.setProperty(
+        "--start-screen-progress",
+        displayedProgress.toFixed(4),
+      );
+      root.style.setProperty(
+        "--start-screen-hint-opacity",
+        hintOpacity.toFixed(3),
+      );
+      progressRef.current?.setAttribute("aria-valuenow", String(percent));
+      if (progressValueRef.current) {
+        progressValueRef.current.textContent = String(percent).padStart(2, "0");
+      }
+      if (progressChapterRef.current) {
+        progressChapterRef.current.textContent = chapter;
+      }
+      if (nextFrame !== displayedFrame) {
+        displayedFrame = nextFrame;
+        frameImage.src = startScreenFramePath(nextFrame);
+      }
+      if (Math.abs(targetProgress - displayedProgress) >= 0.0006) {
+        requestRender();
+      }
+    };
+    function requestRender() {
+      if (!animationFrame) {
+        animationFrame = window.requestAnimationFrame(renderFrame);
+      }
+    }
+    const updateTarget = () => {
+      const maxScroll = Math.max(1, root.offsetHeight - scroller.clientHeight);
+      targetProgress = Math.min(1, Math.max(0, scroller.scrollTop / maxScroll));
+      requestRender();
+    };
+    const resizeObserver = new ResizeObserver(() => {
+      measure();
+      updateTarget();
+    });
+
+    scroller.scrollTop = 0;
+    measure();
+    preloadStartScreenFrames();
+    renderFrame();
+    resizeObserver.observe(scroller);
+    scroller.addEventListener("scroll", updateTarget, { passive: true });
+    mediaQuery.addEventListener("change", updateTarget);
+
+    return () => {
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
+      scroller.removeEventListener("scroll", updateTarget);
+      mediaQuery.removeEventListener("change", updateTarget);
+    };
+  }, []);
+
   return (
     <main className="app-viewport">
       <section className="mini-app start-screen" aria-label="Начало работы">
         {showEnvironmentBadge ? (
           <span className="environment-badge">ТЕСТ</span>
         ) : null}
-        <div className="start-screen-layout">
-          <header className="start-screen-header">
-            <span className="start-screen-brand" aria-label="Макс-Контракт">
-              <span className="start-screen-brand-mark">
-                <PenLine size={17} />
-              </span>
-              <span>
-                МАКС
-                <br />
-                КОНТРАКТ
-              </span>
-            </span>
-            <span className="start-screen-sequence">01 / 04</span>
-          </header>
-
-          <div className="start-screen-media">
-            <Image
-              alt="Документы для подготовки частной сделки"
-              fill
-              priority
-              sizes="(max-width: 430px) 100vw, 430px"
-              src="/images/onboarding-start.webp"
-            />
-            <span className="start-screen-shade" aria-hidden="true" />
-            <span className="start-screen-media-note">
-              Ясность · Контроль · Подпись
-            </span>
-            <motion.div
-              animate={{ opacity: 1, y: 0 }}
-              className="start-screen-card"
-              initial={{ opacity: 0, y: 14 }}
-              transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        <div className="start-screen-scroll">
+          <div className="start-screen-cinematic" ref={rootRef}>
+            <div
+              className="start-screen-stage"
+              onPointerLeave={resetParallax}
+              onPointerMove={updateParallax}
             >
-              <p>Частные сделки без лишней сложности</p>
-              <h1>
-                Условия, которые
-                <br />
-                ведут к сделке.
-              </h1>
-              <span>
-                Подготовим договор, соберём документы и проведём обе стороны до
-                подписи.
-              </span>
-            </motion.div>
+              <header className="start-screen-header">
+                <span className="start-screen-brand" aria-label="Макс-Контракт">
+                  <span className="start-screen-brand-mark">
+                    <PenLine size={17} />
+                  </span>
+                  <span>
+                    МАКС
+                    <br />
+                    КОНТРАКТ
+                  </span>
+                </span>
+                <span className="start-screen-sequence">01 / 04</span>
+              </header>
+
+              <div className="start-screen-media" aria-hidden="true">
+                <div className="start-screen-media-plane">
+                  {/* The frame sequence is intentionally controlled imperatively for scroll scrubbing. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    alt=""
+                    className="start-screen-frame"
+                    decoding="sync"
+                    draggable={false}
+                    fetchPriority="high"
+                    ref={frameImageRef}
+                    src={startScreenFramePath(0)}
+                  />
+                </div>
+                <span className="start-screen-shade" />
+                <span className="start-screen-glass" />
+                <span className="start-screen-rule" />
+                <span className="start-screen-media-note">
+                  Ясность · Контроль · Подпись
+                </span>
+              </div>
+
+              <section className="start-screen-card">
+                <span className="start-screen-kicker">
+                  Частные сделки без лишней сложности
+                </span>
+                <h1>
+                  {["Условия, которые", "ведут к сделке."].map(
+                    (line, lineIndex) => (
+                      <motion.span
+                        animate={{ opacity: 1, y: 0 }}
+                        initial={{ opacity: 0, y: 18 }}
+                        key={line}
+                        transition={{
+                          delay: 0.12 + lineIndex * 0.08,
+                          duration: 0.7,
+                          ease: [0.22, 1, 0.36, 1],
+                        }}
+                      >
+                        {line}
+                      </motion.span>
+                    ),
+                  )}
+                </h1>
+                <motion.p
+                  animate={{ opacity: 1 }}
+                  initial={{ opacity: 0 }}
+                  transition={{ delay: 0.34, duration: 0.6 }}
+                >
+                  Подготовим договор, соберём документы и проведём обе стороны
+                  до подписи.
+                </motion.p>
+              </section>
+
+              <div className="start-screen-scroll-cue" aria-hidden="true">
+                <span>Листайте вниз</span>
+                <ChevronsDown size={15} strokeWidth={1.8} />
+              </div>
+
+              <footer className="start-screen-footer">
+                <div
+                  aria-label="Прогресс просмотра"
+                  aria-valuemax={100}
+                  aria-valuemin={0}
+                  aria-valuenow={0}
+                  className="start-screen-progress"
+                  ref={progressRef}
+                  role="progressbar"
+                >
+                  <span
+                    className="start-screen-progress-chapter"
+                    ref={progressChapterRef}
+                  >
+                    УСЛОВИЯ
+                  </span>
+                  <span className="start-screen-progress-track" aria-hidden="true">
+                    <i />
+                  </span>
+                  <strong ref={progressValueRef}>00</strong>
+                </div>
+                <Button
+                  aria-label="Начать работу с Макс-Контракт"
+                  className="start-screen-action"
+                  onClick={onStart}
+                  type="button"
+                  variant="unstyled"
+                >
+                  <span className="start-screen-action-label">Начать работу</span>
+                  <span className="start-screen-action-arrow">
+                    <ArrowRight size={18} />
+                  </span>
+                </Button>
+              </footer>
+            </div>
           </div>
-
-          <footer className="start-screen-footer">
-            <span>Частные сделки</span>
-            <Button
-              aria-label="Начать работу с Макс-Контракт"
-              className="start-screen-action"
-              onClick={onStart}
-              type="button"
-              variant="unstyled"
-            >
-              <strong>Начать работу</strong>
-              <span>
-                <ArrowRight size={18} />
-              </span>
-            </Button>
-          </footer>
         </div>
       </section>
     </main>

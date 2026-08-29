@@ -46,6 +46,13 @@ enum TemplateVersionStatus {
   @@map("template_version_status")
 }
 
+enum AiGenerationStatus {
+  NEED_MORE_INFO
+  READY_TO_GENERATE
+
+  @@map("ai_generation_status")
+}
+
 model User {
   id         String    @id @default(uuid()) @db.Uuid
   role       UserRole  @default(USER)
@@ -54,6 +61,7 @@ model User {
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   auditEvents AuditEvent[]  @relation("AuditActor")
+  aiGenerations AiGeneration[]
   consents    UserConsent[]
   maxAccount  MaxAccount?
   phones      UserPhone[]
@@ -196,12 +204,36 @@ model ContractTemplateVersion {
   updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   documentRequirements TemplateDocumentRequirement[]
+  aiGenerations        AiGeneration[]
   template             ContractTemplate              @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   @@unique([templateId, versionNumber], map: "contract_template_versions_template_version_key")
   @@index([status, publishedAt], map: "contract_template_versions_status_published_idx")
   @@index([templateId, status, versionNumber], map: "contract_template_versions_template_status_version_idx")
   @@map("contract_template_versions")
+}
+
+model AiGeneration {
+  id                   String             @id @default(uuid()) @db.Uuid
+  userId               String             @map("user_id") @db.Uuid
+  templateVersionId    String             @map("template_version_id") @db.Uuid
+  status               AiGenerationStatus
+  inputAnswers         Json               @map("input_answers")
+  questions            Json
+  clarificationAnswers Json?              @map("clarification_answers")
+  providerMetadata     Json               @map("provider_metadata")
+  promptId             String             @map("prompt_id") @db.VarChar(64)
+  promptVersion        String             @map("prompt_version") @db.VarChar(32)
+  completedAt          DateTime?          @map("completed_at") @db.Timestamptz(3)
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  templateVersion ContractTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt], map: "ai_generations_user_created_at_idx")
+  @@index([templateVersionId, status], map: "ai_generations_template_status_idx")
+  @@map("ai_generations")
 }
 
 model TemplateDocumentRequirement {
