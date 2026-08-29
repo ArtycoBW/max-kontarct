@@ -89,7 +89,11 @@ export class MaxContactVerifier {
         "Некорректное время подтверждения телефона MAX",
       );
     }
-    return parsed;
+    // MAX clients currently return the contact proof timestamp in
+    // milliseconds, while older clients and fixtures use Unix seconds.
+    // Keep the original string for HMAC verification and normalize only the
+    // value used by the freshness check.
+    return value.length === 13 ? Math.floor(parsed / 1_000) : parsed;
   }
 
   private verifyFreshness(authDate: number, nowSeconds: number): void {

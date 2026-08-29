@@ -31,6 +31,18 @@ describe("MaxContactVerifier", () => {
     );
   });
 
+  it("verifies a MAX contact timestamp returned in milliseconds", () => {
+    const contact = createMaxContactFixture({
+      authDate: nowSeconds * 1_000 + 321,
+      maxUserId: "42001",
+      phone: "+79991234567",
+    });
+
+    expect(verifier.verify(contact, "42001", nowSeconds)).toBe(
+      "+79991234567",
+    );
+  });
+
   it("rejects a hash created for another user", () => {
     const contact = createMaxContactFixture({
       authDate: nowSeconds,

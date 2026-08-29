@@ -506,6 +506,26 @@ describe("MAX authentication (e2e)", () => {
     });
   });
 
+  it("verifies a signed MAX contact with a millisecond timestamp", async () => {
+    const agent = request.agent(app.getHttpServer());
+    await agent.post(`/${API_PREFIX}/auth/dev`).expect(200);
+    const contact = createMaxContactFixture({
+      authDate: Date.now(),
+      botToken: TEST_MAX_BOT_TOKEN,
+      maxUserId: "900001",
+    });
+
+    const response = await agent
+      .post(`/${API_PREFIX}/onboarding/phone/max`)
+      .send(contact)
+      .expect(201);
+
+    expect(response.body.phone).toMatchObject({
+      e164: "+79991234567",
+      source: "MAX",
+    });
+  });
+
   it("never treats a manually entered phone as MAX-verified", async () => {
     const agent = request.agent(app.getHttpServer());
     await agent.post(`/${API_PREFIX}/auth/dev`).expect(200);
