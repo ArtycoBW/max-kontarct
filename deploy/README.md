@@ -1,9 +1,9 @@
 # Production deployment
 
-Production runs behind nginx with two systemd services:
+Production runs behind nginx with three systemd services:
 
 - `max-contract-backend.service` — NestJS API on `127.0.0.1:3001`;
-- `max-contract-frontend.service` — Next.js Mini App on `127.0.0.1:3000`.
+- `max-contract-frontend.service` — Next.js Mini App on `127.0.0.1:3000`;
 - `max-contract-worker.service` — BullMQ worker for contract generation.
 
 `CONTRACT_GENERATION_QUEUE_PREFIX` must be unique for every environment that
@@ -28,6 +28,6 @@ After switching, validate configuration and health:
 ```bash
 nginx -t
 systemctl restart max-contract-backend max-contract-frontend max-contract-worker
-curl --fail https://max-kontrakt.ru/api/v1/health/live
-curl --fail https://max-kontrakt.ru/api/v1/health/ready
+curl --fail https://www.max-kontrakt.ru/api/v1/health/live
+curl --fail https://www.max-kontrakt.ru/api/v1/health/ready
 ```

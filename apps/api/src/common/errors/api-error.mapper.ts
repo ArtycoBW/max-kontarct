@@ -34,7 +34,7 @@ const STATUS_DEFAULTS: Record<number, Pick<MappedApiError, "code" | "message">> 
   },
   [HttpStatus.SERVICE_UNAVAILABLE]: {
     code: "SERVICE_UNAVAILABLE",
-    message: "Сервис временно недоступен",
+    message: "Не удалось связаться с сервисом. Повторите попытку.",
   },
 };
 

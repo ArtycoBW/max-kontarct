@@ -29,7 +29,7 @@ export class MaxContactVerifier {
     if (!botToken) {
       throw new ServiceUnavailableException({
         code: "MAX_CONTACT_NOT_CONFIGURED",
-        message: "Подтверждение телефона через MAX пока недоступно",
+        message: "Не удалось подтвердить номер через MAX. Повторите запрос контакта.",
       });
     }
 

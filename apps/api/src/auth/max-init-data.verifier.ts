@@ -31,7 +31,7 @@ export class MaxInitDataVerifier {
     if (!botToken) {
       throw unauthorized(
         "MAX_AUTH_NOT_CONFIGURED",
-        "Авторизация MAX пока недоступна",
+        "Не удалось выполнить вход через MAX. Перезапустите приложение из чата с ботом.",
       );
     }
 

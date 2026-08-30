@@ -328,7 +328,7 @@ function getPhoneErrorCopy(error: Error | null) {
 
   if (error instanceof MaxContactBridgeError && error.reason === "refused") {
     return {
-      copy: "Без подтверждённого номера продолжить пока нельзя. Запрос можно повторить.",
+      copy: "Без подтверждённого номера продолжить нельзя. Запрос можно повторить.",
       title: "Номер не передан",
     };
   }
