@@ -961,9 +961,9 @@ button.service-status {
 .deal-form-flow {
   display: flex;
   min-height: 0;
-  flex: 1;
+  flex: 1 0 auto;
   flex-direction: column;
-  padding-bottom: 0;
+  padding-bottom: 14px;
 }
 
 .questionnaire-heading {

@@ -106,6 +106,11 @@ export function normalizeQuestionnaireAnswers(
       errors[field.key] = "Выберите значение из списка";
     } else if (field.format === "date" && !isDateOnly(normalizedValue)) {
       errors[field.key] = "Укажите корректную дату";
+    } else if (
+      field.format === "date" &&
+      normalizedValue < currentLocalDateOnly()
+    ) {
+      errors[field.key] = "Дата не может быть раньше сегодняшней";
     } else if (field.format === "email" && !isEmail(normalizedValue)) {
       errors[field.key] = "Укажите корректный email";
     } else if (field.pattern && !matchesPattern(normalizedValue, field.pattern)) {
@@ -155,6 +160,14 @@ function isDateOnly(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(value);
+}
+
+function currentLocalDateOnly(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function isEmail(value: string): boolean {

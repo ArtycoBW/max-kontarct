@@ -109,8 +109,35 @@ describe("TemplateSchemaValidator", () => {
         start: yesterday,
       }),
     ).toEqual([
-      { message: "Дата не может быть раньше сегодняшней", path: "start" },
       { message: "Дата не может быть раньше сегодняшней", path: "end" },
+      { message: "Дата не может быть раньше сегодняшней", path: "start" },
+    ]);
+  });
+
+  it("rejects a standalone contract date in the past", () => {
+    const yesterday = addUtcDays(currentUtcDateOnly(), -1);
+    const schema = {
+      additionalProperties: false,
+      properties: {
+        completionDate: {
+          format: "date",
+          title: "Срок оказания услуги",
+          type: "string",
+        },
+      },
+      required: ["completionDate"],
+      type: "object",
+    };
+
+    expect(
+      validator.validateAnswers("version-standalone-date", schema, {
+        completionDate: yesterday,
+      }),
+    ).toEqual([
+      {
+        message: "Дата не может быть раньше сегодняшней",
+        path: "completionDate",
+      },
     ]);
   });
 

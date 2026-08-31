@@ -48,6 +48,7 @@ export class TemplateSchemaValidator {
       : mapValidationErrors(validate.errors ?? []);
     return [
       ...schemaErrors,
+      ...validateDateFields(schema, answers, schemaErrors),
       ...validateCrossFieldRules(schema, answers, schemaErrors),
     ];
   }
@@ -182,27 +183,6 @@ function validateCrossFieldRules(
       const endField = String(rawRule.endField);
       const start = answers[startField];
       const end = answers[endField];
-      const today = currentDateOnly();
-      if (
-        !invalidPaths.has(startField) &&
-        typeof start === "string" &&
-        start < today
-      ) {
-        errors.push({
-          message: "Дата не может быть раньше сегодняшней",
-          path: startField,
-        });
-      }
-      if (
-        !invalidPaths.has(endField) &&
-        typeof end === "string" &&
-        end < today
-      ) {
-        errors.push({
-          message: "Дата не может быть раньше сегодняшней",
-          path: endField,
-        });
-      }
       if (
         !invalidPaths.has(startField) &&
         !invalidPaths.has(endField) &&
@@ -238,6 +218,34 @@ function validateCrossFieldRules(
       }
     }
   }
+  return errors;
+}
+
+function validateDateFields(
+  schema: Record<string, unknown>,
+  answers: Record<string, unknown>,
+  schemaErrors: TemplateAnswerValidationError[],
+): TemplateAnswerValidationError[] {
+  if (!isRecord(schema.properties)) return [];
+  const invalidPaths = new Set(schemaErrors.map(({ path }) => path));
+  const today = currentDateOnly();
+  const errors: TemplateAnswerValidationError[] = [];
+
+  for (const [path, field] of Object.entries(schema.properties)) {
+    const value = answers[path];
+    if (
+      isDateField(field) &&
+      !invalidPaths.has(path) &&
+      typeof value === "string" &&
+      value < today
+    ) {
+      errors.push({
+        message: "Дата не может быть раньше сегодняшней",
+        path,
+      });
+    }
+  }
+
   return errors;
 }
 

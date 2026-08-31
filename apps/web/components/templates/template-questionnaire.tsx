@@ -319,13 +319,12 @@ function getDateBoundaries(
   answers: Record<string, unknown>,
   fieldKey: string,
 ): { maximumValue?: string; minimumValue?: string } {
-  const result: { maximumValue?: string; minimumValue?: string } = {};
   const today = toLocalDateOnly(new Date());
+  const result: { maximumValue?: string; minimumValue?: string } = {
+    minimumValue: today,
+  };
   for (const rule of rules) {
     if (rule.kind !== "dateOrder") continue;
-    if (rule.startField === fieldKey || rule.endField === fieldKey) {
-      result.minimumValue = today;
-    }
     const startValue = answers[rule.startField];
     const endValue = answers[rule.endField];
     if (rule.endField === fieldKey && typeof startValue === "string") {

@@ -103,6 +103,8 @@ describe("normalizeQuestionnaireAnswers", () => {
   });
 
   it("validates date order and a conditionally required field", () => {
+    const start = addLocalDays(2);
+    const end = addLocalDays(1);
     const definition: QuestionnaireDefinition = {
       fields: [
         { format: "date", key: "start", required: true, title: "Начало", type: "string" },
@@ -118,14 +120,14 @@ describe("normalizeQuestionnaireAnswers", () => {
     };
 
     expect(normalizeQuestionnaireAnswers(definition, {
-      end: "2026-08-29",
+      end,
       interestType: "С процентами",
-      start: "2026-08-30",
+      start,
     })).toEqual({
       answers: {
-        end: "2026-08-29",
+        end,
         interestType: "С процентами",
-        start: "2026-08-30",
+        start,
       },
       errors: {
         end: "Дата окончания не может быть раньше даты начала",
@@ -133,7 +135,43 @@ describe("normalizeQuestionnaireAnswers", () => {
       },
     });
   });
+
+  it("rejects a standalone contract date in the past", () => {
+    const definition: QuestionnaireDefinition = {
+      fields: [
+        {
+          format: "date",
+          key: "completionDate",
+          required: true,
+          title: "Срок оказания услуги",
+          type: "string",
+        },
+      ],
+      rules: [],
+      title: null,
+    };
+
+    expect(
+      normalizeQuestionnaireAnswers(definition, {
+        completionDate: addLocalDays(-1),
+      }),
+    ).toEqual({
+      answers: {},
+      errors: {
+        completionDate: "Дата не может быть раньше сегодняшней",
+      },
+    });
+  });
 });
+
+function addLocalDays(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 function numberDefinition(): QuestionnaireDefinition {
   return {
