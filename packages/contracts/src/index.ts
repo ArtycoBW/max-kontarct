@@ -20,6 +20,82 @@ export type DealPartyRole = "INITIATOR" | "COUNTERPARTY";
 
 export type DealApprovalStatus = "APPROVED" | "SUPERSEDED" | "REVOKED";
 
+export type DealCreationPath = "TEMPLATE" | "AI_ASSISTED";
+
+export type DealDraftStep =
+  | "DESCRIPTION"
+  | "PARAMETERS"
+  | "AI_CLARIFICATION"
+  | "AI_GENERATION"
+  | "INITIATOR";
+
+export interface DealInitiatorSnapshot {
+  email: string | null;
+  firstName: string;
+  lastName: string;
+  middleName: string | null;
+  phone: string;
+}
+
+export interface DealDraftData {
+  answers: Record<string, unknown>;
+  clarificationSessionId: string | null;
+  creationPath: DealCreationPath;
+  currentStep: DealDraftStep;
+  description: string;
+  initiator: DealInitiatorSnapshot | null;
+}
+
+export interface CreateDealDraftRequest {
+  creationPath: DealCreationPath;
+  description: string;
+  templateVersionId: string;
+  title: string;
+}
+
+export interface UpdateDealDraftRequest {
+  answers?: Record<string, unknown>;
+  clarificationSessionId?: string | null;
+  creationPath?: DealCreationPath;
+  currentStep?: DealDraftStep;
+  description?: string;
+  expectedUpdatedAt: string;
+  sourceGenerationId?: string | null;
+  title?: string;
+}
+
+export interface DealDraftResponse {
+  contractDraft: ContractStructuredDraft | null;
+  createdAt: string;
+  draft: DealDraftData;
+  id: string;
+  sourceGenerationId: string | null;
+  status: DealStatus;
+  template: {
+    slug: string;
+    title: string;
+    versionId: string;
+    versionNumber: number;
+  };
+  title: string;
+  updatedAt: string;
+  versionId: string;
+  versionNumber: number;
+}
+
+export interface DealListItem {
+  id: string;
+  status: DealStatus;
+  templateTitle: string;
+  title: string;
+  updatedAt: string;
+}
+
+export interface DealListResponse {
+  items: DealListItem[];
+  total: number;
+}
+
 export interface AuthMaxAccount {
   firstName: string | null;
   languageCode: string | null;

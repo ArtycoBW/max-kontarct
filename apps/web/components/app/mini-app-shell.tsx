@@ -5,6 +5,7 @@ import type {
   AiClarificationSessionResponse,
   ContractGenerationResponse,
   ContractTemplateListItem,
+  DealDraftStep,
   OnboardingStateResponse,
   TemplateAnswerValidationError,
   TemplateDocumentRequirementResponse,
@@ -22,6 +23,7 @@ import {
   CircleAlert,
   CircleHelp,
   FileCheck2,
+  FileClock,
   Files,
   FolderOpen,
   Handshake,
@@ -38,7 +40,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -53,10 +55,17 @@ import {
   TemplateQuestionnaire,
 } from "@/components/templates/template-questionnaire";
 import { ApiError } from "@/lib/api/client";
+import {
+  createDealDraft,
+  getDealDraft,
+  getDeals,
+  updateDealDraft,
+} from "@/lib/api/deals";
 import { getOnboardingState } from "@/lib/api/onboarding";
 import { queryKeys } from "@/lib/api/query-keys";
 import {
   answerAiClarification,
+  getAiClarification,
   getContractGeneration,
   getTemplate,
   getTemplates,
@@ -163,15 +172,37 @@ function FlowHeader({
   );
 }
 
-function HomeScreen({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
-  return <DealsScreen onNavigate={onNavigate} />;
+function HomeScreen({
+  onNavigate,
+  onOpenDraft,
+}: {
+  onNavigate: (tab: AppTab) => void;
+  onOpenDraft: (dealId: string) => void;
+}) {
+  return <DealsScreen onNavigate={onNavigate} onOpenDraft={onOpenDraft} />;
 }
 
-function DealsScreen({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
+function DealsScreen({
+  onNavigate,
+  onOpenDraft,
+}: {
+  onNavigate: (tab: AppTab) => void;
+  onOpenDraft: (dealId: string) => void;
+}) {
   const [showInviteHint, setShowInviteHint] = useState(false);
+  const deals = useQuery({
+    queryFn: getDeals,
+    queryKey: queryKeys.deals.list(),
+  });
+  const hasDeals = Boolean(deals.data?.items.length);
 
   return (
-    <div className="screen-content dashboard-empty-screen">
+    <div
+      className={cn(
+        "screen-content",
+        hasDeals ? "dashboard-deals-screen" : "dashboard-empty-screen",
+      )}
+    >
       <ScreenHeader
         action={
           <Button
@@ -189,7 +220,23 @@ function DealsScreen({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
         title="Мои сделки"
       />
 
-      <div className="dashboard-empty-content">
+      {deals.isPending ? (
+        <Card className="form-message" role="status">
+          <strong>Загружаем сделки</strong>
+          <span>Получаем сохранённые черновики и актуальные статусы.</span>
+        </Card>
+      ) : null}
+
+      {deals.isError ? (
+        <RequestErrorCard
+          message={deals.error.message}
+          onRetry={() => deals.refetch()}
+        />
+      ) : null}
+
+      {!hasDeals && !deals.isPending && !deals.isError ? (
+        <>
+          <div className="dashboard-empty-content">
         <span className="state-icon dashboard-empty-icon">
           <span>
             <FolderOpen size={38} />
@@ -208,9 +255,9 @@ function DealsScreen({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
             <small>Подскажем, что заполнить и какие документы приложить</small>
           </span>
         </Card>
-      </div>
+          </div>
 
-      <div className="dashboard-empty-actions">
+          <div className="dashboard-empty-actions">
         <Button className="full-width" onClick={() => onNavigate("create")}>
           <Plus size={18} /> Создать сделку
         </Button>
@@ -227,17 +274,105 @@ function DealsScreen({ onNavigate }: { onNavigate: (tab: AppTab) => void }) {
             Откройте ссылку приглашения из сообщения MAX.
           </p>
         ) : null}
-      </div>
+          </div>
+        </>
+      ) : null}
+
+      {hasDeals ? (
+        <div className="deal-list" aria-label="Сохранённые сделки">
+          {deals.data?.items.map((deal) => (
+            <Button
+              className="deal-list-card"
+              key={deal.id}
+              onClick={() => onOpenDraft(deal.id)}
+              type="button"
+              variant="unstyled"
+            >
+              <span className="deal-list-icon">
+                <FileClock size={20} />
+              </span>
+              <span className="deal-list-copy">
+                <small>{deal.templateTitle}</small>
+                <strong>{deal.title}</strong>
+                <span>
+                  Черновик · обновлён {formatDealUpdatedAt(deal.updatedAt)}
+                </span>
+              </span>
+              <ArrowRight size={17} />
+            </Button>
+          ))}
+          <Button
+            className="full-width"
+            onClick={() => onNavigate("create")}
+            type="button"
+          >
+            <Plus size={18} /> Создать ещё сделку
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
 
+function formatDealUpdatedAt(value: string): string {
+  const date = new Date(value);
+  const today = new Date();
+  if (date.toDateString() === today.toDateString()) {
+    return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  }
+  return date.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" });
+}
+
 type CreateDealStep =
   | "clarification"
+  | "description"
   | "generation"
+  | "initiator"
   | "questionnaire"
   | "ready"
   | "type";
+
+type DraftSaveState = "error" | "idle" | "saved" | "saving";
+
+function toDraftStep(step: CreateDealStep): DealDraftStep {
+  if (step === "description") return "DESCRIPTION";
+  if (step === "questionnaire") return "PARAMETERS";
+  if (step === "generation") return "AI_GENERATION";
+  if (step === "initiator") return "INITIATOR";
+  return "AI_CLARIFICATION";
+}
+
+function restoreCreateStep(step: DealDraftStep): CreateDealStep {
+  if (step === "DESCRIPTION") return "description";
+  if (step === "PARAMETERS") return "questionnaire";
+  if (step === "AI_GENERATION") return "generation";
+  if (step === "INITIATOR") return "initiator";
+  return "clarification";
+}
+
+function draftFingerprint(input: {
+  answers: Record<string, unknown>;
+  clarificationSessionId: string | null;
+  currentStep: CreateDealStep;
+  description: string;
+  title: string;
+}): string {
+  return JSON.stringify(input);
+}
+
+function DraftSaveStatus({ state }: { state: DraftSaveState }) {
+  return (
+    <span className={cn("draft-save-status", state === "error" && "is-error")}>
+      {state === "saving"
+        ? "Сохраняем…"
+        : state === "error"
+          ? "Не сохранено"
+          : state === "saved"
+            ? "Сохранено"
+            : "Черновик"}
+    </span>
+  );
+}
 
 function TemplateTypeIcon({
   size,
@@ -282,26 +417,47 @@ function getTemplateDisplaySummary(
   return "Структура договора и обязательные условия";
 }
 
-function CreateDealScreen({ onBack }: { onBack: () => void }) {
+function CreateDealScreen({
+  draftId,
+  onBack,
+}: {
+  draftId: string | null;
+  onBack: () => void;
+}) {
   const queryClient = useQueryClient();
+  const [activeDraftId, setActiveDraftId] = useState(draftId ?? "");
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [clarificationAnswers, setClarificationAnswers] = useState<
     Record<string, unknown>
   >({});
   const [clarificationError, setClarificationError] = useState("");
+  const [clarificationSessionId, setClarificationSessionId] = useState<string | null>(null);
   const [clarificationSession, setClarificationSession] =
     useState<AiClarificationSessionResponse | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [description, setDescription] = useState("");
+  const [descriptionError, setDescriptionError] = useState("");
   const [query, setQuery] = useState("");
+  const [saveState, setSaveState] = useState<DraftSaveState>("idle");
   const [selectedSlug, setSelectedSlug] = useState("");
   const [step, setStep] = useState<CreateDealStep>("type");
+  const [title, setTitle] = useState("");
+  const hydratedDraftId = useRef("");
+  const lastSavedFingerprint = useRef("");
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const updatedAt = useRef("");
   const templates = useQuery({
     queryFn: getTemplates,
     queryKey: queryKeys.templates.list(),
   });
+  const draft = useQuery({
+    enabled: activeDraftId.length > 0,
+    queryFn: () => getDealDraft(activeDraftId),
+    queryKey: queryKeys.deals.detail(activeDraftId),
+  });
   const effectiveSelectedSlug =
-    selectedSlug || templates.data?.items[0]?.slug || "";
+    selectedSlug || draft.data?.template.slug || templates.data?.items[0]?.slug || "";
   const selectedTemplate = templates.data?.items.find(
     ({ slug }) => slug === effectiveSelectedSlug,
   );
@@ -337,6 +493,19 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
     }),
     [answers, definition],
   );
+  const draftCreation = useMutation({
+    mutationFn: createDealDraft,
+  });
+  const draftSave = useMutation({
+    mutationFn: ({
+      dealId,
+      request,
+    }: {
+      dealId: string;
+      request: Parameters<typeof updateDealDraft>[1];
+    }) => updateDealDraft(dealId, request),
+  });
+  const saveDraftMutation = draftSave.mutateAsync;
   const validation = useMutation({
     mutationFn: (payload: {
       answers: Record<string, unknown>;
@@ -366,23 +535,169 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
         answers: payload.answers,
       }),
   });
+  const clarification = useQuery({
+    enabled:
+      activeDraftId.length > 0 &&
+      Boolean(clarificationSessionId),
+    queryFn: () =>
+      getAiClarification(
+        effectiveSelectedSlug,
+        clarificationSessionId ?? "",
+      ),
+    queryKey: queryKeys.templates.clarification(
+      clarificationSessionId ?? "",
+    ),
+  });
+  const activeClarificationSession =
+    clarificationSession ?? clarification.data ?? null;
+  const renderedStep =
+    step === "clarification" &&
+    activeClarificationSession?.status === "READY_TO_GENERATE"
+      ? "ready"
+      : step;
   const generationStart = useMutation({
     mutationFn: (sessionId: string) =>
       startContractGeneration(effectiveSelectedSlug, sessionId),
   });
   const generation = useQuery({
-    enabled: step === "generation" && Boolean(clarificationSession?.id),
+    enabled: step === "generation" && Boolean(activeClarificationSession?.id),
     queryFn: () =>
       getContractGeneration(
         effectiveSelectedSlug,
-        clarificationSession?.id ?? "",
+        activeClarificationSession?.id ?? "",
       ),
-    queryKey: queryKeys.templates.generation(clarificationSession?.id ?? ""),
+    queryKey: queryKeys.templates.generation(activeClarificationSession?.id ?? ""),
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === "COMPLETED" || status === "FAILED" ? false : 1_200;
     },
   });
+
+  useEffect(() => {
+    if (!draft.data || hydratedDraftId.current === draft.data.id) return;
+    hydratedDraftId.current = draft.data.id;
+    updatedAt.current = draft.data.updatedAt;
+    setActiveDraftId(draft.data.id);
+    setAnswers(draft.data.draft.answers);
+    setClarificationSessionId(draft.data.draft.clarificationSessionId);
+    setDescription(draft.data.draft.description);
+    setSelectedSlug(draft.data.template.slug);
+    setTitle(draft.data.title);
+    const restoredStep = restoreCreateStep(draft.data.draft.currentStep);
+    setStep(restoredStep);
+    lastSavedFingerprint.current = draftFingerprint({
+      answers: draft.data.draft.answers,
+      clarificationSessionId: draft.data.draft.clarificationSessionId,
+      currentStep: restoredStep,
+      description: draft.data.draft.description,
+      title: draft.data.title,
+    });
+    setSaveState("saved");
+  }, [draft.data]);
+
+  const enqueueDraftSave = useCallback((
+    overrides: Partial<{
+      answers: Record<string, unknown>;
+      clarificationSessionId: string | null;
+      currentStep: CreateDealStep;
+      description: string;
+      sourceGenerationId: string | null;
+      title: string;
+    }> = {},
+  ): Promise<void> => {
+    if (!activeDraftId || !updatedAt.current) return Promise.resolve();
+    const snapshot = {
+      answers: overrides.answers ?? answers,
+      clarificationSessionId:
+        overrides.clarificationSessionId !== undefined
+          ? overrides.clarificationSessionId
+          : clarificationSessionId,
+      currentStep: overrides.currentStep ?? step,
+      description: overrides.description ?? description,
+      title: overrides.title ?? title,
+    };
+    const fingerprint = draftFingerprint(snapshot);
+    const execute = async () => {
+      setSaveState("saving");
+      try {
+        const response = await saveDraftMutation({
+          dealId: activeDraftId,
+          request: {
+            answers: snapshot.answers,
+            clarificationSessionId: snapshot.clarificationSessionId,
+            creationPath: "AI_ASSISTED",
+            currentStep: toDraftStep(snapshot.currentStep),
+            description: snapshot.description,
+            expectedUpdatedAt: updatedAt.current,
+            ...(overrides.sourceGenerationId !== undefined
+              ? { sourceGenerationId: overrides.sourceGenerationId }
+              : {}),
+            title: snapshot.title,
+          },
+        });
+        updatedAt.current = response.updatedAt;
+        lastSavedFingerprint.current = fingerprint;
+        queryClient.setQueryData(queryKeys.deals.detail(response.id), response);
+        setSaveState("saved");
+      } catch (error) {
+        setSaveState("error");
+        throw error;
+      }
+    };
+    saveQueue.current = saveQueue.current.catch(() => undefined).then(execute);
+    return saveQueue.current;
+  }, [
+    activeDraftId,
+    answers,
+    clarificationSessionId,
+    description,
+    queryClient,
+    saveDraftMutation,
+    step,
+    title,
+  ]);
+
+  const localFingerprint = draftFingerprint({
+    answers,
+    clarificationSessionId,
+    currentStep: step,
+    description,
+    title,
+  });
+
+  useEffect(() => {
+    if (
+      !activeDraftId ||
+      hydratedDraftId.current !== activeDraftId ||
+      step === "type" ||
+      localFingerprint === lastSavedFingerprint.current
+    ) {
+      return;
+    }
+    const timeout = window.setTimeout(() => {
+      void enqueueDraftSave().catch(() => undefined);
+    }, 700);
+    return () => window.clearTimeout(timeout);
+  }, [activeDraftId, enqueueDraftSave, localFingerprint, step]);
+
+  useEffect(() => {
+    if (
+      generation.data?.status !== "COMPLETED" ||
+      !generation.data.id ||
+      draft.data?.sourceGenerationId === generation.data.id
+    ) {
+      return;
+    }
+    void enqueueDraftSave({
+      currentStep: "generation",
+      sourceGenerationId: generation.data.id,
+    }).catch(() => undefined);
+  }, [
+    draft.data?.sourceGenerationId,
+    enqueueDraftSave,
+    generation.data?.id,
+    generation.data?.status,
+  ]);
 
   const resetClarification = () => {
     clarificationStart.reset();
@@ -390,18 +705,78 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
     generationStart.reset();
     setClarificationAnswers({});
     setClarificationError("");
+    setClarificationSessionId(null);
     setClarificationSession(null);
     setQuestionIndex(0);
   };
 
-  const beginGeneration = async () => {
-    if (!clarificationSession) return;
+  const beginDraft = async () => {
+    if (!selectedTemplate) return;
     try {
-      const next = await generationStart.mutateAsync(clarificationSession.id);
+      const created = await draftCreation.mutateAsync({
+        creationPath: "AI_ASSISTED",
+        description: "",
+        templateVersionId: selectedTemplate.currentVersion.id,
+        title: getTemplateDisplayTitle(selectedTemplate.title),
+      });
+      setActiveDraftId(created.id);
+      setAnswers(created.draft.answers);
+      setClarificationSessionId(null);
+      setDescription(created.draft.description);
+      setSelectedSlug(created.template.slug);
+      setTitle(created.title);
+      setStep("description");
+      hydratedDraftId.current = created.id;
+      updatedAt.current = created.updatedAt;
+      lastSavedFingerprint.current = draftFingerprint({
+        answers: created.draft.answers,
+        clarificationSessionId: null,
+        currentStep: "description",
+        description: created.draft.description,
+        title: created.title,
+      });
+      queryClient.setQueryData(queryKeys.deals.detail(created.id), created);
+      setSaveState("saved");
+    } catch {
+      // Ошибка создания отображается рядом с основной кнопкой.
+    }
+  };
+
+  const continueDescription = async () => {
+    const normalizedTitle = title.trim();
+    const normalizedDescription = description.trim();
+    if (!normalizedTitle) {
+      setDescriptionError("Укажите название сделки");
+      return;
+    }
+    if (normalizedDescription.length < 10) {
+      setDescriptionError("Опишите сделку хотя бы в нескольких словах");
+      return;
+    }
+    setDescriptionError("");
+    setTitle(normalizedTitle);
+    setDescription(normalizedDescription);
+    try {
+      await enqueueDraftSave({
+        currentStep: "questionnaire",
+        description: normalizedDescription,
+        title: normalizedTitle,
+      });
+      setStep("questionnaire");
+    } catch {
+      // Ошибка сохранения уже показана рядом с формой.
+    }
+  };
+
+  const beginGeneration = async () => {
+    if (!activeClarificationSession) return;
+    try {
+      const next = await generationStart.mutateAsync(activeClarificationSession.id);
       queryClient.setQueryData(
-        queryKeys.templates.generation(clarificationSession.id),
+        queryKeys.templates.generation(activeClarificationSession.id),
         next,
       );
+      await enqueueDraftSave({ currentStep: "generation" });
       setStep("generation");
     } catch {
       // Запрос отображается на экране готовности без технических деталей.
@@ -448,6 +823,12 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
     if (Object.keys(normalized.errors).length > 0) return;
 
     try {
+      setAnswers(normalized.answers);
+      await enqueueDraftSave({
+        answers: normalized.answers,
+        clarificationSessionId: null,
+        currentStep: "questionnaire",
+      });
       const validated = await validation.mutateAsync({
         answers: normalized.answers,
         versionId: template.data.currentVersion.id,
@@ -456,7 +837,7 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
         answers: validated.answers,
         versionId: validated.snapshot.templateVersionId,
       });
-      openClarificationSession(session);
+      openClarificationSession(session, normalized.answers);
     } catch (error) {
       setFieldErrors(extractTemplateFieldErrors(error));
     }
@@ -464,12 +845,20 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
 
   const openClarificationSession = (
     session: AiClarificationSessionResponse,
+    sessionAnswers: Record<string, unknown> = answers,
   ) => {
+    setClarificationSessionId(session.id);
     setClarificationSession(session);
     setClarificationAnswers({});
     setClarificationError("");
     setQuestionIndex(0);
-    setStep(session.status === "READY_TO_GENERATE" ? "ready" : "clarification");
+    const nextStep = session.status === "READY_TO_GENERATE" ? "ready" : "clarification";
+    setStep(nextStep);
+    void enqueueDraftSave({
+      answers: sessionAnswers,
+      clarificationSessionId: session.id,
+      currentStep: nextStep,
+    }).catch(() => undefined);
   };
 
   const changeClarificationAnswer = (key: string, value: unknown) => {
@@ -478,8 +867,8 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
   };
 
   const submitClarificationQuestion = async (skip = false) => {
-    if (!clarificationSession) return;
-    const question = clarificationSession.questions[questionIndex];
+    if (!activeClarificationSession) return;
+    const question = activeClarificationSession.questions[questionIndex];
     if (!question) return;
 
     const prepared = prepareClarificationAnswer(
@@ -497,7 +886,7 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
     else nextAnswers[question.id] = prepared.value;
     setClarificationAnswers(nextAnswers);
 
-    if (questionIndex < clarificationSession.questions.length - 1) {
+    if (questionIndex < activeClarificationSession.questions.length - 1) {
       setQuestionIndex((current) => current + 1);
       setClarificationError("");
       return;
@@ -506,7 +895,7 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
     try {
       const session = await clarificationAnswer.mutateAsync({
         answers: nextAnswers,
-        sessionId: clarificationSession.id,
+        sessionId: activeClarificationSession.id,
       });
       openClarificationSession(session);
     } catch {
@@ -514,12 +903,35 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
     }
   };
 
+  if (draftId && draft.isPending && !draft.data) {
+    return (
+      <div className="screen-content create-deal-screen">
+        <FlowHeader eyebrow="Черновик" onBack={onBack} title="Открываем сделку" />
+        <Card className="form-message" role="status">
+          <strong>Загружаем сохранённые данные</strong>
+          <span>Восстанавливаем последний подтверждённый сервером черновик.</span>
+        </Card>
+      </div>
+    );
+  }
+
+  if (draftId && draft.isError && !draft.data) {
+    return (
+      <div className="screen-content create-deal-screen">
+        <FlowHeader eyebrow="Черновик" onBack={onBack} title="Не удалось открыть" />
+        <RequestErrorCard message={draft.error.message} onRetry={() => draft.refetch()} />
+      </div>
+    );
+  }
+
   if (step === "type") {
     return (
       <div className="screen-content create-deal-screen">
         <FlowHeader
-          eyebrow="Шаг 1 из 4"
-          onBack={onBack}
+          eyebrow="Шаг 1 из 5"
+          onBack={() => {
+            void enqueueDraftSave().then(onBack).catch(() => undefined);
+          }}
           title="Выберите тип сделки"
         />
         <p className="screen-copy">
@@ -595,25 +1007,139 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
         ) : null}
 
         <div className="create-flow-action">
+          {draftCreation.isError ? (
+            <RequestErrorCard message={draftCreation.error.message} />
+          ) : null}
           <Button
             className="full-width"
             disabled={
+              draftCreation.isPending ||
               !visibleTemplates.some(
                 ({ slug }) => slug === effectiveSelectedSlug,
               )
             }
-            onClick={() => setStep("questionnaire")}
+            onClick={() => void beginDraft()}
             type="button"
           >
-            Продолжить
+            {draftCreation.isPending ? "Создаём черновик" : "Продолжить"}
           </Button>
         </div>
       </div>
     );
   }
 
-  if (step === "clarification" && clarificationSession) {
-    const question = clarificationSession.questions[questionIndex];
+  if (step === "description") {
+    return (
+      <div className="screen-content create-deal-screen deal-description-screen">
+        <FlowHeader
+          action={<DraftSaveStatus state={saveState} />}
+          eyebrow="Шаг 2 из 5"
+          onBack={onBack}
+          title="Опишите сделку"
+        />
+        <p className="screen-copy">
+          Пишите своими словами — юридические формулировки предложит помощник.
+        </p>
+        <div className="deal-form">
+          <label className="form-field">
+            <span>Название сделки</span>
+            <Input
+              aria-invalid={Boolean(descriptionError && !title.trim())}
+              maxLength={160}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                setDescriptionError("");
+              }}
+              placeholder="Например, аренда квартиры"
+              value={title}
+            />
+          </label>
+          <label className="form-field">
+            <span>Краткое описание</span>
+            <Textarea
+              aria-invalid={Boolean(descriptionError && description.trim().length < 10)}
+              className="deal-description-textarea"
+              maxLength={500}
+              onChange={(event) => {
+                setDescription(event.target.value);
+                setDescriptionError("");
+              }}
+              placeholder="Что передаётся, на какой срок и какие условия важны"
+              value={description}
+            />
+            <small className="field-meta">{description.length}/500</small>
+          </label>
+          {descriptionError ? (
+            <span className="field-error" role="alert">
+              <CircleAlert size={13} /> {descriptionError}
+            </span>
+          ) : null}
+          <Card className="description-helper-card">
+            <PenLine size={18} />
+            <span>
+              <strong>Можно без юридических терминов</strong>
+              <small>Каждый пункт договора можно будет проверить до согласования.</small>
+            </span>
+          </Card>
+          {saveState === "error" ? (
+            <RequestErrorCard
+              message={draftSave.error?.message ?? "Не удалось сохранить черновик"}
+              onRetry={() => void enqueueDraftSave().catch(() => undefined)}
+            />
+          ) : null}
+          <Button
+            className="full-width"
+            disabled={saveState === "saving"}
+            onClick={() => void continueDescription()}
+            type="button"
+          >
+            Сохранить и продолжить
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (
+    (step === "clarification" || step === "generation") &&
+    clarificationSessionId &&
+    clarification.isPending &&
+    !activeClarificationSession
+  ) {
+    return (
+      <div className="screen-content create-deal-screen">
+        <FlowHeader
+          action={<DraftSaveStatus state={saveState} />}
+          eyebrow="Сохранённый черновик"
+          onBack={onBack}
+          title="Восстанавливаем шаг"
+        />
+        <Card className="form-message" role="status">
+          <strong>Загружаем сохранённые вопросы</strong>
+          <span>Получаем актуальное состояние подготовки договора.</span>
+        </Card>
+      </div>
+    );
+  }
+
+  if (
+    (step === "clarification" || step === "generation") &&
+    clarification.isError &&
+    !activeClarificationSession
+  ) {
+    return (
+      <div className="screen-content create-deal-screen">
+        <FlowHeader eyebrow="Сохранённый черновик" onBack={onBack} title="Не удалось продолжить" />
+        <RequestErrorCard
+          message={clarification.error.message}
+          onRetry={() => clarification.refetch()}
+        />
+      </div>
+    );
+  }
+
+  if (renderedStep === "clarification" && activeClarificationSession) {
+    const question = activeClarificationSession.questions[questionIndex];
     if (question) {
       return (
         <AiClarificationScreen
@@ -639,17 +1165,18 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
               ? clarificationAnswer.error.message
               : undefined
           }
-          total={clarificationSession.questions.length}
+          total={activeClarificationSession.questions.length}
         />
       );
     }
   }
 
-  if (step === "ready") {
+  if (renderedStep === "ready") {
     return (
       <div className="screen-content create-deal-screen clarification-ready-screen">
         <FlowHeader
-          eyebrow="Шаг 3 из 4"
+          action={<DraftSaveStatus state={saveState} />}
+          eyebrow="Шаг 4 из 5"
           onBack={() => {
             resetClarification();
             setStep("questionnaire");
@@ -685,24 +1212,100 @@ function CreateDealScreen({ onBack }: { onBack: () => void }) {
     );
   }
 
-  if (step === "generation" && clarificationSession) {
+  if (renderedStep === "generation" && activeClarificationSession) {
     return (
       <ContractGenerationScreen
         generation={generation.data ?? null}
         isLoading={generation.isPending}
         onBack={() => setStep("ready")}
-        onDone={onBack}
+        onDone={() => {
+          void enqueueDraftSave({
+            currentStep: "initiator",
+            sourceGenerationId: generation.data?.id ?? null,
+          })
+            .then(() => setStep("initiator"))
+            .catch(() => undefined);
+        }}
         onRetry={() => void beginGeneration()}
         requestError={generation.isError ? generation.error.message : undefined}
       />
     );
   }
 
+  if (step === "initiator") {
+    const initiator = draft.data?.draft.initiator;
+    return (
+      <div className="screen-content create-deal-screen initiator-review-screen">
+        <FlowHeader
+          action={<DraftSaveStatus state={saveState} />}
+          eyebrow="Шаг 5 из 5"
+          onBack={() => setStep("generation")}
+          title="Ваши данные"
+        />
+        <p className="screen-copy">
+          Проверьте данные инициатора, которые будут использованы в сделке.
+        </p>
+        {initiator ? (
+          <Card className="initiator-summary-card">
+            <span className="state-icon initiator-summary-icon">
+              <UserRound size={25} />
+            </span>
+            <div>
+              <small>Инициатор сделки</small>
+              <strong>
+                {initiator.lastName} {initiator.firstName}
+                {initiator.middleName ? ` ${initiator.middleName}` : ""}
+              </strong>
+              <span>{initiator.phone}</span>
+              {initiator.email ? <span>{initiator.email}</span> : null}
+            </div>
+            <CheckCircle2 size={18} />
+          </Card>
+        ) : (
+          <RequestErrorCard message="Не удалось получить данные инициатора" />
+        )}
+        <Card className="description-helper-card">
+          <ShieldCheck size={18} />
+          <span>
+            <strong>Данные сохранены в защищённом профиле</strong>
+            <small>Контрагент не увидит закрытые сведения до присоединения.</small>
+          </span>
+        </Card>
+        {saveState === "error" ? (
+          <RequestErrorCard
+            message={draftSave.error?.message ?? "Не удалось сохранить черновик"}
+            onRetry={() =>
+              void enqueueDraftSave({ currentStep: "initiator" }).catch(
+                () => undefined,
+              )
+            }
+          />
+        ) : null}
+        <div className="create-flow-action">
+          <Button
+            className="full-width"
+            disabled={!initiator || saveState === "saving"}
+            onClick={() => {
+              void enqueueDraftSave({ currentStep: "initiator" }).then(() => {
+                void queryClient.invalidateQueries({ queryKey: queryKeys.deals.list() });
+                onBack();
+              }).catch(() => undefined);
+            }}
+            type="button"
+          >
+            Сохранить сделку
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="screen-content create-deal-screen">
       <FlowHeader
-        eyebrow="Шаг 2 из 4"
-        onBack={() => setStep("type")}
+        action={<DraftSaveStatus state={saveState} />}
+        eyebrow="Шаг 3 из 5"
+        onBack={() => setStep("description")}
         title="Параметры сделки"
       />
       <p className="screen-copy">
@@ -803,7 +1406,7 @@ function ContractGenerationScreen({
   return (
     <div className="screen-content create-deal-screen contract-generation-screen">
       <FlowHeader
-        eyebrow="Шаг 4 из 4"
+        eyebrow="Шаг 4 из 5"
         onBack={onBack}
         title={isComplete ? "Проект договора" : "Подготовка договора"}
       />
@@ -904,7 +1507,7 @@ function ContractGenerationScreen({
       {isComplete ? (
         <div className="create-flow-action">
           <Button className="full-width" onClick={onDone} type="button">
-            Вернуться к сделкам
+            Проверить свои данные
           </Button>
         </div>
       ) : null}
@@ -1368,17 +1971,30 @@ function BottomNavigation({
 
 function ActiveScreen({
   active,
+  draftId,
   onNavigate,
+  onOpenDraft,
   phone,
 }: {
   active: AppTab;
+  draftId: string | null;
   onNavigate: (tab: AppTab) => void;
+  onOpenDraft: (dealId: string) => void;
   phone: VerifiedPhone;
 }) {
-  if (active === "home") return <HomeScreen onNavigate={onNavigate} />;
-  if (active === "deals") return <DealsScreen onNavigate={onNavigate} />;
+  if (active === "home") {
+    return <HomeScreen onNavigate={onNavigate} onOpenDraft={onOpenDraft} />;
+  }
+  if (active === "deals") {
+    return <DealsScreen onNavigate={onNavigate} onOpenDraft={onOpenDraft} />;
+  }
   if (active === "create") {
-    return <CreateDealScreen onBack={() => onNavigate("deals")} />;
+    return (
+      <CreateDealScreen
+        draftId={draftId}
+        onBack={() => onNavigate("deals")}
+      />
+    );
   }
   if (active === "documents") return <DocumentsScreen />;
   return <ProfileScreen fallbackPhone={phone} />;
@@ -1778,7 +2394,18 @@ function AppWorkspace({
   showEnvironmentBadge: boolean;
 }) {
   const [active, setActive] = useState<AppTab>("deals");
+  const [draftId, setDraftId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const navigate = (tab: AppTab) => {
+    if (tab === "create") setDraftId(null);
+    setActive(tab);
+  };
+
+  const openDraft = (dealId: string) => {
+    setDraftId(dealId);
+    setActive("create");
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -1804,14 +2431,16 @@ function AppWorkspace({
             >
               <ActiveScreen
                 active={active}
-                onNavigate={setActive}
+                draftId={draftId}
+                onNavigate={navigate}
+                onOpenDraft={openDraft}
                 phone={phone}
               />
             </motion.div>
           </AnimatePresence>
         </div>
         {active !== "create" ? (
-          <BottomNavigation active={active} onChange={setActive} />
+          <BottomNavigation active={active} onChange={navigate} />
         ) : null}
       </section>
     </main>

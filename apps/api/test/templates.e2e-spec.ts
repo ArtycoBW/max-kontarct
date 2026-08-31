@@ -57,6 +57,7 @@ describe("templates API (e2e)", () => {
           provide: AiClarificationsService,
           useValue: {
             answer: answerClarification,
+            get: startClarification,
             start: startClarification,
           },
         },
@@ -203,6 +204,23 @@ describe("templates API (e2e)", () => {
       expect.objectContaining({
         templateVersionId: "20000000-0000-4000-8000-000000000001",
       }),
+    );
+  });
+
+  it("restores an owned clarification session", async () => {
+    const response = await request(app.getHttpServer())
+      .get(
+        `/${API_PREFIX}/templates/demo-property-rental/clarifications/10000000-0000-4000-8000-000000000001`,
+      )
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      questions: [expect.objectContaining({ id: "utilitiesPayer" })],
+    });
+    expect(startClarification).toHaveBeenLastCalledWith(
+      "demo-property-rental",
+      "10000000-0000-4000-8000-000000000001",
+      "00000000-0000-4000-8000-000000000001",
     );
   });
 

@@ -64,6 +64,25 @@ export class AiClarificationsService {
     return toResponse(record);
   }
 
+  async get(
+    templateSlug: string,
+    sessionId: string,
+    userId: string,
+  ): Promise<AiClarificationSessionResponse> {
+    const session = await this.clarifications.findOwned(
+      sessionId,
+      templateSlug,
+      userId,
+    );
+    if (!session) {
+      throw new NotFoundException({
+        code: "AI_CLARIFICATION_NOT_FOUND",
+        message: "Сессия уточняющих вопросов не найдена",
+      });
+    }
+    return toResponse(session);
+  }
+
   async answer(
     templateSlug: string,
     sessionId: string,

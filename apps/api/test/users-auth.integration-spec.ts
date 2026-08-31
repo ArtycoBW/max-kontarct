@@ -14,6 +14,8 @@ import {
 } from "@prisma/client";
 
 import { PrismaService } from "../src/database/prisma.service";
+import { DealsRepository } from "../src/deals/deals.repository";
+import { DealsService } from "../src/deals/deals.service";
 import { TemplatesRepository } from "../src/templates/templates.repository";
 import { TemplateSchemaValidator } from "../src/templates/template-schema.validator";
 
@@ -212,6 +214,83 @@ describe("users/auth database foundation (integration)", () => {
         },
       }),
     ).rejects.toMatchObject({ code: "P2003" });
+  });
+
+  it("creates, autosaves and restores an owned deal draft", async () => {
+    const templateVersion = await database.contractTemplateVersion.findFirstOrThrow({
+      where: { status: TemplateVersionStatus.PUBLISHED },
+    });
+    const user = await database.user.create({
+      data: {
+        maxAccount: {
+          create: {
+            firstName: "Артур",
+            lastName: "Балашев",
+            maxUserId: `integration-deal-${randomUUID()}`,
+          },
+        },
+        phones: {
+          create: {
+            e164: `+79${String(Date.now()).slice(-9)}`,
+            isPrimary: true,
+            source: PhoneVerificationSource.MAX,
+            verifiedAt: new Date(),
+          },
+        },
+        profile: {
+          create: {
+            email: "deal-owner@example.test",
+            firstName: "Артур",
+            lastName: "Балашев",
+            middleName: "Вадимович",
+          },
+        },
+      },
+    });
+    const service = new DealsService(
+      new DealsRepository(database as unknown as PrismaService),
+    );
+
+    const created = await service.createDraft(user.id, {
+      creationPath: "AI_ASSISTED",
+      description: "",
+      templateVersionId: templateVersion.id,
+      title: "Аренда квартиры",
+    });
+    const saved = await service.updateDraft(user.id, created.id, {
+      answers: { paymentAmount: 25_000, propertyDescription: "Квартира" },
+      currentStep: "PARAMETERS",
+      description: "Аренда квартиры на один календарный месяц",
+      expectedUpdatedAt: created.updatedAt,
+    });
+    const restored = await service.getDraft(user.id, created.id);
+    const list = await service.list(user.id);
+
+    expect(saved.versionNumber).toBe(1);
+    expect(restored).toMatchObject({
+      draft: {
+        answers: {
+          paymentAmount: 25_000,
+          propertyDescription: "Квартира",
+        },
+        currentStep: "PARAMETERS",
+        description: "Аренда квартиры на один календарный месяц",
+      },
+      id: created.id,
+      status: "DRAFT",
+    });
+    expect(list.items).toEqual([
+      expect.objectContaining({ id: created.id, title: "Аренда квартиры" }),
+    ]);
+
+    await expect(
+      service.updateDraft(user.id, created.id, {
+        description: "Устаревшая запись из другой вкладки",
+        expectedUpdatedAt: created.updatedAt,
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: "DEAL_DRAFT_VERSION_CONFLICT" }),
+    });
   });
 
   it("publishes the production template catalog with valid questionnaires", async () => {

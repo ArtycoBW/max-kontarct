@@ -15,8 +15,15 @@ export const queryKeys = {
     all: ["profile"] as const,
     current: () => [...queryKeys.profile.all, "current"] as const,
   },
+  deals: {
+    all: ["deals"] as const,
+    detail: (dealId: string) => [...queryKeys.deals.all, "detail", dealId] as const,
+    list: () => [...queryKeys.deals.all, "list"] as const,
+  },
   templates: {
     all: ["templates"] as const,
+    clarification: (sessionId: string) =>
+      [...queryKeys.templates.all, "clarification", sessionId] as const,
     detail: (slug: string) => [...queryKeys.templates.all, "detail", slug] as const,
     generation: (sessionId: string) =>
       [...queryKeys.templates.all, "generation", sessionId] as const,

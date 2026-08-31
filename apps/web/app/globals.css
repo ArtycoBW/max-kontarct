@@ -2940,6 +2940,187 @@ button.service-status {
   padding-top: 14px;
 }
 
+.dashboard-deals-screen {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+}
+
+.deal-list {
+  display: grid;
+  gap: 11px;
+}
+
+.deal-list-card {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: 42px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--ink-deep);
+  box-shadow: 0 8px 0 rgba(54, 8, 2, 0.045);
+  text-align: left;
+}
+
+.deal-list-card:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-soft);
+}
+
+.deal-list-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 13px;
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.deal-list-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.deal-list-copy small {
+  overflow: hidden;
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.deal-list-copy strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deal-list-copy span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.deal-list-card > svg:last-child {
+  color: var(--muted);
+}
+
+.draft-save-status {
+  display: inline-flex;
+  min-height: 26px;
+  flex: none;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--success);
+  font-size: 9px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.draft-save-status.is-error {
+  border-color: rgba(209, 54, 42, 0.25);
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+.deal-description-screen .deal-form,
+.initiator-review-screen {
+  gap: 16px;
+}
+
+.deal-description-textarea {
+  min-height: 146px;
+}
+
+.field-meta {
+  justify-self: end;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.description-helper-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 11px;
+  padding: 14px;
+  border: 0;
+  background: var(--accent-tint);
+  box-shadow: 0 8px 0 rgba(54, 8, 2, 0.045);
+}
+
+.description-helper-card > svg {
+  color: var(--accent);
+}
+
+.description-helper-card > span {
+  display: grid;
+  gap: 4px;
+}
+
+.description-helper-card strong {
+  color: var(--ink-deep);
+  font-size: 11px;
+}
+
+.description-helper-card small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.initiator-summary-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.initiator-summary-icon {
+  width: 52px;
+  height: 52px;
+}
+
+.initiator-summary-card > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.initiator-summary-card small,
+.initiator-summary-card span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.initiator-summary-card strong {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.initiator-summary-card > svg:last-child {
+  color: var(--success);
+}
+
 .invitation-hint {
   margin: 2px 0 0;
   color: var(--muted);

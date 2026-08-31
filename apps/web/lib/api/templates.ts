@@ -46,6 +46,15 @@ export function answerAiClarification(
   );
 }
 
+export function getAiClarification(
+  slug: string,
+  sessionId: string,
+): Promise<AiClarificationSessionResponse> {
+  return apiRequest<AiClarificationSessionResponse>(
+    `templates/${encodeURIComponent(slug)}/clarifications/${encodeURIComponent(sessionId)}`,
+  );
+}
+
 export function startContractGeneration(
   slug: string,
   sessionId: string,

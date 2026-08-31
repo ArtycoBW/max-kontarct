@@ -117,6 +117,21 @@ export class TemplatesController {
     );
   }
 
+  @Get(":slug/clarifications/:sessionId")
+  @ApiOperation({ summary: "Восстановить сессию уточняющих вопросов" })
+  @ApiOkResponse({ description: "Текущие вопросы и сохранённые ответы" })
+  @ApiNotFoundResponse({ description: "Сессия не найдена или недоступна" })
+  clarification(
+    @Param() params: AiClarificationParamsDto,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<AiClarificationSessionResponse> {
+    return this.clarifications.get(
+      params.slug,
+      params.sessionId,
+      request.auth.user.id,
+    );
+  }
+
   @Post(":slug/clarifications/:sessionId/generation")
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: "Запустить фоновую подготовку проекта договора" })
