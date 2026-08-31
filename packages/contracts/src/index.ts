@@ -107,6 +107,85 @@ export interface DealListItem {
   versionNumber: number;
 }
 
+export type DealInvitationState =
+  | "ACTIVE"
+  | "ACCEPTED"
+  | "EXPIRED"
+  | "REVOKED";
+
+export interface PublicInvitationTerm {
+  label: string;
+  value: string;
+}
+
+export interface PublicDealInvitationResponse {
+  botUsername: string;
+  expiresAt: string;
+  initiatorMaskedName: string;
+  publicCode: string;
+  state: DealInvitationState;
+  templateSummary: string;
+  templateTitle: string;
+  terms: PublicInvitationTerm[];
+  versionNumber: number;
+  whatItGives: string[];
+}
+
+export interface CreateDealInvitationRequest {
+  expectedUpdatedAt: string;
+  expectedVersionId: string;
+  replaceActive?: boolean;
+}
+
+export interface DealInvitationResponse {
+  acceptedAt: string | null;
+  createdAt: string;
+  expiresAt: string;
+  id: string;
+  maxDeeplink: string | null;
+  publicCode: string;
+  shareText: string | null;
+  shareUrl: string | null;
+  state: DealInvitationState;
+}
+
+export interface JoinDealInvitationRequest {
+  publicCode: string;
+  token: string;
+}
+
+export interface DealPartySummary {
+  displayName: string;
+  profileCompleted: boolean;
+  role: DealPartyRole;
+}
+
+export interface DealWorkspaceResponse extends DealDraftResponse {
+  approvals: {
+    currentUserApproved: boolean;
+    required: number;
+    totalApproved: number;
+  };
+  counterparty: DealPartySummary | null;
+  currentUserRole: DealPartyRole;
+  initiator: DealPartySummary;
+  invitation: Omit<DealInvitationResponse, "maxDeeplink" | "shareText" | "shareUrl"> | null;
+}
+
+export interface ApproveDealVersionRequest {
+  expectedDealUpdatedAt: string;
+}
+
+export interface DealApprovalResponse {
+  approvalId: string;
+  approvedAt: string;
+  dealStatus: DealStatus;
+  dealUpdatedAt: string;
+  totalApproved: number;
+  versionId: string;
+  versionNumber: number;
+}
+
 export interface DealListResponse {
   items: DealListItem[];
   total: number;

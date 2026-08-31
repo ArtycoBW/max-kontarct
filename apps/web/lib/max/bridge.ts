@@ -61,6 +61,48 @@ export function getMaxInitData(): string {
   return initData;
 }
 
+export type MaxStartPayload =
+  | { dealId: string; kind: "deal" }
+  | { kind: "invitation"; publicCode: string; token: string };
+
+export function getMaxStartPayload(): MaxStartPayload | null {
+  if (typeof window === "undefined") return null;
+  const value =
+    window.WebApp?.initDataUnsafe?.start_param ??
+    new URLSearchParams(window.location.search).get("WebAppStartParam") ??
+    "";
+  const invitation = /^invite_([A-Za-z0-9_-]{12})_([A-Za-z0-9_-]{32})$/.exec(value);
+  if (invitation?.[1] && invitation[2]) {
+    return { kind: "invitation", publicCode: invitation[1], token: invitation[2] };
+  }
+  const deal = /^deal_([0-9a-f]{32})$/i.exec(value);
+  if (deal?.[1]) {
+    const id = deal[1];
+    return {
+      dealId: `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`,
+      kind: "deal",
+    };
+  }
+  return null;
+}
+
+export async function shareInMax(text: string, link: string): Promise<void> {
+  const webApp = typeof window === "undefined" ? undefined : window.WebApp;
+  if (webApp?.shareMaxContent) {
+    await webApp.shareMaxContent({ link, text });
+    return;
+  }
+  if (webApp?.shareContent) {
+    await webApp.shareContent({ link, text });
+    return;
+  }
+  if (typeof navigator !== "undefined" && navigator.share) {
+    await navigator.share({ text, title: "Приглашение в Макс-Контракт", url: link });
+    return;
+  }
+  await navigator.clipboard.writeText(`${text}\n${link}`);
+}
+
 export async function requestMaxContact(): Promise<MaxContactBridgeResult> {
   if (process.env.NODE_ENV !== "production") {
     await new Promise((resolve) => setTimeout(resolve, 450));

@@ -26,6 +26,127 @@
   --radius-lg: 24px;
 }
 
+/* Public invitation preview: deliberately independent from the MAX webview shell. */
+.public-invite-page {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow-y: auto;
+  padding: 28px 16px;
+  background:
+    radial-gradient(circle at 85% 0%, rgba(255, 55, 36, 0.12), transparent 34rem),
+    #f7f3f0;
+  color: #2c120e;
+}
+
+.public-invite-shell {
+  width: min(100%, 620px);
+  margin: 0 auto;
+  padding: 26px;
+  border: 1px solid rgba(91, 45, 37, 0.12);
+  border-radius: 32px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 24px 80px rgba(69, 34, 28, 0.1);
+}
+
+.public-invite-brand,
+.public-invite-trust-card,
+.public-invite-section-title,
+.public-invite-benefits li,
+.public-invite-expiry {
+  display: flex;
+  align-items: center;
+}
+
+.public-invite-brand { gap: 12px; }
+.public-invite-brand-mark {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 14px;
+  color: white;
+  background: #ff3724;
+}
+.public-invite-brand span:last-child { display: grid; gap: 2px; }
+.public-invite-brand strong { font-size: 13px; letter-spacing: 0.04em; }
+.public-invite-brand small { color: #8a716c; font-size: 11px; }
+
+.public-invite-heading { margin: 44px 0 24px; }
+.public-invite-heading h1 {
+  margin: 6px 0 12px;
+  font-size: clamp(34px, 8vw, 54px);
+  line-height: 0.98;
+  letter-spacing: -0.055em;
+}
+.public-invite-heading > p:last-child { margin: 0; color: #826d68; line-height: 1.55; }
+
+.public-invite-trust-card {
+  gap: 12px;
+  padding: 16px;
+  border-color: rgba(18, 139, 91, 0.2);
+  background: #eefaf4;
+  color: #08734b;
+}
+.public-invite-trust-card span { display: grid; gap: 3px; }
+.public-invite-trust-card small { color: #4f7667; line-height: 1.4; }
+
+.public-invite-section { margin-top: 28px; }
+.public-invite-section h2 { margin: 0; font-size: 17px; }
+.public-invite-section-title { gap: 8px; }
+.public-invite-terms {
+  margin-top: 13px;
+  overflow: hidden;
+  border: 1px solid #eadbd6;
+  border-radius: 20px;
+}
+.public-invite-terms > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #f0e4e0;
+}
+.public-invite-terms > div:last-child { border-bottom: 0; }
+.public-invite-terms span { color: #836e69; font-size: 12px; }
+.public-invite-terms strong { text-align: right; font-size: 13px; }
+.public-invite-terms > p { margin: 0; padding: 16px; color: #836e69; font-size: 13px; }
+.public-invite-benefits { display: grid; gap: 10px; margin: 14px 0 0; padding: 0; list-style: none; }
+.public-invite-benefits li { gap: 9px; color: #6e5752; font-size: 13px; line-height: 1.45; }
+.public-invite-benefits svg { flex: 0 0 auto; color: #159b68; }
+.public-invite-expiry { gap: 8px; margin-top: 24px; color: #846f6a; font-size: 12px; }
+.public-invite-error {
+  margin-top: 24px;
+  padding: 16px;
+  border-color: #f3b8ae;
+  background: #fff2ef;
+  color: #a82d20;
+  line-height: 1.45;
+}
+.public-invite-actions { margin-top: 22px; }
+.public-invite-actions > p {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  color: #8a716c;
+  font-size: 11px;
+}
+
+@media (max-width: 520px) {
+  .public-invite-page { padding: 0; background: #fff; }
+  .public-invite-shell {
+    min-height: 100dvh;
+    padding: max(22px, env(safe-area-inset-top)) 18px max(24px, env(safe-area-inset-bottom));
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .public-invite-heading { margin-top: 34px; }
+  .public-invite-terms > div { grid-template-columns: 1fr; gap: 5px; }
+  .public-invite-terms strong { text-align: left; }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -4222,4 +4343,86 @@ button.service-status {
   .start-screen-glass {
     transform: none;
   }
+}
+
+.deal-workspace-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: max(28px, env(safe-area-inset-bottom));
+}
+
+.deal-workspace-header { margin-bottom: 0; }
+.deal-workspace-summary,
+.deal-party-card,
+.deal-workspace-notice,
+.deal-workspace-section-heading,
+.invitation-entry-card-title,
+.invitation-entry-benefits span {
+  display: flex;
+  align-items: center;
+}
+.deal-workspace-summary { gap: 12px; padding: 14px; }
+.deal-workspace-summary .state-icon { width: 44px; height: 44px; flex: 0 0 auto; }
+.deal-workspace-summary > div { display: grid; min-width: 0; flex: 1; gap: 3px; }
+.deal-workspace-summary small,
+.deal-workspace-summary span { color: var(--app-muted); font-size: 10px; }
+.deal-workspace-summary strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.deal-workspace-summary > svg { color: #159b68; }
+.deal-workspace-notice {
+  gap: 7px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 13px;
+  color: #08734b;
+  background: #eefaf4;
+  font-size: 11px;
+}
+.deal-workspace-section { display: grid; gap: 12px; }
+.deal-workspace-section > h2,
+.deal-workspace-section-heading h2 { margin: 0; font-size: 15px; }
+.deal-workspace-section-heading { justify-content: space-between; gap: 12px; }
+.deal-workspace-section-heading span { color: var(--app-muted); font-size: 10px; }
+.deal-party-card { gap: 11px; padding: 14px; }
+.deal-party-card > svg:first-child { color: var(--app-accent); }
+.deal-party-card > svg:last-child { margin-left: auto; color: #159b68; }
+.deal-party-card > span { display: grid; flex: 1; gap: 3px; }
+.deal-party-card strong { font-size: 12px; }
+.deal-party-card small { color: var(--app-muted); font-size: 10px; line-height: 1.35; }
+.deal-party-card.is-waiting > svg:last-child { color: var(--app-muted); }
+.deal-invitation-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.deal-invitation-actions .button { min-width: 0; font-size: 10px; }
+.deal-contract-preview { max-height: 340px; overflow: auto; padding: 16px; }
+.deal-contract-preview > strong { display: block; margin-bottom: 10px; font-size: 14px; }
+.deal-contract-preview h3 { margin: 14px 0 6px; font-size: 12px; }
+.deal-contract-preview p { margin: 0 0 7px; color: var(--app-muted); font-size: 10px; line-height: 1.5; }
+
+.invitation-entry-screen { min-height: 100%; padding-bottom: 24px; }
+.invitation-entry-icon {
+  display: grid;
+  width: 68px;
+  height: 68px;
+  margin: 20px auto 18px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--app-accent);
+  background: var(--app-accent-soft);
+}
+.invitation-entry-screen > h1 { margin: 5px 0 12px; font-size: 34px; line-height: 1; letter-spacing: -0.055em; }
+.invitation-entry-terms,
+.invitation-entry-benefits { margin-top: 18px; padding: 15px; }
+.invitation-entry-card-title { gap: 8px; margin-bottom: 12px; }
+.invitation-entry-term { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 10px 0; border-top: 1px solid var(--app-border); }
+.invitation-entry-term span { color: var(--app-muted); font-size: 10px; }
+.invitation-entry-term strong { text-align: right; font-size: 11px; }
+.invitation-entry-benefits { display: grid; gap: 9px; }
+.invitation-entry-benefits > strong { margin-bottom: 3px; font-size: 12px; }
+.invitation-entry-benefits span { gap: 7px; color: var(--app-muted); font-size: 10px; line-height: 1.4; }
+.invitation-entry-benefits svg { flex: 0 0 auto; color: #159b68; }
+.invitation-entry-action { position: static; margin-top: 22px; padding-bottom: 0; }
+.invitation-entry-action small { display: block; margin-top: 9px; text-align: center; color: var(--app-muted); font-size: 9px; }
+
+@media (max-width: 360px) {
+  .deal-invitation-actions { grid-template-columns: 1fr; }
+  .invitation-entry-screen > h1 { font-size: 30px; }
 }

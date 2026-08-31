@@ -8,6 +8,7 @@ const DEVELOPMENT_DEFAULTS = {
   CONSENT_STATUS_NOTIFICATIONS_VERSION: "dev-v1",
   CONSENT_TERMS_VERSION: "dev-v1",
   CONTRACT_GENERATION_QUEUE_PREFIX: "max-contract",
+  DEAL_INVITATION_TTL_SECONDS: 3 * 24 * 60 * 60,
   CORS_ORIGINS: "http://localhost:3000,http://localhost:3002",
   DATABASE_URL:
     "postgresql://max_contract:max_contract_dev@localhost:5434/max_contract",
@@ -31,6 +32,7 @@ const DEVELOPMENT_DEFAULTS = {
   MINIO_ENDPOINT: "http://localhost:9100",
   MINIO_REGION: "ru-central1",
   MINIO_SECRET_KEY: "max_contract_dev_secret",
+  PUBLIC_WEB_URL: "http://localhost:3000",
   REDIS_URL: "redis://localhost:6381",
   THROTTLE_LIMIT: 120,
   THROTTLE_TTL_MS: 60_000,
@@ -56,6 +58,7 @@ const REQUIRED_PRODUCTION_KEYS = [
   "MINIO_SECRET_KEY",
   "MAX_BOT_TOKEN",
   "MAX_WEBHOOK_SECRET",
+  "PUBLIC_WEB_URL",
   "REDIS_URL",
 ] as const;
 
@@ -211,6 +214,13 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
       input.CONTRACT_GENERATION_QUEUE_PREFIX,
       DEVELOPMENT_DEFAULTS.CONTRACT_GENERATION_QUEUE_PREFIX,
     ),
+    DEAL_INVITATION_TTL_SECONDS: parseBoundedInteger(
+      input.DEAL_INVITATION_TTL_SECONDS,
+      DEVELOPMENT_DEFAULTS.DEAL_INVITATION_TTL_SECONDS,
+      "DEAL_INVITATION_TTL_SECONDS",
+      5 * 60,
+      30 * 24 * 60 * 60,
+    ),
     DATABASE_URL: readString(
       input.DATABASE_URL,
       DEVELOPMENT_DEFAULTS.DATABASE_URL,
@@ -302,6 +312,10 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
       DEVELOPMENT_DEFAULTS.MINIO_SECRET_KEY,
     ),
     NODE_ENV: nodeEnv,
+    PUBLIC_WEB_URL: readString(
+      input.PUBLIC_WEB_URL,
+      DEVELOPMENT_DEFAULTS.PUBLIC_WEB_URL,
+    ).replace(/\/$/, ""),
     REDIS_URL: readString(input.REDIS_URL, DEVELOPMENT_DEFAULTS.REDIS_URL),
     THROTTLE_LIMIT: parseInteger(
       input.THROTTLE_LIMIT,

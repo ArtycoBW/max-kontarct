@@ -21,6 +21,8 @@ export const queryKeys = {
     list: () => [...queryKeys.deals.all, "list"] as const,
     versions: (dealId: string) =>
       [...queryKeys.deals.all, "versions", dealId] as const,
+    workspace: (dealId: string) =>
+      [...queryKeys.deals.all, "workspace", dealId] as const,
   },
   templates: {
     all: ["templates"] as const,

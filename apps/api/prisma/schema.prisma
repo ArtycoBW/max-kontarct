@@ -103,6 +103,8 @@ model User {
   consents       UserConsent[]
   dealParties    DealParty[]
   dealVersions   DealVersion[]  @relation("DealVersionAuthor")
+  createdDealInvitations  DealInvitation[] @relation("DealInvitationCreator")
+  acceptedDealInvitations DealInvitation[] @relation("DealInvitationAcceptor")
   initiatedDeals Deal[]         @relation("DealInitiator")
   maxAccount     MaxAccount?
   phones         UserPhone[]
@@ -301,11 +303,35 @@ model Deal {
   templateVersion ContractTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
   parties         DealParty[]
   versions        DealVersion[]
+  invitations     DealInvitation[]
 
   @@index([initiatorUserId, status, updatedAt], map: "deals_initiator_status_updated_idx")
   @@index([status, updatedAt], map: "deals_status_updated_idx")
   @@index([templateVersionId], map: "deals_template_version_id_idx")
   @@map("deals")
+}
+
+model DealInvitation {
+  id               String    @id @default(uuid()) @db.Uuid
+  dealId           String    @map("deal_id") @db.Uuid
+  createdByUserId  String    @map("created_by_user_id") @db.Uuid
+  acceptedByUserId String?   @map("accepted_by_user_id") @db.Uuid
+  publicCode       String    @unique(map: "deal_invitations_public_code_key") @map("public_code") @db.VarChar(24)
+  tokenHash        String    @unique(map: "deal_invitations_token_hash_key") @map("token_hash") @db.Char(64)
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(3)
+  acceptedAt       DateTime? @map("accepted_at") @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  acceptedBy User? @relation("DealInvitationAcceptor", fields: [acceptedByUserId], references: [id], onDelete: SetNull)
+  createdBy  User  @relation("DealInvitationCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  deal       Deal  @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@index([dealId, createdAt], map: "deal_invitations_deal_created_idx")
+  @@index([expiresAt], map: "deal_invitations_expires_at_idx")
+  @@index([acceptedByUserId], map: "deal_invitations_accepted_by_user_id_idx")
+  @@map("deal_invitations")
 }
 
 model DealParty {

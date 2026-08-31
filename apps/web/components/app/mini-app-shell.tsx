@@ -51,6 +51,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/components/providers/auth-provider";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { ProfileScreen } from "@/components/profile/profile-screen";
+import { DealWorkspaceScreen } from "@/components/deals/deal-workspace-screen";
+import { InvitationEntryScreen } from "@/components/invitations/invitation-entry-screen";
 import {
   parseQuestionnaireSchema,
   TemplateQuestionnaire,
@@ -63,6 +65,7 @@ import {
   updateDealDraft,
 } from "@/lib/api/deals";
 import { getOnboardingState } from "@/lib/api/onboarding";
+import { joinDealInvitation } from "@/lib/api/invitations";
 import { queryKeys } from "@/lib/api/query-keys";
 import {
   answerAiClarification,
@@ -76,8 +79,9 @@ import {
 } from "@/lib/api/templates";
 import { normalizeQuestionnaireAnswers } from "@/lib/validation/questionnaire-answers";
 import { cn } from "@/lib/utils";
+import { getMaxStartPayload, type MaxStartPayload } from "@/lib/max/bridge";
 
-type AppTab = "home" | "deals" | "create" | "documents" | "profile";
+type AppTab = "home" | "deals" | "create" | "deal" | "documents" | "profile";
 type Icon = LucideIcon;
 
 const navigation: Array<{
@@ -2007,13 +2011,17 @@ function BottomNavigation({
 function ActiveScreen({
   active,
   draftId,
+  selectedDealId,
   onNavigate,
+  onEditDeal,
   onOpenDraft,
   phone,
 }: {
   active: AppTab;
   draftId: string | null;
+  selectedDealId: string | null;
   onNavigate: (tab: AppTab) => void;
+  onEditDeal: (dealId: string) => void;
   onOpenDraft: (dealId: string) => void;
   phone: VerifiedPhone;
 }) {
@@ -2028,6 +2036,16 @@ function ActiveScreen({
       <CreateDealScreen
         draftId={draftId}
         onBack={() => onNavigate("deals")}
+      />
+    );
+  }
+  if (active === "deal" && selectedDealId) {
+    return (
+      <DealWorkspaceScreen
+        dealId={selectedDealId}
+        onBack={() => onNavigate("deals")}
+        onEdit={() => onEditDeal(selectedDealId)}
+        onOpenProfile={() => onNavigate("profile")}
       />
     );
   }
@@ -2345,7 +2363,19 @@ export function MiniAppShell({
   showEnvironmentBadge: boolean;
 }) {
   const auth = useAuth();
-  const [started, setStarted] = useState(false);
+  const [startPayload] = useState<MaxStartPayload | null>(() =>
+    getMaxStartPayload(),
+  );
+  const [started, setStarted] = useState(startPayload?.kind === "deal");
+
+  if (startPayload?.kind === "invitation" && !started) {
+    return (
+      <InvitationEntryScreen
+        onContinue={() => setStarted(true)}
+        payload={startPayload}
+      />
+    );
+  }
 
   if (!started) {
     return (
@@ -2365,14 +2395,19 @@ export function MiniAppShell({
   }
 
   return (
-    <AuthenticatedMiniApp showEnvironmentBadge={showEnvironmentBadge} />
+    <AuthenticatedMiniApp
+      showEnvironmentBadge={showEnvironmentBadge}
+      startPayload={startPayload}
+    />
   );
 }
 
 function AuthenticatedMiniApp({
   showEnvironmentBadge,
+  startPayload,
 }: {
   showEnvironmentBadge: boolean;
+  startPayload: MaxStartPayload | null;
 }) {
   const queryClient = useQueryClient();
   const onboarding = useQuery({
@@ -2413,31 +2448,103 @@ function AuthenticatedMiniApp({
     );
   }
 
+  if (startPayload?.kind === "invitation") {
+    return (
+      <InvitationJoinGate
+        payload={startPayload}
+        phone={onboarding.data.phone!}
+        showEnvironmentBadge={showEnvironmentBadge}
+      />
+    );
+  }
+
   return (
     <AppWorkspace
+      initialDealId={startPayload?.kind === "deal" ? startPayload.dealId : null}
       phone={onboarding.data.phone!}
       showEnvironmentBadge={showEnvironmentBadge}
     />
   );
 }
 
-function AppWorkspace({
+function InvitationJoinGate({
+  payload,
   phone,
   showEnvironmentBadge,
 }: {
+  payload: Extract<MaxStartPayload, { kind: "invitation" }>;
   phone: VerifiedPhone;
   showEnvironmentBadge: boolean;
 }) {
-  const [active, setActive] = useState<AppTab>("deals");
+  const join = useMutation({
+    mutationFn: () =>
+      joinDealInvitation({
+        publicCode: payload.publicCode,
+        token: payload.token,
+      }),
+  });
+  const joinNow = join.mutate;
+  useEffect(() => {
+    joinNow();
+  }, [joinNow]);
+
+  if (join.isSuccess) {
+    return (
+      <AppWorkspace
+        initialDealId={join.data.id}
+        phone={phone}
+        showEnvironmentBadge={showEnvironmentBadge}
+      />
+    );
+  }
+  if (join.isError) {
+    return (
+      <AuthenticationError
+        error={join.error}
+        onRetry={() => join.mutate()}
+        title="Не удалось присоединиться к сделке"
+      />
+    );
+  }
+  return (
+    <AuthenticationLoading
+      copy="Добавляем вас второй стороной и открываем условия."
+      eyebrow="Приглашение подтверждено"
+      title="Подключаем к сделке"
+    />
+  );
+}
+
+function AppWorkspace({
+  initialDealId,
+  phone,
+  showEnvironmentBadge,
+}: {
+  initialDealId: string | null;
+  phone: VerifiedPhone;
+  showEnvironmentBadge: boolean;
+}) {
+  const [active, setActive] = useState<AppTab>(
+    initialDealId ? "deal" : "deals",
+  );
   const [draftId, setDraftId] = useState<string | null>(null);
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(
+    initialDealId,
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const navigate = (tab: AppTab) => {
     if (tab === "create") setDraftId(null);
+    if (tab !== "deal") setSelectedDealId(null);
     setActive(tab);
   };
 
-  const openDraft = (dealId: string) => {
+  const openDeal = (dealId: string) => {
+    setSelectedDealId(dealId);
+    setActive("deal");
+  };
+
+  const editDeal = (dealId: string) => {
     setDraftId(dealId);
     setActive("create");
   };
@@ -2458,7 +2565,7 @@ function AppWorkspace({
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               className="screen-motion"
-              key={active}
+              key={`${active}:${selectedDealId ?? draftId ?? ""}`}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
@@ -2467,14 +2574,16 @@ function AppWorkspace({
               <ActiveScreen
                 active={active}
                 draftId={draftId}
+                selectedDealId={selectedDealId}
+                onEditDeal={editDeal}
                 onNavigate={navigate}
-                onOpenDraft={openDraft}
+                onOpenDraft={openDeal}
                 phone={phone}
               />
             </motion.div>
           </AnimatePresence>
         </div>
-        {active !== "create" ? (
+        {active !== "create" && active !== "deal" ? (
           <BottomNavigation active={active} onChange={navigate} />
         ) : null}
       </section>

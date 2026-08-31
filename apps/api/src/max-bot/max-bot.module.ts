@@ -5,6 +5,7 @@ import { MaxBotService } from "./max-bot.service";
 
 @Module({
   controllers: [MaxBotController],
+  exports: [MaxBotService],
   providers: [MaxBotService],
 })
 export class MaxBotModule {}

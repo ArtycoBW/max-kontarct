@@ -1,4 +1,4 @@
-import { getMaxInitData, waitForMaxWebApp } from "./bridge";
+import { getMaxInitData, getMaxStartPayload, waitForMaxWebApp } from "./bridge";
 
 function setWindow(value: Partial<Window>): void {
   Object.defineProperty(global, "window", {
@@ -57,5 +57,34 @@ describe("MAX Bridge startup", () => {
     );
     await jest.advanceTimersByTimeAsync(125);
     await rejection;
+  });
+
+  it("parses an opaque invitation payload without exposing personal data", () => {
+    setWindow({
+      WebApp: {
+        initData: "signed-init-data",
+        initDataUnsafe: {
+          start_param:
+            "invite_AbCdEfGhIjKl_0123456789abcdefghijklmnopqrstuv",
+        },
+      },
+    });
+
+    expect(getMaxStartPayload()).toEqual({
+      kind: "invitation",
+      publicCode: "AbCdEfGhIjKl",
+      token: "0123456789abcdefghijklmnopqrstuv",
+    });
+  });
+
+  it("rejects malformed start parameters", () => {
+    setWindow({
+      WebApp: {
+        initData: "signed-init-data",
+        initDataUnsafe: { start_param: "invite_Артур_+79990000000" },
+      },
+    });
+
+    expect(getMaxStartPayload()).toBeNull();
   });
 });

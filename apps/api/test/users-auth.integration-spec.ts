@@ -108,6 +108,7 @@ describe("users/auth database foundation (integration)", () => {
         "contract_template_versions",
         "contract_templates",
         "deal_approvals",
+        "deal_invitations",
         "deal_parties",
         "deal_versions",
         "deals",
@@ -120,6 +121,90 @@ describe("users/auth database foundation (integration)", () => {
         "template_document_requirements",
       ]),
     );
+  });
+
+  it("enforces one active invitation and accepts it atomically", async () => {
+    const [templateVersion, initiator, counterparty] = await Promise.all([
+      database.contractTemplateVersion.findFirstOrThrow({
+        where: { status: TemplateVersionStatus.PUBLISHED },
+      }),
+      database.user.create({ data: {} }),
+      database.user.create({ data: {} }),
+    ]);
+    const deal = await database.deal.create({
+      data: {
+        initiatorUserId: initiator.id,
+        status: DealStatus.INVITED,
+        templateVersionId: templateVersion.id,
+        title: "Сделка с приглашением",
+      },
+    });
+    await database.dealParty.create({
+      data: {
+        dealId: deal.id,
+        role: DealPartyRole.INITIATOR,
+        userId: initiator.id,
+      },
+    });
+    const first = await database.dealInvitation.create({
+      data: {
+        createdByUserId: initiator.id,
+        dealId: deal.id,
+        expiresAt: new Date(Date.now() + 60_000),
+        publicCode: "FirstCode001",
+        tokenHash: "a".repeat(64),
+      },
+    });
+
+    await expect(
+      database.dealInvitation.create({
+        data: {
+          createdByUserId: initiator.id,
+          dealId: deal.id,
+          expiresAt: new Date(Date.now() + 60_000),
+          publicCode: "SecondCode02",
+          tokenHash: "b".repeat(64),
+        },
+      }),
+    ).rejects.toMatchObject({ code: "P2002" });
+
+    const accepted = await database.$transaction(async (transaction) => {
+      await transaction.dealInvitation.update({
+        data: { revokedAt: new Date() },
+        where: { id: first.id },
+      });
+      const invitation = await transaction.dealInvitation.create({
+        data: {
+          createdByUserId: initiator.id,
+          dealId: deal.id,
+          expiresAt: new Date(Date.now() + 60_000),
+          publicCode: "SecondCode02",
+          tokenHash: "b".repeat(64),
+        },
+      });
+      await transaction.dealParty.create({
+        data: {
+          dealId: deal.id,
+          role: DealPartyRole.COUNTERPARTY,
+          userId: counterparty.id,
+        },
+      });
+      return transaction.dealInvitation.update({
+        data: { acceptedAt: new Date(), acceptedByUserId: counterparty.id },
+        where: { id: invitation.id },
+      });
+    });
+
+    expect(accepted).toMatchObject({
+      acceptedByUserId: counterparty.id,
+      dealId: deal.id,
+      tokenHash: "b".repeat(64),
+    });
+    await expect(
+      database.dealParty.findUniqueOrThrow({
+        where: { dealId_role: { dealId: deal.id, role: DealPartyRole.COUNTERPARTY } },
+      }),
+    ).resolves.toMatchObject({ userId: counterparty.id });
   });
 
   it("persists versioned deals, parties and approvals with relational boundaries", async () => {

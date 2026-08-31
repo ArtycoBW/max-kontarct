@@ -55,6 +55,73 @@ export class MaxBotService {
     await this.sendWelcomeMessage(chatId);
   }
 
+  async getBotUsername(): Promise<string> {
+    return (await this.getBotIdentity()).username;
+  }
+
+  async createMiniAppDeeplink(payload: string): Promise<string> {
+    if (!/^[A-Za-z0-9_-]{1,512}$/.test(payload)) {
+      throw new Error("Некорректный параметр запуска мини-приложения MAX");
+    }
+    return `https://max.ru/${encodeURIComponent(await this.getBotUsername())}?startapp=${encodeURIComponent(payload)}`;
+  }
+
+  async sendUserNotification(
+    maxUserId: string,
+    text: string,
+    payload?: string,
+  ): Promise<boolean> {
+    if (!/^\d{1,20}$/.test(maxUserId)) return false;
+
+    try {
+      const deeplink = payload
+        ? await this.createMiniAppDeeplink(payload)
+        : undefined;
+      const response = await fetch(
+        `${this.apiUrl}/messages?user_id=${encodeURIComponent(maxUserId)}`,
+        {
+          body: JSON.stringify({
+            ...(deeplink
+              ? {
+                  attachments: [
+                    {
+                      payload: {
+                        buttons: [
+                          [
+                            {
+                              text: "Открыть сделку",
+                              type: "link",
+                              url: deeplink,
+                            },
+                          ],
+                        ],
+                      },
+                      type: "inline_keyboard",
+                    },
+                  ],
+                }
+              : {}),
+            text,
+          }),
+          headers: {
+            Authorization: this.token,
+            "Content-Type": "application/json",
+          },
+          method: "POST",
+          signal: AbortSignal.timeout(MAX_API_TIMEOUT_MS),
+        },
+      );
+      if (response.ok) return true;
+      this.logger.warn(
+        { maxUserId, statusCode: response.status },
+        "MAX rejected a deal notification",
+      );
+    } catch {
+      this.logger.warn({ maxUserId }, "MAX deal notification was not delivered");
+    }
+    return false;
+  }
+
   private readChatId(value: unknown): string | null {
     if (typeof value === "number") {
       return Number.isSafeInteger(value) && value !== 0 ? String(value) : null;
