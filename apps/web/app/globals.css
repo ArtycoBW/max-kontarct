@@ -1584,6 +1584,42 @@ button.service-status {
   margin: 0;
 }
 
+.profile-admin-link {
+  display: grid;
+  width: 100%;
+  min-height: 66px;
+  grid-template-columns: auto 1fr auto;
+  gap: 13px;
+  justify-content: initial;
+  margin-top: 12px;
+  padding: 12px 15px;
+  color: var(--ink-deep);
+  text-align: left;
+}
+
+.profile-admin-link > svg:first-child {
+  color: var(--accent);
+}
+
+.profile-admin-link > svg:last-child {
+  color: var(--muted);
+}
+
+.profile-admin-link > span {
+  display: grid;
+  gap: 3px;
+}
+
+.profile-admin-link strong {
+  font-size: 12px;
+}
+
+.profile-admin-link small {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 500;
+}
+
 .profile-connection {
   display: inline-flex;
   align-items: center;

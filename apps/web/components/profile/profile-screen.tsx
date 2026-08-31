@@ -4,6 +4,7 @@ import type { UpdateUserProfileRequest, VerifiedPhone } from "@max-contract/cont
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowRight,
   Check,
   CircleAlert,
   LockKeyhole,
@@ -13,6 +14,7 @@ import {
   ShieldCheck,
   UserRound,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
@@ -22,6 +24,7 @@ import { Card } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/components/providers/auth-provider";
 import { getProfile, updateProfile } from "@/lib/api/profile";
 import { queryKeys } from "@/lib/api/query-keys";
 
@@ -63,6 +66,7 @@ export function ProfileScreen({
 }: {
   fallbackPhone: VerifiedPhone;
 }) {
+  const auth = useAuth();
   const queryClient = useQueryClient();
   const [saved, setSaved] = useState(false);
   const profile = useQuery({
@@ -147,6 +151,23 @@ export function ProfileScreen({
           <p>{identity}</p>
         </div>
       </Card>
+
+      {auth.user?.role === "ADMIN" || auth.user?.role === "SUPPORT" ? (
+        <Button asChild className="profile-admin-link" variant="outline">
+          <Link href="/admin">
+            <ShieldCheck size={19} />
+            <span>
+              <strong>Панель управления</strong>
+              <small>
+                {auth.user.role === "ADMIN"
+                  ? "Пользователи, шаблоны и журнал"
+                  : "Просмотр данных и журнала"}
+              </small>
+            </span>
+            <ArrowRight size={18} />
+          </Link>
+        </Button>
+      ) : null}
 
       <form
         className="profile-form"
