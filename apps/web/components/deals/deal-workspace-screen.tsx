@@ -281,5 +281,11 @@ function statusLabel(status: DealStatus): string {
 }
 
 function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat("ru-RU", { day: "2-digit", hour: "2-digit", minute: "2-digit", month: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short",
+    timeZone: "Europe/Moscow",
+  }).format(new Date(value));
 }

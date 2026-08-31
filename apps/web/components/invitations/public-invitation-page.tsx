@@ -149,6 +149,7 @@ function formatDateTime(value: string): string {
     hour: "2-digit",
     minute: "2-digit",
     month: "long",
+    timeZone: "Europe/Moscow",
   }).format(new Date(value));
 }
 

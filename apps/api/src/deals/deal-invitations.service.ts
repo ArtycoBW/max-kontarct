@@ -840,7 +840,9 @@ function formatPublicValue(key: string, value: unknown): string {
     return /amount|price/i.test(key) ? `${formatted} ₽` : formatted;
   }
   if (typeof value === "string" && /date/i.test(key) && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return new Intl.DateTimeFormat("ru-RU").format(new Date(`${value}T00:00:00Z`));
+    return new Intl.DateTimeFormat("ru-RU", { timeZone: "UTC" }).format(
+      new Date(`${value}T00:00:00Z`),
+    );
   }
   return String(value).slice(0, 120);
 }
