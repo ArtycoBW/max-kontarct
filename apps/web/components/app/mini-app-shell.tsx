@@ -280,34 +280,39 @@ function DealsScreen({
 
       {hasDeals ? (
         <div className="deal-list" aria-label="Сохранённые сделки">
-          {deals.data?.items.map((deal) => (
-            <Button
-              className="deal-list-card"
-              key={deal.id}
-              onClick={() => onOpenDraft(deal.id)}
-              type="button"
-              variant="unstyled"
-            >
-              <span className="deal-list-icon">
-                <FileClock size={20} />
-              </span>
-              <span className="deal-list-copy">
-                <small>{deal.templateTitle}</small>
-                <strong>{deal.title}</strong>
-                <span>
-                  Черновик · обновлён {formatDealUpdatedAt(deal.updatedAt)}
+          <div className="deal-list-items">
+            {deals.data?.items.map((deal) => (
+              <Button
+                className="deal-list-card"
+                key={deal.id}
+                onClick={() => onOpenDraft(deal.id)}
+                type="button"
+                variant="unstyled"
+              >
+                <span className="deal-list-icon">
+                  <FileClock size={20} />
                 </span>
-              </span>
-              <ArrowRight size={17} />
+                <span className="deal-list-copy">
+                  <small>{deal.templateTitle}</small>
+                  <strong>{deal.title}</strong>
+                  <span>
+                    Черновик · обновлён {formatDealUpdatedAt(deal.updatedAt)}
+                  </span>
+                </span>
+                <ArrowRight size={17} />
+              </Button>
+            ))}
+          </div>
+
+          <div className="deal-list-action">
+            <Button
+              className="full-width"
+              onClick={() => onNavigate("create")}
+              type="button"
+            >
+              <Plus size={18} /> Создать ещё сделку
             </Button>
-          ))}
-          <Button
-            className="full-width"
-            onClick={() => onNavigate("create")}
-            type="button"
-          >
-            <Plus size={18} /> Создать ещё сделку
-          </Button>
+          </div>
         </div>
       ) : null}
     </div>
