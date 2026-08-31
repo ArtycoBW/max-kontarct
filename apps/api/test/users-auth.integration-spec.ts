@@ -6,6 +6,8 @@ import {
   AiGenerationStatus,
   ConsentSource,
   ConsentType,
+  DealPartyRole,
+  DealStatus,
   PhoneVerificationSource,
   PrismaClient,
   TemplateVersionStatus,
@@ -102,6 +104,10 @@ describe("users/auth database foundation (integration)", () => {
         "ai_generations",
         "contract_template_versions",
         "contract_templates",
+        "deal_approvals",
+        "deal_parties",
+        "deal_versions",
+        "deals",
         "max_accounts",
         "user_consents",
         "user_phones",
@@ -111,6 +117,101 @@ describe("users/auth database foundation (integration)", () => {
         "template_document_requirements",
       ]),
     );
+  });
+
+  it("persists versioned deals, parties and approvals with relational boundaries", async () => {
+    const [templateVersion, initiator, counterparty, otherUser] = await Promise.all([
+      database.contractTemplateVersion.findFirstOrThrow({
+        where: { status: TemplateVersionStatus.PUBLISHED },
+      }),
+      database.user.create({ data: {} }),
+      database.user.create({ data: {} }),
+      database.user.create({ data: {} }),
+    ]);
+    const deal = await database.deal.create({
+      data: {
+        initiatorUserId: initiator.id,
+        status: DealStatus.TERMS_REVIEW,
+        templateVersionId: templateVersion.id,
+        title: "Аренда квартиры",
+      },
+    });
+    const otherDeal = await database.deal.create({
+      data: {
+        initiatorUserId: otherUser.id,
+        templateVersionId: templateVersion.id,
+        title: "Другая сделка",
+      },
+    });
+    const [initiatorParty, counterpartyParty, otherParty] = await Promise.all([
+      database.dealParty.create({
+        data: {
+          dealId: deal.id,
+          role: DealPartyRole.INITIATOR,
+          userId: initiator.id,
+        },
+      }),
+      database.dealParty.create({
+        data: {
+          dealId: deal.id,
+          role: DealPartyRole.COUNTERPARTY,
+          userId: counterparty.id,
+        },
+      }),
+      database.dealParty.create({
+        data: {
+          dealId: otherDeal.id,
+          role: DealPartyRole.INITIATOR,
+          userId: otherUser.id,
+        },
+      }),
+    ]);
+    const version = await database.dealVersion.create({
+      data: {
+        contractDraft: { sections: [{ clauses: ["Условие"], heading: "Предмет" }] },
+        createdByUserId: initiator.id,
+        dealId: deal.id,
+        terms: { amount: 50_000, subject: "Квартира" },
+        versionNumber: 1,
+      },
+    });
+    await database.dealApproval.createMany({
+      data: [
+        { dealId: deal.id, dealVersionId: version.id, partyId: initiatorParty.id },
+        { dealId: deal.id, dealVersionId: version.id, partyId: counterpartyParty.id },
+      ],
+    });
+
+    const stored = await database.deal.findUniqueOrThrow({
+      include: {
+        parties: { include: { approvals: true }, orderBy: { role: "asc" } },
+        versions: { include: { approvals: true } },
+      },
+      where: { id: deal.id },
+    });
+
+    expect(stored).toMatchObject({
+      status: DealStatus.TERMS_REVIEW,
+      title: "Аренда квартиры",
+      versions: [
+        expect.objectContaining({
+          terms: { amount: 50_000, subject: "Квартира" },
+          versionNumber: 1,
+        }),
+      ],
+    });
+    expect(stored.parties).toHaveLength(2);
+    expect(stored.versions[0]?.approvals).toHaveLength(2);
+
+    await expect(
+      database.dealApproval.create({
+        data: {
+          dealId: deal.id,
+          dealVersionId: version.id,
+          partyId: otherParty.id,
+        },
+      }),
+    ).rejects.toMatchObject({ code: "P2003" });
   });
 
   it("publishes the production template catalog with valid questionnaires", async () => {

@@ -57,6 +57,40 @@ enum AiGenerationStatus {
   @@map("ai_generation_status")
 }
 
+enum DealStatus {
+  DRAFT
+  COLLECTING_DATA
+  INVITATION_READY
+  INVITED
+  COUNTERPARTY_JOINED
+  DOCUMENTS_PENDING
+  DOCUMENTS_REVIEW
+  CONTRACT_DRAFT
+  TERMS_REVIEW
+  READY_TO_SIGN
+  SIGNED_BY_ONE
+  SIGNED
+  COMPLETED
+  CANCELED
+
+  @@map("deal_status")
+}
+
+enum DealPartyRole {
+  INITIATOR
+  COUNTERPARTY
+
+  @@map("deal_party_role")
+}
+
+enum DealApprovalStatus {
+  APPROVED
+  SUPERSEDED
+  REVOKED
+
+  @@map("deal_approval_status")
+}
+
 model User {
   id         String    @id @default(uuid()) @db.Uuid
   role       UserRole  @default(USER)
@@ -64,13 +98,16 @@ model User {
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  auditEvents AuditEvent[]  @relation("AuditActor")
-  aiGenerations AiGeneration[]
-  consents    UserConsent[]
-  maxAccount  MaxAccount?
-  phones      UserPhone[]
-  profile     UserProfile?
-  sessions    UserSession[]
+  auditEvents    AuditEvent[]   @relation("AuditActor")
+  aiGenerations  AiGeneration[]
+  consents       UserConsent[]
+  dealParties    DealParty[]
+  dealVersions   DealVersion[]  @relation("DealVersionAuthor")
+  initiatedDeals Deal[]         @relation("DealInitiator")
+  maxAccount     MaxAccount?
+  phones         UserPhone[]
+  profile        UserProfile?
+  sessions       UserSession[]
 
   @@index([role], map: "users_role_idx")
   @@map("users")
@@ -209,6 +246,7 @@ model ContractTemplateVersion {
 
   documentRequirements TemplateDocumentRequirement[]
   aiGenerations        AiGeneration[]
+  deals                Deal[]
   template             ContractTemplate              @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   @@unique([templateId, versionNumber], map: "contract_template_versions_template_version_key")
@@ -239,12 +277,99 @@ model AiGeneration {
   updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dealVersion     DealVersion?
   templateVersion ContractTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
 
   @@index([userId, createdAt], map: "ai_generations_user_created_at_idx")
   @@index([userId, status, updatedAt], map: "ai_generations_user_status_updated_idx")
   @@index([templateVersionId, status], map: "ai_generations_template_status_idx")
   @@map("ai_generations")
+}
+
+model Deal {
+  id                String     @id @default(uuid()) @db.Uuid
+  initiatorUserId   String     @map("initiator_user_id") @db.Uuid
+  templateVersionId String     @map("template_version_id") @db.Uuid
+  title             String     @db.VarChar(160)
+  status            DealStatus @default(DRAFT)
+  canceledAt        DateTime?  @map("canceled_at") @db.Timestamptz(3)
+  completedAt       DateTime?  @map("completed_at") @db.Timestamptz(3)
+  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  initiator       User                    @relation("DealInitiator", fields: [initiatorUserId], references: [id], onDelete: Restrict)
+  templateVersion ContractTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
+  parties         DealParty[]
+  versions        DealVersion[]
+
+  @@index([initiatorUserId, status, updatedAt], map: "deals_initiator_status_updated_idx")
+  @@index([status, updatedAt], map: "deals_status_updated_idx")
+  @@index([templateVersionId], map: "deals_template_version_id_idx")
+  @@map("deals")
+}
+
+model DealParty {
+  id        String        @id @default(uuid()) @db.Uuid
+  dealId    String        @map("deal_id") @db.Uuid
+  userId    String        @map("user_id") @db.Uuid
+  role      DealPartyRole
+  joinedAt  DateTime      @default(now()) @map("joined_at") @db.Timestamptz(3)
+  createdAt DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  approvals DealApproval[]
+  deal      Deal           @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([dealId, role], map: "deal_parties_deal_role_key")
+  @@unique([dealId, userId], map: "deal_parties_deal_user_key")
+  @@unique([id, dealId], map: "deal_parties_id_deal_id_key")
+  @@index([userId, joinedAt], map: "deal_parties_user_joined_idx")
+  @@map("deal_parties")
+}
+
+model DealVersion {
+  id                 String   @id @default(uuid()) @db.Uuid
+  dealId             String   @map("deal_id") @db.Uuid
+  createdByUserId    String   @map("created_by_user_id") @db.Uuid
+  sourceGenerationId String?  @unique(map: "deal_versions_source_generation_id_key") @map("source_generation_id") @db.Uuid
+  versionNumber      Int      @map("version_number")
+  terms              Json
+  contractDraft      Json?    @map("contract_draft")
+  changeSummary      String?  @map("change_summary") @db.VarChar(500)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  approvals        DealApproval[]
+  createdBy        User           @relation("DealVersionAuthor", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  deal             Deal           @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  sourceGeneration AiGeneration?  @relation(fields: [sourceGenerationId], references: [id], onDelete: SetNull)
+
+  @@unique([dealId, versionNumber], map: "deal_versions_deal_version_key")
+  @@unique([id, dealId], map: "deal_versions_id_deal_id_key")
+  @@index([dealId, createdAt], map: "deal_versions_deal_created_idx")
+  @@index([createdByUserId], map: "deal_versions_created_by_user_id_idx")
+  @@map("deal_versions")
+}
+
+model DealApproval {
+  id            String             @id @default(uuid()) @db.Uuid
+  dealId        String             @map("deal_id") @db.Uuid
+  dealVersionId String             @map("deal_version_id") @db.Uuid
+  partyId       String             @map("party_id") @db.Uuid
+  status        DealApprovalStatus @default(APPROVED)
+  approvedAt    DateTime           @default(now()) @map("approved_at") @db.Timestamptz(3)
+  invalidatedAt DateTime?          @map("invalidated_at") @db.Timestamptz(3)
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  dealVersion DealVersion @relation(fields: [dealVersionId, dealId], references: [id, dealId], onDelete: Cascade)
+  party       DealParty   @relation(fields: [partyId, dealId], references: [id, dealId], onDelete: Cascade)
+
+  @@unique([dealVersionId, partyId], map: "deal_approvals_version_party_key")
+  @@index([partyId, status], map: "deal_approvals_party_status_idx")
+  @@index([dealVersionId, status], map: "deal_approvals_version_status_idx")
+  @@map("deal_approvals")
 }
 
 model TemplateDocumentRequirement {

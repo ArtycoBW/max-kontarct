@@ -1,5 +1,25 @@
 export type AuthUserRole = "USER" | "ADMIN" | "SUPPORT";
 
+export type DealStatus =
+  | "DRAFT"
+  | "COLLECTING_DATA"
+  | "INVITATION_READY"
+  | "INVITED"
+  | "COUNTERPARTY_JOINED"
+  | "DOCUMENTS_PENDING"
+  | "DOCUMENTS_REVIEW"
+  | "CONTRACT_DRAFT"
+  | "TERMS_REVIEW"
+  | "READY_TO_SIGN"
+  | "SIGNED_BY_ONE"
+  | "SIGNED"
+  | "COMPLETED"
+  | "CANCELED";
+
+export type DealPartyRole = "INITIATOR" | "COUNTERPARTY";
+
+export type DealApprovalStatus = "APPROVED" | "SUPERSEDED" | "REVOKED";
+
 export interface AuthMaxAccount {
   firstName: string | null;
   languageCode: string | null;
