@@ -22,8 +22,8 @@ import { AiClarificationsRepository } from "./ai-clarifications.repository";
 import { TemplatesService } from "./templates.service";
 
 const PROMPT_ID = "contract-clarification";
-const PROMPT_VERSION = "1.0.0";
-const MAX_QUESTIONS = 5;
+const PROMPT_VERSION = "1.1.0";
+const MAX_TOTAL_QUESTIONS = 5;
 
 type ClarificationAiOutput = {
   questions: AiClarificationQuestion[];
@@ -49,15 +49,21 @@ export class AiClarificationsService {
       inputAnswers: validated.answers,
       previousQuestions: [],
       templateTitle: validated.snapshot.templateTitle,
-    }, userId);
+    }, userId, MAX_TOTAL_QUESTIONS);
+    const data = sanitizeClarificationOutput(output.data, {
+      clarificationAnswers: {},
+      inputAnswers: validated.answers,
+      previousQuestions: [],
+      remainingQuestions: MAX_TOTAL_QUESTIONS,
+    });
 
     const record = await this.clarifications.create({
       inputAnswers: toPrismaObject(validated.answers),
-      metadata: toPrismaObject(output.metadata),
+      metadata: withQuestionHistory(output.metadata, data.questions),
       promptId: PROMPT_ID,
       promptVersion: PROMPT_VERSION,
-      questions: toPrismaArray(output.data.questions),
-      status: toDatabaseStatus(output.data.status),
+      questions: toPrismaArray(data.questions),
+      status: toDatabaseStatus(data.status),
       templateVersionId: validated.snapshot.templateVersionId,
       userId,
     });
@@ -113,18 +119,48 @@ export class AiClarificationsService {
       ? toJsonObject(session.clarificationAnswers)
       : {};
     const cumulativeAnswers = { ...previousAnswers, ...answers };
-    const output = await this.generate({
-      clarificationAnswers: cumulativeAnswers,
-      inputAnswers: toJsonObject(session.inputAnswers),
-      previousQuestions: questions,
-      templateTitle: session.templateVersion.template.title,
-    }, userId);
+    const inputAnswers = toJsonObject(session.inputAnswers);
+    const questionHistory = readQuestionHistory(
+      session.providerMetadata,
+      questions,
+    );
+    const remainingQuestions = Math.max(
+      0,
+      MAX_TOTAL_QUESTIONS - questionHistory.length,
+    );
+    let data: ClarificationAiOutput = {
+      questions: [],
+      status: "READY_TO_GENERATE",
+    };
+    let metadata = withQuestionHistory(
+      session.providerMetadata,
+      questionHistory,
+    );
+
+    if (remainingQuestions > 0) {
+      const output = await this.generate({
+        clarificationAnswers: cumulativeAnswers,
+        inputAnswers,
+        previousQuestions: questionHistory,
+        templateTitle: session.templateVersion.template.title,
+      }, userId, remainingQuestions);
+      data = sanitizeClarificationOutput(output.data, {
+        clarificationAnswers: cumulativeAnswers,
+        inputAnswers,
+        previousQuestions: questionHistory,
+        remainingQuestions,
+      });
+      metadata = withQuestionHistory(output.metadata, [
+        ...questionHistory,
+        ...data.questions,
+      ]);
+    }
     const record = await this.clarifications.update({
       answers: toPrismaObject(cumulativeAnswers),
       id: session.id,
-      metadata: toPrismaObject(output.metadata),
-      questions: toPrismaArray(output.data.questions),
-      status: toDatabaseStatus(output.data.status),
+      metadata,
+      questions: toPrismaArray(data.questions),
+      status: toDatabaseStatus(data.status),
     });
     return toResponse(record);
   }
@@ -137,6 +173,7 @@ export class AiClarificationsService {
       templateTitle: string;
     },
     userId: string,
+    maxQuestions: number,
   ) {
     try {
       const result = await this.ai.generateStructured({
@@ -150,10 +187,13 @@ export class AiClarificationsService {
           id: PROMPT_ID,
           trustedInstruction: [
             "Оцени, достаточно ли данных для подготовки проекта договора.",
-            `Если данных недостаточно, верни NEED_MORE_INFO и не более ${MAX_QUESTIONS} конкретных вопросов.`,
+            `Если данных недостаточно, верни NEED_MORE_INFO и не более ${maxQuestions} конкретных вопросов.`,
+            `За всю сессию можно задать не более ${MAX_TOTAL_QUESTIONS} вопросов.`,
+            "Не повторяй вопросы из previousQuestions и не переспрашивай сведения, которые уже есть в inputAnswers или clarificationAnswers, даже если ключи или формулировки отличаются.",
+            "Если адрес, площадь, периодичность оплаты или другое условие уже указано, считай его полученным и не проси повторить или уточнить без явного противоречия.",
             "Используй только типы single_choice, boolean, short_text, number или date.",
             "Для single_choice верни минимум два варианта, для остальных типов options должен быть пустым.",
-            "Не спрашивай ФИО, телефон, email, паспортные данные и другие лишние персональные данные.",
+            "Не спрашивай ФИО, телефон, email, контакты, паспортные данные инициатора или контрагента: они берутся только из подтверждённых профилей.",
             "Если сведений достаточно, верни READY_TO_GENERATE и пустой массив questions.",
           ].join(" "),
           version: PROMPT_VERSION,
@@ -212,7 +252,7 @@ const clarificationOutputSchema: AiJsonObject = {
         required: ["description", "id", "label", "options", "required", "type"],
         type: "object",
       },
-      maxItems: MAX_QUESTIONS,
+      maxItems: MAX_TOTAL_QUESTIONS,
       type: "array",
     },
     status: {
@@ -250,6 +290,129 @@ function parseClarificationOutput(value: AiJsonObject): ClarificationAiOutput {
   const output = value as unknown as ClarificationAiOutput;
   assertClarificationOutput(output);
   return output;
+}
+
+function sanitizeClarificationOutput(
+  output: ClarificationAiOutput,
+  context: {
+    clarificationAnswers: Record<string, unknown>;
+    inputAnswers: Record<string, unknown>;
+    previousQuestions: AiClarificationQuestion[];
+    remainingQuestions: number;
+  },
+): ClarificationAiOutput {
+  if (output.status === "READY_TO_GENERATE") return output;
+
+  const knownIds = new Set([
+    ...Object.keys(context.clarificationAnswers),
+    ...context.previousQuestions.map(({ id }) => id),
+  ].map(normalizeText));
+  const knownLabels = new Set(
+    context.previousQuestions.map(({ label }) => normalizeText(label)),
+  );
+  const knownTopics = new Set(
+    [
+      ...Object.keys(context.inputAnswers),
+      ...Object.keys(context.clarificationAnswers),
+      ...context.previousQuestions.flatMap(({ id, label }) => [id, label]),
+    ]
+      .map(questionTopic)
+      .filter((topic): topic is string => Boolean(topic)),
+  );
+  const questions: AiClarificationQuestion[] = [];
+
+  for (const question of output.questions) {
+    const id = normalizeText(question.id);
+    const label = normalizeText(question.label);
+    const topic = questionTopic(`${question.id} ${question.label}`);
+    if (
+      isPersonalQuestion(question) ||
+      knownIds.has(id) ||
+      knownLabels.has(label) ||
+      (topic !== null && knownTopics.has(topic))
+    ) {
+      continue;
+    }
+
+    questions.push(question);
+    knownIds.add(id);
+    knownLabels.add(label);
+    if (topic) knownTopics.add(topic);
+    if (questions.length >= context.remainingQuestions) break;
+  }
+
+  return questions.length > 0
+    ? { questions, status: "NEED_MORE_INFO" }
+    : { questions: [], status: "READY_TO_GENERATE" };
+}
+
+function readQuestionHistory(
+  metadata: Prisma.JsonValue,
+  fallback: AiClarificationQuestion[],
+): AiClarificationQuestion[] {
+  if (typeof metadata !== "object" || metadata === null || Array.isArray(metadata)) {
+    return fallback;
+  }
+  const rawHistory = metadata.questionHistory;
+  if (!Array.isArray(rawHistory) || rawHistory.length === 0) return fallback;
+  try {
+    const history = rawHistory as unknown as AiClarificationQuestion[];
+    assertClarificationOutput({ questions: history, status: "NEED_MORE_INFO" });
+    return history.slice(0, MAX_TOTAL_QUESTIONS);
+  } catch {
+    return fallback;
+  }
+}
+
+function withQuestionHistory(
+  metadata: unknown,
+  questions: AiClarificationQuestion[],
+): Prisma.InputJsonObject {
+  const stored = JSON.parse(JSON.stringify(metadata)) as Record<string, unknown>;
+  return toPrismaObject({
+    ...stored,
+    questionHistory: questions.slice(0, MAX_TOTAL_QUESTIONS),
+  });
+}
+
+function isPersonalQuestion(question: AiClarificationQuestion): boolean {
+  const text = normalizeText(`${question.id} ${question.label}`);
+  return (
+    /(passport|phone|email|e mail|contact|full name|personal data|fio)/.test(text) ||
+    /(паспорт|телефон|электронн.*почт|контакт|персональн.*данн|фио|фамили)/.test(text) ||
+    /\b(landlord|tenant) (info|contact|name)\b/.test(text)
+  );
+}
+
+function questionTopic(value: string): string | null {
+  const text = normalizeText(value);
+  if (/(address|location|адрес|местонахожд)/.test(text)) return "property_address";
+  if (/(room.*area|area.*room|area.*sqm|площад)/.test(text)) return "property_area";
+  if (/(payment.*(frequency|periodicity)|frequ.*payment|периодич.*оплат|частот.*оплат)/.test(text)) {
+    return "payment_frequency";
+  }
+  if (/(payment.*amount|amount.*payment|размер.*плат|арендн.*плат)/.test(text)) {
+    return "payment_amount";
+  }
+  if (/(property.*type|type.*property|тип.*имуществ|вид.*имуществ)/.test(text)) {
+    return "property_type";
+  }
+  if (/(property.*description|description.*property|предмет.*аренд)/.test(text)) {
+    return "property_description";
+  }
+  if (/(utilit|коммун)/.test(text)) return "utilities";
+  if (/(deposit|обеспечительн.*плат|залог)/.test(text)) return "deposit";
+  if (/(start.*date|date.*start|дата.*начал|начал.*дат)/.test(text)) return "start_date";
+  if (/(end.*date|date.*end|дата.*оконч|оконч.*дат)/.test(text)) return "end_date";
+  return null;
+}
+
+function normalizeText(value: string): string {
+  return value
+    .toLocaleLowerCase("ru-RU")
+    .replaceAll("ё", "е")
+    .replace(/[^a-zа-я0-9]+/g, " ")
+    .trim();
 }
 
 function validateClarificationAnswers(

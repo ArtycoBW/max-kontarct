@@ -458,6 +458,7 @@ textarea:focus-visible {
 
 .screen-motion {
   display: flex;
+  height: 100%;
   min-height: 100%;
   flex-direction: column;
 }
@@ -955,6 +956,14 @@ button.service-status {
   display: grid;
   gap: 19px;
   padding-bottom: 32px;
+}
+
+.deal-form-flow {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  padding-bottom: 0;
 }
 
 .questionnaire-heading {
@@ -2947,8 +2956,15 @@ button.service-status {
 }
 
 .deal-list {
-  display: grid;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
   gap: 11px;
+}
+
+.deal-list > .full-width:last-child {
+  margin-top: auto;
 }
 
 .deal-list-card {

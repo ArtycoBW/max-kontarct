@@ -58,25 +58,28 @@ export function DatePicker({
   value: string;
 }) {
   const selected = useMemo(() => parseDateOnly(value), [value]);
-  const now = useMemo(() => new Date(), []);
-  const lastYear = toYear ?? now.getFullYear();
+  const now = useMemo(() => startOfLocalDay(new Date()), []);
+  const configuredLastYear = toYear ?? now.getFullYear();
   const firstAllowedDate = useMemo(
     () => parseDateOnly(minimumValue ?? "") ?? new Date(fromYear, 0, 1),
     [fromYear, minimumValue],
   );
   const lastAllowedDate = useMemo(() => {
     const configuredMaximum =
-      parseDateOnly(maximumValue ?? "") ?? new Date(lastYear, 11, 31);
-    return allowFuture
+      parseDateOnly(maximumValue ?? "") ?? new Date(configuredLastYear, 11, 31);
+    const effectiveMaximum = allowFuture
       ? configuredMaximum
       : earlierDate(configuredMaximum, now);
-  }, [allowFuture, lastYear, maximumValue, now]);
+    return laterDate(effectiveMaximum, firstAllowedDate);
+  }, [allowFuture, configuredLastYear, firstAllowedDate, maximumValue, now]);
   const initialMonth = clampDate(selected ?? now, firstAllowedDate, lastAllowedDate);
   const [open, setOpen] = useState(false);
   const [visibleMonth, setVisibleMonth] = useState(initialMonth);
+  const firstYear = firstAllowedDate.getFullYear();
+  const lastYear = lastAllowedDate.getFullYear();
   const years = useMemo(
-    () => Array.from({ length: lastYear - fromYear + 1 }, (_, index) => lastYear - index),
-    [fromYear, lastYear],
+    () => Array.from({ length: lastYear - firstYear + 1 }, (_, index) => lastYear - index),
+    [firstYear, lastYear],
   );
 
   const setMonth = (month: number) => {
@@ -194,6 +197,14 @@ function clampDate(date: Date, minimum: Date, maximum: Date): Date {
 
 function earlierDate(first: Date, second: Date): Date {
   return first < second ? first : second;
+}
+
+function laterDate(first: Date, second: Date): Date {
+  return first > second ? first : second;
+}
+
+function startOfLocalDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
 function toDateOnly(date: Date): string {

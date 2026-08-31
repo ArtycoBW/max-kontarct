@@ -1040,7 +1040,7 @@ function CreateDealScreen({
         <p className="screen-copy">
           Пишите своими словами — юридические формулировки предложит помощник.
         </p>
-        <div className="deal-form">
+        <div className="deal-form deal-form-flow">
           <label className="form-field">
             <span>Название сделки</span>
             <Input
@@ -1087,14 +1087,16 @@ function CreateDealScreen({
               onRetry={() => void enqueueDraftSave().catch(() => undefined)}
             />
           ) : null}
-          <Button
-            className="full-width"
-            disabled={saveState === "saving"}
-            onClick={() => void continueDescription()}
-            type="button"
-          >
-            Сохранить и продолжить
-          </Button>
+          <div className="create-flow-action">
+            <Button
+              className="full-width"
+              disabled={saveState === "saving"}
+              onClick={() => void continueDescription()}
+              type="button"
+            >
+              Сохранить и продолжить
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -1312,7 +1314,11 @@ function CreateDealScreen({
         Ответьте на вопросы — по ним будет подготовлена структура договора.
       </p>
 
-      <form className="deal-form" onSubmit={submitQuestionnaire} noValidate>
+      <form
+        className="deal-form deal-form-flow questionnaire-deal-form"
+        onSubmit={submitQuestionnaire}
+        noValidate
+      >
         {selectedTemplate ? (
           <SelectedTemplateSummary template={selectedTemplate} />
         ) : null}
@@ -1366,17 +1372,19 @@ function CreateDealScreen({
         ) : null}
 
         {template.data && definition ? (
-          <Button
-            className="full-width"
-            disabled={validation.isPending || clarificationStart.isPending}
-            type="submit"
-          >
-            {validation.isPending
-              ? "Проверяем анкету"
-              : clarificationStart.isPending
-                ? "Подготавливаем вопросы"
-                : "Продолжить"}
-          </Button>
+          <div className="create-flow-action">
+            <Button
+              className="full-width"
+              disabled={validation.isPending || clarificationStart.isPending}
+              type="submit"
+            >
+              {validation.isPending
+                ? "Проверяем анкету"
+                : clarificationStart.isPending
+                  ? "Подготавливаем вопросы"
+                  : "Продолжить"}
+            </Button>
+          </div>
         ) : null}
       </form>
     </div>

@@ -182,6 +182,27 @@ function validateCrossFieldRules(
       const endField = String(rawRule.endField);
       const start = answers[startField];
       const end = answers[endField];
+      const today = currentDateOnly();
+      if (
+        !invalidPaths.has(startField) &&
+        typeof start === "string" &&
+        start < today
+      ) {
+        errors.push({
+          message: "Дата не может быть раньше сегодняшней",
+          path: startField,
+        });
+      }
+      if (
+        !invalidPaths.has(endField) &&
+        typeof end === "string" &&
+        end < today
+      ) {
+        errors.push({
+          message: "Дата не может быть раньше сегодняшней",
+          path: endField,
+        });
+      }
       if (
         !invalidPaths.has(startField) &&
         !invalidPaths.has(endField) &&
@@ -218,6 +239,20 @@ function validateCrossFieldRules(
     }
   }
   return errors;
+}
+
+function currentDateOnly(): string {
+  const parts = new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: "Europe/Moscow",
+    year: "numeric",
+  }).formatToParts(new Date());
+  const year = parts.find(({ type }) => type === "year")?.value;
+  const month = parts.find(({ type }) => type === "month")?.value;
+  const day = parts.find(({ type }) => type === "day")?.value;
+  if (!year || !month || !day) return new Date().toISOString().slice(0, 10);
+  return `${year}-${month}-${day}`;
 }
 
 function isDateField(value: unknown): boolean {

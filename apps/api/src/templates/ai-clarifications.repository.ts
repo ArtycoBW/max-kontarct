@@ -8,6 +8,7 @@ const clarificationSelect = {
   createdAt: true,
   id: true,
   inputAnswers: true,
+  providerMetadata: true,
   questions: true,
   status: true,
   templateVersion: {

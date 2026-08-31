@@ -63,7 +63,7 @@ describe("AiClarificationsService", () => {
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
         promptId: "contract-clarification",
-        promptVersion: "1.0.0",
+        promptVersion: "1.1.0",
         status: AiGenerationStatus.NEED_MORE_INFO,
         templateVersionId: versionId,
         userId,
@@ -218,6 +218,69 @@ describe("AiClarificationsService", () => {
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
     expect(create).not.toHaveBeenCalled();
   });
+
+  it("filters questions already answered by the questionnaire and personal questions", async () => {
+    validateAnswers.mockResolvedValue({
+      answers: { paymentFrequency: "Ежемесячно" },
+      snapshot: {
+        templateTitle: "Аренда имущества",
+        templateVersionId: versionId,
+      },
+      valid: true,
+    });
+    generateStructured.mockResolvedValue(aiResult({
+      questions: [
+        shortTextQuestion("payment_periodicity", "Какова периодичность оплаты?"),
+        shortTextQuestion("property_address", "Укажите полный адрес имущества"),
+        shortTextQuestion("landlord_contact", "Укажите телефон арендодателя"),
+      ],
+      status: "NEED_MORE_INFO",
+    }));
+    create.mockResolvedValue(record());
+
+    await service.start("property-rental", userId, {
+      answers: { paymentFrequency: "Ежемесячно" },
+      templateVersionId: versionId,
+    });
+
+    expect(create.mock.calls[0]?.[0]).toMatchObject({
+      metadata: {
+        questionHistory: [{ id: "property_address" }],
+      },
+      questions: [{ id: "property_address" }],
+    });
+  });
+
+  it("stops after five questions across the whole session", async () => {
+    const questionHistory = [
+      ...needMoreInfo().questions,
+      shortTextQuestion("address", "Адрес имущества"),
+      shortTextQuestion("area", "Площадь имущества"),
+      shortTextQuestion("restrictions", "Ограничения использования"),
+      shortTextQuestion("contents", "Что находится в помещении"),
+    ];
+    findOwned.mockResolvedValue(record({
+      providerMetadata: { questionHistory },
+    }));
+    update.mockResolvedValue(record({
+      clarificationAnswers: { utilitiesPayer: "tenant" },
+      providerMetadata: { questionHistory },
+      questions: [],
+      status: AiGenerationStatus.READY_TO_GENERATE,
+    }));
+
+    await expect(service.answer("property-rental", sessionId, userId, {
+      answers: { utilitiesPayer: "tenant" },
+    })).resolves.toMatchObject({
+      questions: [],
+      status: "READY_TO_GENERATE",
+    });
+
+    expect(generateStructured).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      status: AiGenerationStatus.READY_TO_GENERATE,
+    }));
+  });
 });
 
 function needMoreInfo() {
@@ -246,7 +309,7 @@ function aiResult(data: AiJsonObject): AiStructuredResult {
       model: "fake-yandexgpt",
       modelVersion: "fake-v1",
       promptId: "contract-clarification",
-      promptVersion: "1.0.0",
+      promptVersion: "1.1.0",
       provider: "fake",
       providerRequestId: null,
       redactedPiiCount: 0,
@@ -267,6 +330,7 @@ function record(
     createdAt,
     id: sessionId,
     inputAnswers: { paymentAmount: 120_000 },
+    providerMetadata: {},
     questions: needMoreInfo().questions,
     status: AiGenerationStatus.NEED_MORE_INFO,
     templateVersion: {
@@ -277,5 +341,16 @@ function record(
     updatedAt: createdAt,
     userId,
     ...overrides,
+  };
+}
+
+function shortTextQuestion(id: string, label: string) {
+  return {
+    description: "",
+    id,
+    label,
+    options: [],
+    required: true,
+    type: "short_text" as const,
   };
 }

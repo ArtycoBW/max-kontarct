@@ -320,18 +320,33 @@ function getDateBoundaries(
   fieldKey: string,
 ): { maximumValue?: string; minimumValue?: string } {
   const result: { maximumValue?: string; minimumValue?: string } = {};
+  const today = toLocalDateOnly(new Date());
   for (const rule of rules) {
     if (rule.kind !== "dateOrder") continue;
+    if (rule.startField === fieldKey || rule.endField === fieldKey) {
+      result.minimumValue = today;
+    }
     const startValue = answers[rule.startField];
     const endValue = answers[rule.endField];
     if (rule.endField === fieldKey && typeof startValue === "string") {
-      result.minimumValue = startValue;
+      result.minimumValue = startValue > today ? startValue : today;
     }
-    if (rule.startField === fieldKey && typeof endValue === "string") {
+    if (
+      rule.startField === fieldKey &&
+      typeof endValue === "string" &&
+      endValue >= today
+    ) {
       result.maximumValue = endValue;
     }
   }
   return result;
+}
+
+function toLocalDateOnly(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function isFieldRequired(

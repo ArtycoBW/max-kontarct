@@ -58,6 +58,8 @@ describe("TemplateSchemaValidator", () => {
   });
 
   it("enforces date order and conditional requirements", () => {
+    const start = addUtcDays(currentUtcDateOnly(), 2);
+    const end = addUtcDays(currentUtcDateOnly(), 1);
     const schema = {
       $schema: "https://json-schema.org/draft/2020-12/schema",
       additionalProperties: false,
@@ -77,12 +79,38 @@ describe("TemplateSchemaValidator", () => {
     };
 
     expect(validator.validateAnswers("version-rules", schema, {
-      end: "2026-08-29",
+      end,
       interestType: "С процентами",
-      start: "2026-08-30",
+      start,
     })).toEqual([
       { message: "Дата окончания не может быть раньше даты начала", path: "end" },
       { message: "Укажите процентную ставку", path: "interestRate" },
+    ]);
+  });
+
+  it("rejects contract dates in the past", () => {
+    const yesterday = addUtcDays(currentUtcDateOnly(), -1);
+    const schema = {
+      additionalProperties: false,
+      properties: {
+        end: { format: "date", title: "Окончание", type: "string" },
+        start: { format: "date", title: "Начало", type: "string" },
+      },
+      required: ["start", "end"],
+      type: "object",
+      "x-rules": [
+        { endField: "end", kind: "dateOrder", startField: "start" },
+      ],
+    };
+
+    expect(
+      validator.validateAnswers("version-past-dates", schema, {
+        end: yesterday,
+        start: yesterday,
+      }),
+    ).toEqual([
+      { message: "Дата не может быть раньше сегодняшней", path: "start" },
+      { message: "Дата не может быть раньше сегодняшней", path: "end" },
     ]);
   });
 
@@ -112,4 +140,14 @@ function questionnaireSchema(): Record<string, unknown> {
     required: ["subject", "amount"],
     type: "object",
   };
+}
+
+function currentUtcDateOnly(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addUtcDays(value: string, days: number): string {
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
 }
