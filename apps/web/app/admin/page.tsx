@@ -18,6 +18,7 @@ import {
   UserRoundCheck,
   UsersRound,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -76,7 +77,15 @@ export default function AdminPage() {
     <main className="admin-shell">
       <aside className="admin-sidebar">
         <div className="admin-brand">
-          <span><ShieldCheck size={21} /></span>
+          <span className="admin-brand-logo">
+            <Image
+              alt=""
+              aria-hidden="true"
+              height={40}
+              src="/images/max-contract-app-icon.jpg"
+              width={40}
+            />
+          </span>
           <div>
             <strong>МАКС-КОНТРАКТ</strong>
             <small>Управление</small>
@@ -105,7 +114,7 @@ export default function AdminPage() {
             type="button"
             variant="unstyled"
           >
-            <Bot size={17} /> Генерации AI
+            <Bot size={17} /> Генерации ИИ
           </Button>
           <Button
             className={activeTab === "audit" ? "is-active" : undefined}
@@ -264,7 +273,7 @@ function roleLabel(role: AuthUserRole): string {
 function tabTitle(tab: AdminTab): string {
   return {
     audit: "Журнал событий",
-    generations: "Генерации AI",
+    generations: "Генерации ИИ",
     templates: "Шаблоны договоров",
     users: "Пользователи",
   }[tab];

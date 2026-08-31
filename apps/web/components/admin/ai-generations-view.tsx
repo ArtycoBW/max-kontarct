@@ -59,13 +59,13 @@ function AiGenerationsContent({
             <span className="admin-generation-icon"><Bot size={18} /></span>
             <span className="admin-generation-main">
               <strong>{generation.templateTitle}</strong>
-              <small>Версия {generation.templateVersion} · промпт {generation.promptId} / {generation.promptVersion}</small>
+              <small>Версия шаблона {generation.templateVersion} · версия сценария {generation.promptVersion}</small>
             </span>
             <span>
               <i className={`admin-status is-${generation.status.toLowerCase()}`}>
                 {generationStatusLabel(generation.status)}
               </i>
-              <small>{providerLabel(generation.provider, generation.model)}</small>
+              <small>{providerLabel(generation.provider)}</small>
             </span>
             <span className="admin-generation-metrics">
               <strong>{generation.totalTokens ?? "—"}</strong>
@@ -93,10 +93,11 @@ function generationStatusLabel(status: AiGenerationStatus): string {
   }[status];
 }
 
-function providerLabel(provider: string | null, model: string | null): string {
-  if (!provider && !model) return "Провайдер не вызывался";
-  const providerName = provider === "yandex" ? "YandexGPT" : provider === "fake" ? "Тестовый AI" : provider;
-  return [providerName, model].filter(Boolean).join(" · ");
+function providerLabel(provider: string | null): string {
+  if (!provider) return "Сервис не вызывался";
+  if (provider === "yandex") return "YandexGPT";
+  if (provider === "fake") return "Тестовый режим";
+  return "Подключённый сервис";
 }
 
 function formatDateTime(value: string): string {

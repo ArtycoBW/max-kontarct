@@ -15,7 +15,7 @@ const manrope = Manrope({
 
 export const metadata: Metadata = {
   title: "Макс-Контракт",
-  description: "Mini App для договоров между физическими лицами",
+  description: "Мини-приложение для договоров между физическими лицами",
 };
 
 export const viewport: Viewport = {

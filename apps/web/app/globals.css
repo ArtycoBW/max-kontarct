@@ -1831,6 +1831,20 @@ button.service-status {
   color: white;
 }
 
+.admin-brand > .admin-brand-logo {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: white;
+  color: inherit;
+}
+
+.admin-brand-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.62);
+}
+
 .admin-brand div,
 .admin-role-card span {
   display: grid;
@@ -2277,7 +2291,6 @@ button.service-status {
 }
 
 .admin-version-actions,
-.admin-confirm-action > div,
 .admin-requirements-editor > footer {
   display: flex;
   flex-wrap: wrap;
@@ -2318,8 +2331,6 @@ button.service-status {
   color: var(--danger);
 }
 
-.admin-operation-notice,
-.admin-confirm-action,
 .admin-ai-note {
   display: flex;
   width: 100%;
@@ -2330,27 +2341,6 @@ button.service-status {
   padding: 15px 17px;
 }
 
-.admin-operation-notice {
-  border-color: #cfe7d9;
-  background: var(--success-tint);
-  color: var(--success);
-}
-
-.admin-operation-notice span {
-  flex: 1;
-  color: var(--ink-deep);
-  font-size: 11px;
-}
-
-.admin-confirm-action {
-  position: sticky;
-  z-index: 5;
-  bottom: 16px;
-  border-color: var(--accent);
-  box-shadow: 0 18px 50px rgb(50 24 18 / 16%);
-}
-
-.admin-confirm-action > span,
 .admin-ai-note > span {
   display: grid;
   min-width: 0;
@@ -2358,7 +2348,6 @@ button.service-status {
   gap: 3px;
 }
 
-.admin-confirm-action small,
 .admin-ai-note small {
   color: var(--muted);
   font-size: 9px;
@@ -2494,10 +2483,8 @@ button.service-status {
 }
 
 .admin-requirement-footer {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto;
-  align-items: end;
-  gap: 14px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .admin-required-switch {
@@ -2518,6 +2505,99 @@ button.service-status {
   font-size: 10px;
 }
 
+.alert-dialog-overlay {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  background: rgb(42 25 20 / 42%);
+  backdrop-filter: blur(5px);
+}
+
+.alert-dialog-content {
+  position: fixed;
+  z-index: 81;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: min(calc(100vw - 32px), 390px);
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgb(50 24 18 / 22%);
+  color: var(--ink-deep);
+  transform: translate(-50%, -50%);
+}
+
+.alert-dialog-icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.alert-dialog-header {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+}
+
+.alert-dialog-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.alert-dialog-description {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.alert-dialog-footer {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.toaster {
+  --normal-bg: var(--surface);
+  --normal-border: var(--border);
+  --normal-text: var(--ink-deep);
+  --success-bg: #effaf4;
+  --success-border: #cfe7d9;
+  --success-text: #1c6d4d;
+  --error-bg: var(--danger-tint);
+  --error-border: #f1c2bb;
+  --error-text: var(--danger);
+  font-family: var(--font-manrope), sans-serif;
+}
+
+[data-sonner-toaster] [data-sonner-toast].app-toast {
+  min-height: 56px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 16px 48px rgb(50 24 18 / 16%);
+}
+
+.app-toast-title {
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.app-toast-description {
+  color: var(--muted);
+  font-size: 9px;
+}
+
 @media (max-width: 820px) {
   .admin-shell {
     display: block;
@@ -2525,21 +2605,27 @@ button.service-status {
   }
 
   .admin-sidebar {
+    position: relative;
+    z-index: 10;
     min-height: auto;
-    gap: 16px;
-    padding: 18px;
+    gap: 12px;
+    padding: 14px;
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
 
   .admin-sidebar nav {
-    display: flex;
-    overflow-x: auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    overflow: visible;
   }
 
   .admin-sidebar nav button {
-    width: auto;
-    flex: none;
+    width: 100%;
+    min-height: 40px;
+    padding: 0 10px;
+    font-size: 11px;
   }
 
   .admin-version-row,
@@ -2563,7 +2649,15 @@ button.service-status {
 
   .admin-content {
     overflow: visible;
-    padding: 28px 18px 48px;
+    padding: 24px 14px 48px;
+  }
+
+  .admin-header {
+    margin-bottom: 22px;
+  }
+
+  .admin-header h1 {
+    font-size: clamp(32px, 9vw, 44px);
   }
 
   .admin-table-head {
@@ -2584,27 +2678,86 @@ button.service-status {
 
 @media (max-width: 520px) {
   .admin-header {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: flex-end;
+    gap: 12px;
   }
 
   .admin-summary-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
 
   .admin-templates-view > .admin-summary-grid,
   .admin-generations-view > .admin-summary-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .admin-template-card > header,
-  .admin-confirm-action {
+  .admin-summary-grid .card {
+    min-height: 92px;
+    padding: 12px;
+  }
+
+  .admin-summary-grid span {
+    line-height: 1.25;
+  }
+
+  .admin-summary-grid small {
+    display: none;
+  }
+
+  .admin-summary-grid strong {
+    margin-top: 5px;
+    font-size: 26px;
+  }
+
+  .admin-header h1 {
+    font-size: 30px;
+  }
+
+  .admin-security-badge {
+    padding: 7px 9px;
+    font-size: 9px;
+  }
+
+  .admin-template-card > header {
     align-items: stretch;
     flex-direction: column;
+    gap: 14px;
+    padding: 15px;
   }
 
-  .admin-requirement-footer {
-    grid-template-columns: 1fr;
+  .admin-template-card header strong {
+    font-size: 16px;
+  }
+
+  .admin-version-row {
+    min-height: auto;
+    gap: 13px;
+    padding: 14px 15px;
+  }
+
+  .admin-version-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-version-actions .button:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .alert-dialog-content {
+    width: min(calc(100vw - 24px), 360px);
+    gap: 12px;
+    padding: 17px;
+  }
+
+  .alert-dialog-footer {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .alert-dialog-footer .button {
+    width: 100%;
   }
 
   .admin-editor-backdrop {
@@ -2614,6 +2767,14 @@ button.service-status {
   .admin-requirements-editor {
     max-height: calc(100dvh - 16px);
     padding: 16px;
+  }
+
+  .admin-requirements-editor h2 {
+    font-size: 21px;
+  }
+
+  .admin-requirement-form {
+    padding: 14px;
   }
 
   .audit-row {

@@ -8,7 +8,6 @@ import type {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
-  Check,
   CircleAlert,
   CopyPlus,
   FileCheck2,
@@ -19,7 +18,17 @@ import {
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -46,7 +55,6 @@ export function AdminTemplatesView({ canManage }: { canManage: boolean }) {
     version: AdminTemplateVersion;
   } | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const query = useQuery({
     queryFn: getAdminTemplates,
     queryKey: queryKeys.admin.templates(),
@@ -57,9 +65,9 @@ export function AdminTemplatesView({ canManage }: { canManage: boolean }) {
   };
   const createDraft = useMutation({
     mutationFn: createAdminTemplateDraft,
-    onError: (error: Error) => setNotice(error.message),
+    onError: (error: Error) => toast.error(error.message),
     onSuccess: async () => {
-      setNotice("Черновая версия создана.");
+      toast.success("Черновая версия создана");
       await refreshTemplates();
     },
   });
@@ -68,14 +76,14 @@ export function AdminTemplatesView({ canManage }: { canManage: boolean }) {
       action.kind === "publish"
         ? publishAdminTemplateDraft(action.templateId, action.versionId)
         : archiveAdminTemplateDraft(action.templateId, action.versionId),
-    onError: (error: Error) => setNotice(error.message),
+    onError: (error: Error) => toast.error(error.message),
     onSuccess: async (_, action) => {
       setEditing(null);
       setPendingAction(null);
-      setNotice(
+      toast.success(
         action.kind === "publish"
-          ? "Версия опубликована, предыдущая версия перенесена в архив."
-          : "Черновая версия перенесена в архив.",
+          ? "Версия опубликована, предыдущая сохранена в архиве"
+          : "Черновая версия перенесена в архив",
       );
       await Promise.all([
         refreshTemplates(),
@@ -105,15 +113,6 @@ export function AdminTemplatesView({ canManage }: { canManage: boolean }) {
         </Card>
       </div>
 
-      {notice ? (
-        <Card className="admin-operation-notice" role="status">
-          <Check size={17} /> <span>{notice}</span>
-          <Button onClick={() => setNotice(null)} type="button" variant="ghost">
-            Закрыть
-          </Button>
-        </Card>
-      ) : null}
-
       <div className="admin-template-list">
         {query.data.items.map((template) => {
           const draft = template.versions.find(({ status }) => status === "DRAFT");
@@ -121,7 +120,7 @@ export function AdminTemplatesView({ canManage }: { canManage: boolean }) {
             <Card className="admin-template-card" key={template.id}>
               <header>
                 <span>
-                  <small>{template.slug}</small>
+                  <small>Шаблон договора</small>
                   <strong>{template.title}</strong>
                   <p>{template.summary}</p>
                 </span>
@@ -145,9 +144,7 @@ export function AdminTemplatesView({ canManage }: { canManage: boolean }) {
                         {versionStatusLabel(version.status)}
                       </span>
                       <strong>Версия {version.versionNumber}</strong>
-                      <small>
-                        {version.documentRequirements.length} {documentCountLabel(version.documentRequirements.length)} · {questionCount(version)} полей анкеты
-                      </small>
+                      <small>{versionSummary(version)}</small>
                     </div>
                     <time dateTime={version.updatedAt}>
                       Изменена {formatDateTime(version.updatedAt)}
@@ -192,35 +189,44 @@ export function AdminTemplatesView({ canManage }: { canManage: boolean }) {
         })}
       </div>
 
-      {pendingAction ? (
-        <Card className="admin-confirm-action" role="alert">
-          <CircleAlert size={20} />
-          <span>
-            <strong>
-              {pendingAction.kind === "publish"
+      <AlertDialog
+        onOpenChange={(open) => {
+          if (!open && !transition.isPending) setPendingAction(null);
+        }}
+        open={Boolean(pendingAction)}
+      >
+        <AlertDialogContent>
+          <span className="alert-dialog-icon"><CircleAlert size={20} /></span>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingAction?.kind === "publish"
                 ? "Опубликовать эту версию?"
                 : "Перенести черновик в архив?"}
-            </strong>
-            <small>
-              {pendingAction.kind === "publish"
-                ? "Текущая опубликованная версия будет сохранена в архиве."
-                : "Архивный черновик останется в истории версий."}
-            </small>
-          </span>
-          <div>
-            <Button onClick={() => setPendingAction(null)} type="button" variant="outline">
-              Отменить
-            </Button>
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingAction?.kind === "publish"
+                ? "Текущая опубликованная версия сохранится в истории."
+                : "Черновик останется доступен в истории версий."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel asChild>
+              <Button disabled={transition.isPending} type="button" variant="outline">
+                Отменить
+              </Button>
+            </AlertDialogCancel>
             <Button
-              disabled={transition.isPending}
-              onClick={() => transition.mutate(pendingAction)}
+              disabled={transition.isPending || !pendingAction}
+              onClick={() => {
+                if (pendingAction) transition.mutate(pendingAction);
+              }}
               type="button"
             >
               {transition.isPending ? "Сохраняем…" : "Подтвердить"}
             </Button>
-          </div>
-        </Card>
-      ) : null}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {editing ? (
         <DocumentRequirementsEditor
@@ -228,7 +234,7 @@ export function AdminTemplatesView({ canManage }: { canManage: boolean }) {
           onClose={() => setEditing(null)}
           onSaved={async () => {
             setEditing(null);
-            setNotice("Требования к документам сохранены.");
+            toast.success("Требования к документам сохранены");
             await refreshTemplates();
           }}
           template={editing.template}
@@ -292,15 +298,17 @@ function DocumentRequirementsEditor({
     ]);
   };
   const submit = () => {
-    const invalid = requirements.find(({ key, title }) =>
-      !/^[a-z][a-z0-9_]{1,63}$/.test(key.trim()) || title.trim().length < 2,
-    );
-    if (invalid) {
-      setError("У каждого документа должны быть название и корректный системный ключ.");
+    const invalidTitle = requirements.find(({ title }) => title.trim().length < 2);
+    if (invalidTitle) {
+      setError("У каждого документа должно быть название не короче двух символов.");
       return;
     }
-    if (new Set(requirements.map(({ key }) => key.trim())).size !== requirements.length) {
-      setError("Системные ключи документов не должны повторяться.");
+    const internalKeys = requirements.map(({ key }) => key.trim());
+    if (
+      internalKeys.some((key) => !/^[a-z][a-z0-9_]{1,63}$/.test(key)) ||
+      new Set(internalKeys).size !== requirements.length
+    ) {
+      setError("Не удалось подготовить список документов. Обновите страницу и повторите попытку.");
       return;
     }
     setError(null);
@@ -350,14 +358,6 @@ function DocumentRequirementsEditor({
                 />
               </label>
               <div className="admin-requirement-footer">
-                <label>
-                  Системный ключ
-                  <Input
-                    maxLength={64}
-                    onChange={(event) => updateRequirement(index, { key: event.target.value.toLowerCase() })}
-                    value={requirement.key}
-                  />
-                </label>
                 <label className="admin-required-switch">
                   <Switch
                     checked={requirement.required}
@@ -415,6 +415,12 @@ function questionCount(version: AdminTemplateVersion): number {
     : 0;
 }
 
+function versionSummary(version: AdminTemplateVersion): string {
+  const documents = version.documentRequirements.length;
+  const questions = questionCount(version);
+  return `${documents} ${documentCountLabel(documents)} · ${questions} ${questionCountLabel(questions)} анкеты`;
+}
+
 function versionStatusLabel(status: AdminTemplateVersion["status"]): string {
   return { ARCHIVED: "Архив", DRAFT: "Черновик", PUBLISHED: "Опубликован" }[status];
 }
@@ -426,6 +432,15 @@ function documentCountLabel(value: number): string {
   if (last === 1) return "документ";
   if (last >= 2 && last <= 4) return "документа";
   return "документов";
+}
+
+function questionCountLabel(value: number): string {
+  const last = value % 10;
+  const lastTwo = value % 100;
+  if (lastTwo >= 11 && lastTwo <= 14) return "полей";
+  if (last === 1) return "поле";
+  if (last >= 2 && last <= 4) return "поля";
+  return "полей";
 }
 
 function nextRequirementKey(current: AdminTemplateDocumentRequirementInput[]): string {
