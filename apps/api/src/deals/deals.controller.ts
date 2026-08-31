@@ -1,10 +1,24 @@
 import type {
+  CreateDealVersionRequest,
   CreateDealDraftRequest,
   DealDraftResponse,
   DealListResponse,
+  DealVersionListResponse,
+  StartDealAgreementRequest,
   UpdateDealDraftRequest,
 } from "@max-contract/contracts";
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
 import {
   ApiConflictResponse,
   ApiCookieAuth,
@@ -19,7 +33,9 @@ import {
 import type { AuthenticatedRequest } from "../auth/auth.types";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { CreateDealDraftDto } from "./dto/create-deal-draft.dto";
+import { CreateDealVersionDto } from "./dto/create-deal-version.dto";
 import { DealParamsDto } from "./dto/deal-params.dto";
+import { StartDealAgreementDto } from "./dto/start-deal-agreement.dto";
 import { UpdateDealDraftDto } from "./dto/update-deal-draft.dto";
 import { DealsService } from "./deals.service";
 
@@ -60,6 +76,52 @@ export class DealsController {
     @Req() request: AuthenticatedRequest,
   ): Promise<DealDraftResponse> {
     return this.deals.getDraft(request.auth.user.id, params.dealId);
+  }
+
+  @Get(":dealId/versions")
+  @ApiOperation({ summary: "Получить историю версий условий сделки" })
+  @ApiOkResponse({ description: "Версии и состояния привязанных согласований" })
+  @ApiNotFoundResponse({ description: "Сделка не найдена или недоступна" })
+  versions(
+    @Param() params: DealParamsDto,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<DealVersionListResponse> {
+    return this.deals.listVersions(request.auth.user.id, params.dealId);
+  }
+
+  @Post(":dealId/agreement/start")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Зафиксировать черновик и начать согласование" })
+  @ApiOkResponse({ description: "Первая версия условий зафиксирована" })
+  @ApiConflictResponse({ description: "Конфликт версии или состояния" })
+  @ApiForbiddenResponse({ description: "Действие доступно только инициатору" })
+  startAgreement(
+    @Param() params: DealParamsDto,
+    @Body() body: StartDealAgreementDto,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<DealDraftResponse> {
+    return this.deals.startAgreement(
+      request.auth.user.id,
+      params.dealId,
+      body satisfies StartDealAgreementRequest,
+    );
+  }
+
+  @Post(":dealId/versions")
+  @ApiOperation({ summary: "Создать новую версию изменённых условий" })
+  @ApiCreatedResponse({ description: "Новая неизменяемая версия условий" })
+  @ApiConflictResponse({ description: "Конфликт версии, состояния или генерации" })
+  @ApiForbiddenResponse({ description: "Действие доступно только инициатору" })
+  createVersion(
+    @Param() params: DealParamsDto,
+    @Body() body: CreateDealVersionDto,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<DealDraftResponse> {
+    return this.deals.createVersion(
+      request.auth.user.id,
+      params.dealId,
+      body satisfies CreateDealVersionRequest,
+    );
   }
 
   @Patch(":dealId/draft")

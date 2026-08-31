@@ -14,6 +14,7 @@ import {
 } from "@prisma/client";
 
 import { PrismaService } from "../src/database/prisma.service";
+import { DealStateMachineService } from "../src/deals/deal-state-machine.service";
 import { DealsRepository } from "../src/deals/deals.repository";
 import { DealsService } from "../src/deals/deals.service";
 import { TemplatesRepository } from "../src/templates/templates.repository";
@@ -216,6 +217,148 @@ describe("users/auth database foundation (integration)", () => {
     ).rejects.toMatchObject({ code: "P2003" });
   });
 
+  it("creates a new deal version atomically and supersedes old approvals", async () => {
+    const templateVersion = await database.contractTemplateVersion.findFirstOrThrow({
+      where: { status: TemplateVersionStatus.PUBLISHED },
+    });
+    const [initiator, counterparty] = await Promise.all([
+      database.user.create({ data: {} }),
+      database.user.create({ data: {} }),
+    ]);
+    const deal = await database.deal.create({
+      data: {
+        initiatorUserId: initiator.id,
+        status: DealStatus.TERMS_REVIEW,
+        templateVersionId: templateVersion.id,
+        title: "Аренда квартиры",
+      },
+    });
+    const [initiatorParty, counterpartyParty] = await Promise.all([
+      database.dealParty.create({
+        data: {
+          dealId: deal.id,
+          role: DealPartyRole.INITIATOR,
+          userId: initiator.id,
+        },
+      }),
+      database.dealParty.create({
+        data: {
+          dealId: deal.id,
+          role: DealPartyRole.COUNTERPARTY,
+          userId: counterparty.id,
+        },
+      }),
+    ]);
+    const firstVersion = await database.dealVersion.create({
+      data: {
+        contractDraft: { sections: [{ clauses: ["Сумма 50 000 рублей"] }] },
+        createdByUserId: initiator.id,
+        dealId: deal.id,
+        terms: { amount: 50_000 },
+        versionNumber: 1,
+      },
+    });
+    await database.dealApproval.createMany({
+      data: [initiatorParty, counterpartyParty].map((party) => ({
+        dealId: deal.id,
+        dealVersionId: firstVersion.id,
+        partyId: party.id,
+      })),
+    });
+    const generation = await database.aiGeneration.create({
+      data: {
+        attemptCount: 1,
+        completedAt: new Date(),
+        inputAnswers: { amount: 60_000 },
+        promptId: "contract-generation",
+        promptVersion: "1",
+        providerMetadata: {},
+        questions: [],
+        status: AiGenerationStatus.COMPLETED,
+        structuredDraft: {
+          preamble: "Преамбула",
+          sections: [{ clauses: ["Сумма 60 000 рублей"] }],
+          title: "Договор аренды",
+          warnings: [],
+        },
+        templateVersionId: templateVersion.id,
+        userId: initiator.id,
+      },
+    });
+    const repository = new DealsRepository(database as unknown as PrismaService);
+
+    const revised = await repository.createVersion({
+      changeSummary: "Изменён размер арендной платы",
+      contractDraft: {
+        preamble: "Преамбула",
+        sections: [{ clauses: ["Сумма 60 000 рублей"] }],
+        title: "Договор аренды",
+        warnings: [],
+      },
+      currentStatus: DealStatus.TERMS_REVIEW,
+      currentVersionId: firstVersion.id,
+      dealId: deal.id,
+      expectedUpdatedAt: deal.updatedAt,
+      nextStatus: DealStatus.TERMS_REVIEW,
+      sourceGenerationId: generation.id,
+      terms: { amount: 60_000 },
+      userId: initiator.id,
+      versionNumber: 2,
+    });
+    const stored = await database.deal.findUniqueOrThrow({
+      include: {
+        versions: {
+          include: { approvals: true },
+          orderBy: { versionNumber: "asc" },
+        },
+      },
+      where: { id: deal.id },
+    });
+
+    expect(revised?.versions[0]?.versionNumber).toBe(2);
+    expect(stored.versions).toHaveLength(2);
+    expect(stored.versions[0]).toMatchObject({
+      terms: { amount: 50_000 },
+      versionNumber: 1,
+    });
+    expect(stored.versions[0]?.approvals).toEqual([
+      expect.objectContaining({
+        invalidatedAt: expect.any(Date),
+        status: "SUPERSEDED",
+      }),
+      expect.objectContaining({
+        invalidatedAt: expect.any(Date),
+        status: "SUPERSEDED",
+      }),
+    ]);
+    expect(stored.versions[1]).toMatchObject({
+      changeSummary: "Изменён размер арендной платы",
+      terms: { amount: 60_000 },
+      versionNumber: 2,
+    });
+    expect(
+      await database.auditEvent.count({
+        where: { entityId: deal.id, eventType: "DEAL_VERSION_CREATED" },
+      }),
+    ).toBe(1);
+
+    await expect(
+      repository.createVersion({
+        changeSummary: "Конкурирующая редакция",
+        contractDraft: { sections: [] },
+        currentStatus: DealStatus.TERMS_REVIEW,
+        currentVersionId: firstVersion.id,
+        dealId: deal.id,
+        expectedUpdatedAt: deal.updatedAt,
+        nextStatus: DealStatus.TERMS_REVIEW,
+        sourceGenerationId: generation.id,
+        terms: { amount: 70_000 },
+        userId: initiator.id,
+        versionNumber: 2,
+      }),
+    ).resolves.toBeNull();
+  });
+
   it("creates, autosaves and restores an owned deal draft", async () => {
     const templateVersion = await database.contractTemplateVersion.findFirstOrThrow({
       where: { status: TemplateVersionStatus.PUBLISHED },
@@ -249,6 +392,7 @@ describe("users/auth database foundation (integration)", () => {
     });
     const service = new DealsService(
       new DealsRepository(database as unknown as PrismaService),
+      new DealStateMachineService(),
     );
 
     const created = await service.createDraft(user.id, {

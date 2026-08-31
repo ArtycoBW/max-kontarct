@@ -1,7 +1,10 @@
 import type {
+  CreateDealVersionRequest,
   CreateDealDraftRequest,
   DealDraftResponse,
   DealListResponse,
+  DealVersionListResponse,
+  StartDealAgreementRequest,
   UpdateDealDraftRequest,
 } from "@max-contract/contracts";
 
@@ -23,6 +26,42 @@ export function getDealDraft(dealId: string): Promise<DealDraftResponse> {
 
 export function getDeals(): Promise<DealListResponse> {
   return apiRequest<DealListResponse>("deals");
+}
+
+export function getDealVersions(
+  dealId: string,
+): Promise<DealVersionListResponse> {
+  return apiRequest<DealVersionListResponse>(
+    `deals/${encodeURIComponent(dealId)}/versions`,
+  );
+}
+
+export function startDealAgreement(
+  dealId: string,
+  request: StartDealAgreementRequest,
+): Promise<DealDraftResponse> {
+  return apiRequest<DealDraftResponse>(
+    `deals/${encodeURIComponent(dealId)}/agreement/start`,
+    {
+      body: JSON.stringify(request),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    },
+  );
+}
+
+export function createDealVersion(
+  dealId: string,
+  request: CreateDealVersionRequest,
+): Promise<DealDraftResponse> {
+  return apiRequest<DealDraftResponse>(
+    `deals/${encodeURIComponent(dealId)}/versions`,
+    {
+      body: JSON.stringify(request),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    },
+  );
 }
 
 export function updateDealDraft(

@@ -1,10 +1,15 @@
+import { isDeepStrictEqual } from "node:util";
+
 import type {
   ContractStructuredDraft,
+  CreateDealVersionRequest,
   CreateDealDraftRequest,
   DealDraftData,
   DealDraftResponse,
   DealInitiatorSnapshot,
   DealListResponse,
+  DealVersionListResponse,
+  StartDealAgreementRequest,
   UpdateDealDraftRequest,
 } from "@max-contract/contracts";
 import {
@@ -14,16 +19,20 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { DealStatus, Prisma } from "@prisma/client";
+import { DealApprovalStatus, DealStatus, Prisma } from "@prisma/client";
 
 import type { DealDraftRecord } from "./deals.repository";
 import { DealsRepository } from "./deals.repository";
+import { DealStateMachineService } from "./deal-state-machine.service";
 
 const MAX_ANSWERS_BYTES = 64 * 1024;
 
 @Injectable()
 export class DealsService {
-  constructor(private readonly deals: DealsRepository) {}
+  constructor(
+    private readonly deals: DealsRepository,
+    private readonly stateMachine: DealStateMachineService,
+  ) {}
 
   async createDraft(
     userId: string,
@@ -73,9 +82,175 @@ export class DealsService {
         templateTitle: record.templateVersion.template.title,
         title: record.title,
         updatedAt: record.updatedAt.toISOString(),
+        versionNumber: record.versions[0]?.versionNumber ?? 0,
       })),
       total: records.length,
     };
+  }
+
+  async listVersions(
+    userId: string,
+    dealId: string,
+  ): Promise<DealVersionListResponse> {
+    const versions = await this.deals.findVersionHistory(dealId, userId);
+    if (!versions) throw dealNotFound();
+    return {
+      items: versions.map((version, index) => ({
+        approvals: {
+          approved: version.approvals.filter(
+            ({ status }) => status === DealApprovalStatus.APPROVED,
+          ).length,
+          revoked: version.approvals.filter(
+            ({ status }) => status === DealApprovalStatus.REVOKED,
+          ).length,
+          superseded: version.approvals.filter(
+            ({ status }) => status === DealApprovalStatus.SUPERSEDED,
+          ).length,
+        },
+        changeSummary: version.changeSummary,
+        createdAt: version.createdAt.toISOString(),
+        id: version.id,
+        isCurrent: index === 0,
+        versionNumber: version.versionNumber,
+      })),
+      total: versions.length,
+    };
+  }
+
+  async startAgreement(
+    userId: string,
+    dealId: string,
+    input: StartDealAgreementRequest,
+  ): Promise<DealDraftResponse> {
+    const record = await this.deals.findOwnedDraft(dealId, userId);
+    if (!record) throw dealNotFound();
+    assertInitiator(record, userId);
+    if (record.status !== DealStatus.DRAFT) {
+      throw new ConflictException({
+        code: "DEAL_AGREEMENT_ALREADY_STARTED",
+        message: "Согласование этой сделки уже началось",
+      });
+    }
+    const version = requireVersion(record);
+    assertExpectedVersion(version.id, input.expectedVersionId);
+    const draft = parseDraft(version.terms);
+    if (
+      draft.currentStep !== "INITIATOR" ||
+      !version.contractDraft ||
+      !version.sourceGenerationId
+    ) {
+      throw new ConflictException({
+        code: "DEAL_DRAFT_NOT_READY",
+        message: "Сначала заполните условия и подготовьте проект договора",
+      });
+    }
+    const generation = await this.deals.findCompletedGeneration({
+      id: version.sourceGenerationId,
+      templateVersionId: record.templateVersion.id,
+      userId,
+    });
+    if (
+      !generation?.structuredDraft ||
+      !isDeepStrictEqual(generation.inputAnswers, draft.answers) ||
+      !isDeepStrictEqual(generation.structuredDraft, version.contractDraft)
+    ) {
+      throw new ConflictException({
+        code: "DEAL_DRAFT_GENERATION_STALE",
+        message: "Проект договора не соответствует текущим условиям",
+      });
+    }
+
+    const updated = await this.deals.startAgreement({
+      dealId,
+      expectedUpdatedAt: new Date(input.expectedUpdatedAt),
+      expectedVersionId: version.id,
+      nextStatus: this.stateMachine.transition(
+        DealStatus.DRAFT,
+        DealStatus.COLLECTING_DATA,
+      ),
+      userId,
+      versionNumber: version.versionNumber,
+    });
+    if (!updated) throw versionConflict();
+    return toResponse(updated);
+  }
+
+  async createVersion(
+    userId: string,
+    dealId: string,
+    input: CreateDealVersionRequest,
+  ): Promise<DealDraftResponse> {
+    const record = await this.deals.findOwnedDraft(dealId, userId);
+    if (!record) throw dealNotFound();
+    assertInitiator(record, userId);
+    assertVersioningAllowed(record.status);
+    const currentVersion = requireVersion(record);
+    assertExpectedVersion(currentVersion.id, input.expectedVersionId);
+    if (currentVersion.sourceGenerationId === input.sourceGenerationId) {
+      throw new ConflictException({
+        code: "DEAL_VERSION_GENERATION_REUSED",
+        message: "Эта редакция договора уже используется в текущей версии",
+      });
+    }
+
+    assertAnswersSize(input.answers);
+    const generation = await this.deals.findCompletedGeneration({
+      id: input.sourceGenerationId,
+      templateVersionId: record.templateVersion.id,
+      userId,
+    });
+    if (!generation?.structuredDraft) {
+      throw new ConflictException({
+        code: "DEAL_GENERATION_NOT_READY",
+        message: "Новая редакция договора ещё не подготовлена",
+      });
+    }
+    if (!isDeepStrictEqual(generation.inputAnswers, input.answers)) {
+      throw new ConflictException({
+        code: "DEAL_GENERATION_INPUT_MISMATCH",
+        message: "Проект договора подготовлен для других условий",
+      });
+    }
+
+    const current = parseDraft(currentVersion.terms);
+    const description = normalizeDescription(input.description);
+    const nextDraft: DealDraftData = {
+      answers: input.answers,
+      clarificationSessionId:
+        input.clarificationSessionId !== undefined
+          ? input.clarificationSessionId
+          : current.clarificationSessionId,
+      creationPath: current.creationPath,
+      currentStep: "INITIATOR",
+      description,
+      initiator: current.initiator,
+    };
+    if (
+      isDeepStrictEqual(current, nextDraft) &&
+      isDeepStrictEqual(currentVersion.contractDraft, generation.structuredDraft)
+    ) {
+      throw new BadRequestException({
+        code: "DEAL_VERSION_NO_CHANGES",
+        message: "В новой редакции нет изменений условий",
+      });
+    }
+
+    const nextStatus = statusAfterRevision(record.status, this.stateMachine);
+    const updated = await this.deals.createVersion({
+      changeSummary: input.changeSummary.trim(),
+      contractDraft: toPrismaValue(generation.structuredDraft),
+      currentStatus: record.status,
+      currentVersionId: currentVersion.id,
+      dealId,
+      expectedUpdatedAt: new Date(input.expectedUpdatedAt),
+      nextStatus,
+      sourceGenerationId: generation.id,
+      terms: toPrismaObject(nextDraft),
+      userId,
+      versionNumber: currentVersion.versionNumber + 1,
+    });
+    if (!updated) throw versionConflict();
+    return toResponse(updated);
   }
 
   async updateDraft(
@@ -156,6 +331,47 @@ export class DealsService {
   }
 }
 
+function assertInitiator(record: DealDraftRecord, userId: string): void {
+  if (record.initiatorUserId === userId) return;
+  throw new ForbiddenException({
+    code: "DEAL_VERSION_EDIT_FORBIDDEN",
+    message: "Изменять условия может только инициатор сделки",
+  });
+}
+
+function assertExpectedVersion(currentId: string, expectedId: string): void {
+  if (currentId === expectedId) return;
+  throw versionConflict();
+}
+
+function assertVersioningAllowed(status: DealStatus): void {
+  if (status === DealStatus.DRAFT) {
+    throw new ConflictException({
+      code: "DEAL_AGREEMENT_NOT_STARTED",
+      message: "Сначала зафиксируйте черновик и начните согласование",
+    });
+  }
+  if (
+    status === DealStatus.SIGNED_BY_ONE ||
+    status === DealStatus.SIGNED ||
+    status === DealStatus.COMPLETED ||
+    status === DealStatus.CANCELED
+  ) {
+    throw new ConflictException({
+      code: "DEAL_VERSIONING_NOT_ALLOWED",
+      message: "На текущем этапе условия сделки изменять нельзя",
+    });
+  }
+}
+
+function statusAfterRevision(
+  status: DealStatus,
+  stateMachine: DealStateMachineService,
+): DealStatus {
+  if (status !== DealStatus.READY_TO_SIGN) return status;
+  return stateMachine.transition(DealStatus.READY_TO_SIGN, DealStatus.TERMS_REVIEW);
+}
+
 function normalizeTitle(value: string): string {
   const title = value.trim();
   if (!title) {
@@ -165,6 +381,17 @@ function normalizeTitle(value: string): string {
     });
   }
   return title;
+}
+
+function normalizeDescription(value: string): string {
+  const description = value.trim();
+  if (description.length < 10) {
+    throw new BadRequestException({
+      code: "DEAL_DESCRIPTION_TOO_SHORT",
+      message: "Опишите изменённые условия хотя бы в нескольких словах",
+    });
+  }
+  return description;
 }
 
 function assertAnswersSize(answers: Record<string, unknown>): void {
@@ -271,6 +498,10 @@ function toPrismaObject(value: DealDraftData): Prisma.InputJsonObject {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonObject;
 }
 
+function toPrismaValue(value: Prisma.JsonValue): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
 function invalidAnswers(): ConflictException {
   return new ConflictException({
     code: "DEAL_DRAFT_DATA_INVALID",
@@ -282,5 +513,12 @@ function dealNotFound(): NotFoundException {
   return new NotFoundException({
     code: "DEAL_NOT_FOUND",
     message: "Сделка не найдена",
+  });
+}
+
+function versionConflict(): ConflictException {
+  return new ConflictException({
+    code: "DEAL_VERSION_CONFLICT",
+    message: "Условия сделки изменились в другой вкладке. Обновите данные",
   });
 }

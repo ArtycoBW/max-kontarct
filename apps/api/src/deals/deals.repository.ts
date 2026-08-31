@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import {
   AiGenerationStatus,
+  DealApprovalStatus,
   DealPartyRole,
   DealStatus,
   Prisma,
@@ -42,7 +43,20 @@ const dealListSelect = {
   templateVersion: { select: { template: { select: { title: true } } } },
   title: true,
   updatedAt: true,
+  versions: {
+    orderBy: { versionNumber: "desc" as const },
+    select: { versionNumber: true },
+    take: 1,
+  },
 } satisfies Prisma.DealSelect;
+
+const dealVersionHistorySelect = {
+  approvals: { select: { status: true } },
+  changeSummary: true,
+  createdAt: true,
+  id: true,
+  versionNumber: true,
+} satisfies Prisma.DealVersionSelect;
 
 export type DealDraftRecord = Prisma.DealGetPayload<{
   select: typeof dealDraftSelect;
@@ -50,6 +64,10 @@ export type DealDraftRecord = Prisma.DealGetPayload<{
 
 export type DealListRecord = Prisma.DealGetPayload<{
   select: typeof dealListSelect;
+}>;
+
+export type DealVersionHistoryRecord = Prisma.DealVersionGetPayload<{
+  select: typeof dealVersionHistorySelect;
 }>;
 
 @Injectable()
@@ -139,6 +157,23 @@ export class DealsRepository {
     });
   }
 
+  findVersionHistory(
+    id: string,
+    userId: string,
+  ): Promise<DealVersionHistoryRecord[] | null> {
+    return this.prisma.deal
+      .findFirst({
+        select: {
+          versions: {
+            orderBy: { versionNumber: "desc" },
+            select: dealVersionHistorySelect,
+          },
+        },
+        where: { id, parties: { some: { userId } } },
+      })
+      .then((deal) => deal?.versions ?? null);
+  }
+
   listOwned(userId: string): Promise<DealListRecord[]> {
     return this.prisma.deal.findMany({
       orderBy: { updatedAt: "desc" },
@@ -153,13 +188,122 @@ export class DealsRepository {
     userId: string;
   }) {
     return this.prisma.aiGeneration.findFirst({
-      select: { id: true, structuredDraft: true },
+      select: { id: true, inputAnswers: true, structuredDraft: true },
       where: {
         id: input.id,
         status: AiGenerationStatus.COMPLETED,
         templateVersionId: input.templateVersionId,
         userId: input.userId,
       },
+    });
+  }
+
+  startAgreement(input: {
+    dealId: string;
+    expectedUpdatedAt: Date;
+    expectedVersionId: string;
+    nextStatus: DealStatus;
+    userId: string;
+    versionNumber: number;
+  }): Promise<DealDraftRecord | null> {
+    return this.prisma.$transaction(async (transaction) => {
+      const updated = await transaction.deal.updateMany({
+        data: { status: input.nextStatus, updatedAt: new Date() },
+        where: {
+          id: input.dealId,
+          initiatorUserId: input.userId,
+          status: DealStatus.DRAFT,
+          updatedAt: input.expectedUpdatedAt,
+          versions: { some: { id: input.expectedVersionId } },
+        },
+      });
+      if (updated.count !== 1) return null;
+
+      await transaction.auditEvent.create({
+        data: {
+          actorUserId: input.userId,
+          entityId: input.dealId,
+          entityType: "Deal",
+          eventType: "DEAL_AGREEMENT_STARTED",
+          metadata: {
+            versionId: input.expectedVersionId,
+            versionNumber: input.versionNumber,
+          },
+        },
+      });
+      return transaction.deal.findUnique({
+        select: dealDraftSelect,
+        where: { id: input.dealId },
+      });
+    });
+  }
+
+  createVersion(input: {
+    changeSummary: string;
+    contractDraft: Prisma.InputJsonValue;
+    currentStatus: DealStatus;
+    currentVersionId: string;
+    dealId: string;
+    expectedUpdatedAt: Date;
+    nextStatus: DealStatus;
+    sourceGenerationId: string;
+    terms: Prisma.InputJsonObject;
+    userId: string;
+    versionNumber: number;
+  }): Promise<DealDraftRecord | null> {
+    return this.prisma.$transaction(async (transaction) => {
+      const updated = await transaction.deal.updateMany({
+        data: { status: input.nextStatus, updatedAt: new Date() },
+        where: {
+          id: input.dealId,
+          initiatorUserId: input.userId,
+          status: input.currentStatus,
+          updatedAt: input.expectedUpdatedAt,
+          versions: { some: { id: input.currentVersionId } },
+        },
+      });
+      if (updated.count !== 1) return null;
+
+      const createdVersion = await transaction.dealVersion.create({
+        data: {
+          changeSummary: input.changeSummary,
+          contractDraft: input.contractDraft,
+          createdByUserId: input.userId,
+          dealId: input.dealId,
+          sourceGenerationId: input.sourceGenerationId,
+          terms: input.terms,
+          versionNumber: input.versionNumber,
+        },
+        select: { id: true },
+      });
+      const invalidated = await transaction.dealApproval.updateMany({
+        data: {
+          invalidatedAt: new Date(),
+          status: DealApprovalStatus.SUPERSEDED,
+        },
+        where: {
+          dealId: input.dealId,
+          status: DealApprovalStatus.APPROVED,
+        },
+      });
+      await transaction.auditEvent.create({
+        data: {
+          actorUserId: input.userId,
+          entityId: input.dealId,
+          entityType: "Deal",
+          eventType: "DEAL_VERSION_CREATED",
+          metadata: {
+            invalidatedApprovals: invalidated.count,
+            previousVersionId: input.currentVersionId,
+            versionId: createdVersion.id,
+            versionNumber: input.versionNumber,
+          },
+        },
+      });
+      return transaction.deal.findUnique({
+        select: dealDraftSelect,
+        where: { id: input.dealId },
+      });
     });
   }
 

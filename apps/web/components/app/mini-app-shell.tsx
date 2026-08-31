@@ -5,6 +5,7 @@ import type {
   AiClarificationSessionResponse,
   ContractGenerationResponse,
   ContractTemplateListItem,
+  DealStatus,
   DealDraftStep,
   OnboardingStateResponse,
   TemplateAnswerValidationError,
@@ -296,7 +297,8 @@ function DealsScreen({
                   <small>{deal.templateTitle}</small>
                   <strong>{deal.title}</strong>
                   <span>
-                    Черновик · обновлён {formatDealUpdatedAt(deal.updatedAt)}
+                    {formatDealStatus(deal.status)} · версия {deal.versionNumber}
+                    {" · обновлён "}{formatDealUpdatedAt(deal.updatedAt)}
                   </span>
                 </span>
                 <ArrowRight size={17} />
@@ -326,6 +328,26 @@ function formatDealUpdatedAt(value: string): string {
     return date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
   }
   return date.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" });
+}
+
+function formatDealStatus(status: DealStatus): string {
+  const labels: Record<DealStatus, string> = {
+    CANCELED: "Отменено",
+    COLLECTING_DATA: "Согласование начато",
+    COMPLETED: "Завершено",
+    CONTRACT_DRAFT: "Проект договора",
+    COUNTERPARTY_JOINED: "Контрагент подключён",
+    DOCUMENTS_PENDING: "Ожидаются документы",
+    DOCUMENTS_REVIEW: "Проверка документов",
+    DRAFT: "Черновик",
+    INVITATION_READY: "Приглашение готово",
+    INVITED: "Приглашение отправлено",
+    READY_TO_SIGN: "Готово к подписи",
+    SIGNED: "Подписано",
+    SIGNED_BY_ONE: "Одна сторона подписала",
+    TERMS_REVIEW: "Согласование условий",
+  };
+  return labels[status];
 }
 
 type CreateDealStep =

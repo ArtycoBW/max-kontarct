@@ -64,6 +64,21 @@ export interface UpdateDealDraftRequest {
   title?: string;
 }
 
+export interface StartDealAgreementRequest {
+  expectedUpdatedAt: string;
+  expectedVersionId: string;
+}
+
+export interface CreateDealVersionRequest {
+  answers: Record<string, unknown>;
+  changeSummary: string;
+  clarificationSessionId?: string | null;
+  description: string;
+  expectedUpdatedAt: string;
+  expectedVersionId: string;
+  sourceGenerationId: string;
+}
+
 export interface DealDraftResponse {
   contractDraft: ContractStructuredDraft | null;
   createdAt: string;
@@ -89,10 +104,31 @@ export interface DealListItem {
   templateTitle: string;
   title: string;
   updatedAt: string;
+  versionNumber: number;
 }
 
 export interface DealListResponse {
   items: DealListItem[];
+  total: number;
+}
+
+export interface DealVersionApprovalSummary {
+  approved: number;
+  revoked: number;
+  superseded: number;
+}
+
+export interface DealVersionListItem {
+  approvals: DealVersionApprovalSummary;
+  changeSummary: string | null;
+  createdAt: string;
+  id: string;
+  isCurrent: boolean;
+  versionNumber: number;
+}
+
+export interface DealVersionListResponse {
+  items: DealVersionListItem[];
   total: number;
 }
 
