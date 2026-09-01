@@ -174,6 +174,7 @@ export class SigningService {
     const party = requireParty(context, userId);
     if (version.signatures.some((signature) => signature.partyId === party.id)) {
       if (version.signatures.length >= context.parties.length) await this.artifacts.ensureFinalPdf(dealId);
+      if (version.signatures.length >= context.parties.length) await this.artifacts.ensureEvidencePackage(dealId);
       return this.state(userId, dealId);
     }
 
@@ -260,6 +261,7 @@ export class SigningService {
     const nextState = await this.state(userId, dealId);
     if (nextState.totalSignatures >= nextState.requiredSignatures) {
       await this.artifacts.ensureFinalPdf(dealId);
+      await this.artifacts.ensureEvidencePackage(dealId);
       return this.state(userId, dealId);
     }
     return nextState;
@@ -304,11 +306,13 @@ function toState(context: SigningContext, userId: string, pepVersion: string): D
   const version = requireFrozenVersion(context);
   const signatures = new Map(version.signatures.map((signature) => [signature.partyId, signature]));
   const finalPdf = context.artifacts.find(({ type }) => type === "FINAL_PDF");
+  const evidencePackage = context.artifacts.find(({ type }) => type === "EVIDENCE_ZIP");
   return {
     contractNumber: version.contractNumber,
     currentUserSigned: version.signatures.some((signature) => signature.userId === userId),
     dealId: context.id,
     documentHash: version.snapshotHash,
+    evidencePackage: evidencePackage ? toSummary(evidencePackage) : null,
     finalPdf: finalPdf ? toSummary(finalPdf) : null,
     parties: [...context.parties]
       .sort((left, right) => left.role === DealPartyRole.INITIATOR ? -1 : right.role === DealPartyRole.INITIATOR ? 1 : 0)

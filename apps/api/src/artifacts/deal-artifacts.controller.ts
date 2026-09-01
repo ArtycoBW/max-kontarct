@@ -25,4 +25,17 @@ export class DealArtifactsController {
       type: result.artifact.mimeType,
     });
   }
+
+  @Get("evidence-package")
+  @ApiOperation({ summary: "Скачать технический пакет материалов после проверки ACL" })
+  async evidencePackage(
+    @Param("dealId", new ParseUUIDPipe()) dealId: string,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<StreamableFile> {
+    const result = await this.artifacts.download(request.auth.user.id, dealId, DealArtifactType.EVIDENCE_ZIP);
+    return new StreamableFile(result.object.body, {
+      disposition: `attachment; filename*=UTF-8''${encodeURIComponent(result.artifact.originalName)}`,
+      type: result.artifact.mimeType,
+    });
+  }
 }

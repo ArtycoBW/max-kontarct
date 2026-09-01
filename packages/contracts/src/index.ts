@@ -224,6 +224,7 @@ export interface DealSigningStateResponse {
   currentUserSigned: boolean;
   dealId: string;
   documentHash: string;
+  evidencePackage: DealArtifactSummary | null;
   finalPdf: DealArtifactSummary | null;
   parties: DealSigningPartyStatus[];
   pepAgreement: PepAgreementResponse;

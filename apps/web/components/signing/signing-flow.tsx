@@ -164,6 +164,8 @@ function SignedState({ state }: { state: DealSigningStateResponse }) {
         {state.parties.map((party) => <div key={`${party.role}-${party.displayName}`}><span>{party.signedAt ? <CheckCircle2 size={17} /> : <Clock3 size={17} />}<strong>{party.displayName}{party.isCurrentUser ? " · вы" : ""}</strong></span><small>{party.signedAt ? `Подписано ${formatDateTime(party.signedAt)}` : "Ожидаем подпись"}</small></div>)}
       </Card>
       {state.finalPdf ? <Button asChild className="full-width"><a href={state.finalPdf.downloadUrl}><Download size={17} /> Скачать подписанный PDF</a></Button> : null}
+      {state.evidencePackage ? <Button asChild className="full-width" variant="secondary"><a href={state.evidencePackage.downloadUrl}><Download size={17} /> Скачать пакет материалов</a></Button> : null}
+      {state.evidencePackage ? <p className="signing-package-note">Технический пакет помогает проверить целостность материалов, но не гарантирует их принятие конкретным судом или государственным органом.</p> : null}
       <p className="signing-integrity"><ShieldCheck size={16} />Подписи связаны с версией {state.versionNumber} и SHA-256 {shortHash(state.documentHash)}.</p>
     </section>
   );
