@@ -5,7 +5,6 @@ import type {
 } from "@max-contract/contracts";
 import {
   BadRequestException,
-  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -104,9 +103,7 @@ export class FilesService {
     const validated = validateUploadedFile(file, this.maxUploadBytes);
     const sha256 = calculateSha256(file.buffer);
     const objectKey = createPrivateObjectKey(dealId);
-    const visibility = requirement && PRIVATE_REQUIREMENT_PATTERN.test(`${requirement.key} ${requirement.title}`)
-      ? DealFileVisibility.OWNER_ONLY
-      : DealFileVisibility.DEAL_PARTICIPANTS;
+    const visibility = resolveFileVisibility(requirement ?? null);
     await this.storage.putObject({
       body: file.buffer,
       contentType: validated.mimeType,
@@ -186,10 +183,19 @@ export class FilesService {
     });
     if (!deal) throw new NotFoundException({ code: "DEAL_NOT_FOUND", message: "Сделка не найдена" });
     if (!deal.parties.some((party) => party.userId === userId)) {
-      throw new ForbiddenException({ code: "DEAL_ACCESS_DENIED", message: "Нет доступа к сделке" });
+      throw new NotFoundException({ code: "DEAL_NOT_FOUND", message: "Сделка не найдена" });
     }
     return deal;
   }
+}
+
+export function resolveFileVisibility(
+  requirement: { key: string; title: string } | null,
+): DealFileVisibility {
+  if (!requirement) return DealFileVisibility.DEAL_PARTICIPANTS;
+  return PRIVATE_REQUIREMENT_PATTERN.test(`${requirement.key} ${requirement.title}`)
+    ? DealFileVisibility.OWNER_ONLY
+    : DealFileVisibility.DEAL_PARTICIPANTS;
 }
 
 async function syncRequiredFilesTrust(
