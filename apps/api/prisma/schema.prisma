@@ -143,6 +143,13 @@ enum DealFileReviewStatus {
   @@map("deal_file_review_status")
 }
 
+enum DealArtifactType {
+  FINAL_PDF
+  EVIDENCE_ZIP
+
+  @@map("deal_artifact_type")
+}
+
 model User {
   id         String    @id @default(uuid()) @db.Uuid
   role       UserRole  @default(USER)
@@ -391,6 +398,7 @@ model Deal {
   invitations     DealInvitation[]
   files           DealFile[]
   signatures      DealSignature[]
+  artifacts       DealArtifact[]
 
   @@index([initiatorUserId, status, updatedAt], map: "deals_initiator_status_updated_idx")
   @@index([status, updatedAt], map: "deals_status_updated_idx")
@@ -460,6 +468,7 @@ model DealVersion {
 
   approvals        DealApproval[]
   signatures       DealSignature[]
+  artifacts        DealArtifact[]
   createdBy        User           @relation("DealVersionAuthor", fields: [createdByUserId], references: [id], onDelete: Restrict)
   deal             Deal           @relation(fields: [dealId], references: [id], onDelete: Cascade)
   sourceGeneration AiGeneration?  @relation(fields: [sourceGenerationId], references: [id], onDelete: SetNull)
@@ -499,6 +508,29 @@ model DealSignature {
   @@index([userId, signedAt], map: "deal_signatures_user_signed_idx")
   @@index([documentHash], map: "deal_signatures_document_hash_idx")
   @@map("deal_signatures")
+}
+
+model DealArtifact {
+  id            String           @id @default(uuid()) @db.Uuid
+  dealId        String           @map("deal_id") @db.Uuid
+  dealVersionId String           @map("deal_version_id") @db.Uuid
+  type          DealArtifactType
+  bucket        String           @db.VarChar(128)
+  objectKey     String           @map("object_key") @db.VarChar(512)
+  originalName  String           @map("original_name") @db.VarChar(255)
+  mimeType      String           @map("mime_type") @db.VarChar(120)
+  sizeBytes     BigInt           @map("size_bytes")
+  sha256        String           @db.Char(64)
+  publicCode    String?          @unique(map: "deal_artifacts_public_code_key") @map("public_code") @db.VarChar(32)
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  deal        Deal        @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  dealVersion DealVersion @relation(fields: [dealVersionId, dealId], references: [id, dealId], onDelete: Cascade)
+
+  @@unique([dealVersionId, type], map: "deal_artifacts_version_type_key")
+  @@index([dealId, createdAt], map: "deal_artifacts_deal_created_idx")
+  @@index([sha256], map: "deal_artifacts_sha256_idx")
+  @@map("deal_artifacts")
 }
 
 model DealApproval {

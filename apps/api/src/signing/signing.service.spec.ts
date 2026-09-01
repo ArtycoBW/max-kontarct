@@ -4,6 +4,7 @@ import { ConfigService } from "@nestjs/config";
 import { DealStatus } from "@prisma/client";
 
 import { PrismaService } from "../database/prisma.service";
+import { DealArtifactsService } from "../artifacts/deal-artifacts.service";
 import { MaxBotService } from "../max-bot/max-bot.service";
 import { OtpService } from "./otp.service";
 import { SigningService } from "./signing.service";
@@ -88,6 +89,7 @@ describe("SigningService", () => {
 function createService(prisma: Record<string, any>, otp: Record<string, any>) {
   return new SigningService(
     new ConfigService({ CONSENT_ELECTRONIC_SIGNATURE_VERSION: "pep-v1" }),
+    { ensureFinalPdf: jest.fn(async () => ({})) } as unknown as DealArtifactsService,
     { sendUserNotification: jest.fn(async () => true) } as unknown as MaxBotService,
     otp as unknown as OtpService,
     prisma as unknown as PrismaService,
@@ -104,6 +106,7 @@ function prismaMock(context: ReturnType<typeof signingContext>, transaction: Rec
 
 function signingContext() {
   return {
+    artifacts: [],
     id: dealId,
     parties: [
       {

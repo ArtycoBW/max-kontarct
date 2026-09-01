@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 
 import { AuthModule } from "../auth/auth.module";
+import { DealArtifactsModule } from "../artifacts/deal-artifacts.module";
 import { MaxBotModule } from "../max-bot/max-bot.module";
 import { MaxBotService } from "../max-bot/max-bot.service";
 import { DisabledSmsProvider } from "./disabled-sms.provider";
@@ -16,7 +17,7 @@ import { SmscSmsProvider } from "./smsc-sms.provider";
 @Module({
   controllers: [SigningController],
   exports: [OtpService, SMS_PROVIDER],
-  imports: [AuthModule, MaxBotModule],
+  imports: [AuthModule, DealArtifactsModule, MaxBotModule],
   providers: [
     OtpService,
     SigningService,

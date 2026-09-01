@@ -200,11 +200,23 @@ export interface DealSigningPartyStatus {
   signedAt: string | null;
 }
 
+export interface DealArtifactSummary {
+  createdAt: string;
+  downloadUrl: string;
+  id: string;
+  mimeType: string;
+  originalName: string;
+  sha256: string;
+  sizeBytes: number;
+  type: "FINAL_PDF" | "EVIDENCE_ZIP";
+}
+
 export interface DealSigningStateResponse {
   contractNumber: string;
   currentUserSigned: boolean;
   dealId: string;
   documentHash: string;
+  finalPdf: DealArtifactSummary | null;
   parties: DealSigningPartyStatus[];
   pepAgreement: PepAgreementResponse;
   requiredSignatures: number;

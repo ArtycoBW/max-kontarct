@@ -6,6 +6,7 @@ import { LoggerModule } from "nestjs-pino";
 
 import { AdminModule } from "./admin/admin.module";
 import { AiModule } from "./ai/ai.module";
+import { DealArtifactsModule } from "./artifacts/deal-artifacts.module";
 import { AuthModule } from "./auth/auth.module";
 import { ApiExceptionFilter } from "./common/errors/api-exception.filter";
 import { createLoggerParams } from "./common/logging/logger.config";
@@ -46,6 +47,7 @@ import { TrustModule } from "./trust/trust.module";
       ],
     }),
     PrismaModule,
+    DealArtifactsModule,
     DataNormalizationModule,
     DealsModule,
     FilesModule,

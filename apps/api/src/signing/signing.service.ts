@@ -20,12 +20,17 @@ import {
   Prisma,
 } from "@prisma/client";
 
+import { DealArtifactsService, toSummary } from "../artifacts/deal-artifacts.service";
 import { PrismaService } from "../database/prisma.service";
 import { MaxBotService } from "../max-bot/max-bot.service";
 import { OtpService } from "./otp.service";
 import { pepAgreement } from "./pep-agreement";
 
 const signingContextSelect = {
+  artifacts: {
+    orderBy: { createdAt: "desc" as const },
+    take: 2,
+  },
   id: true,
   parties: {
     select: {
@@ -68,6 +73,7 @@ export class SigningService {
 
   constructor(
     config: ConfigService,
+    private readonly artifacts: DealArtifactsService,
     private readonly maxBot: MaxBotService,
     private readonly otp: OtpService,
     private readonly prisma: PrismaService,
@@ -167,7 +173,8 @@ export class SigningService {
     assertSigningOpen(context.status);
     const party = requireParty(context, userId);
     if (version.signatures.some((signature) => signature.partyId === party.id)) {
-      return toState(context, userId, this.pepVersion);
+      if (version.signatures.length >= context.parties.length) await this.artifacts.ensureFinalPdf(dealId);
+      return this.state(userId, dealId);
     }
 
     let verified: Awaited<ReturnType<OtpService["verify"]>>;
@@ -250,7 +257,12 @@ export class SigningService {
       );
     }
     void result;
-    return this.state(userId, dealId);
+    const nextState = await this.state(userId, dealId);
+    if (nextState.totalSignatures >= nextState.requiredSignatures) {
+      await this.artifacts.ensureFinalPdf(dealId);
+      return this.state(userId, dealId);
+    }
+    return nextState;
   }
 
   private async loadContext(userId: string, dealId: string): Promise<SigningContext> {
@@ -291,11 +303,13 @@ function assertSigningOpen(status: DealStatus): void {
 function toState(context: SigningContext, userId: string, pepVersion: string): DealSigningStateResponse {
   const version = requireFrozenVersion(context);
   const signatures = new Map(version.signatures.map((signature) => [signature.partyId, signature]));
+  const finalPdf = context.artifacts.find(({ type }) => type === "FINAL_PDF");
   return {
     contractNumber: version.contractNumber,
     currentUserSigned: version.signatures.some((signature) => signature.userId === userId),
     dealId: context.id,
     documentHash: version.snapshotHash,
+    finalPdf: finalPdf ? toSummary(finalPdf) : null,
     parties: [...context.parties]
       .sort((left, right) => left.role === DealPartyRole.INITIATOR ? -1 : right.role === DealPartyRole.INITIATOR ? 1 : 0)
       .map((party) => ({

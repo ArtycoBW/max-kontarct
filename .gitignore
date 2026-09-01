@@ -18,6 +18,7 @@ next-env.d.ts
 # Test and runtime artifacts
 playwright-report/
 test-results/
+tmp/
 *.log
 npm-debug.log*
 
