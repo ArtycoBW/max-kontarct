@@ -1842,6 +1842,73 @@ button.service-status {
   outline: none;
 }
 
+.profile-trust-card {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 18px;
+}
+
+.profile-trust-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.profile-trust-card > header span,
+.profile-trust-card > p {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+
+.profile-trust-card > header span {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.profile-trust-card > header strong {
+  font-size: 13px;
+}
+
+.profile-trust-card > div {
+  display: grid;
+  gap: 8px;
+}
+
+.trust-check {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 13px;
+  color: var(--muted-foreground);
+  background: var(--muted);
+}
+
+.trust-check.is-confirmed {
+  color: #087c55;
+  background: #ebf8f2;
+}
+
+.trust-check.is-rejected {
+  color: var(--destructive);
+  background: var(--accent-soft);
+}
+
+.trust-check i {
+  display: grid;
+  gap: 2px;
+  font-style: normal;
+}
+
+.trust-check strong { color: var(--foreground); font-size: 13px; }
+.trust-check small { font-size: 11px; }
+.profile-trust-card > p { margin: 0; color: var(--muted-foreground); font-size: 11px; }
+
 .profile-form-heading {
   display: flex;
   align-items: flex-start;

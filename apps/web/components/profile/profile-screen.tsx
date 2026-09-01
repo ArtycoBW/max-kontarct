@@ -1,18 +1,26 @@
 "use client";
 
-import type { UpdateUserProfileRequest, VerifiedPhone } from "@max-contract/contracts";
+import type {
+  TrustCheckStatus,
+  TrustCheckType,
+  UpdateUserProfileRequest,
+  VerifiedPhone,
+} from "@max-contract/contracts";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   Check,
   CircleAlert,
+  CircleCheck,
+  Clock3,
   LockKeyhole,
   Mail,
   MapPin,
   RefreshCw,
   Save,
   ShieldCheck,
+  ShieldQuestion,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -29,6 +37,7 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { getProfile, updateProfile } from "@/lib/api/profile";
 import { getAddressSuggestions, normalizeAddress } from "@/lib/api/data-normalization";
 import { queryKeys } from "@/lib/api/query-keys";
+import { getTrustStatus } from "@/lib/api/trust";
 
 const PERSON_NAME = /^[\p{L}][\p{L}\p{M}' -]*$/u;
 const profileSchema = z.object({
@@ -81,6 +90,11 @@ export function ProfileScreen({
     queryKey: queryKeys.profile.current(),
     retry: false,
   });
+  const trust = useQuery({
+    queryFn: getTrustStatus,
+    queryKey: queryKeys.trust.current(),
+    retry: false,
+  });
   const form = useForm<ProfileFormValues>({
     defaultValues: emptyProfile,
     mode: "onBlur",
@@ -102,6 +116,7 @@ export function ProfileScreen({
       queryClient.setQueryData(queryKeys.profile.current(), nextProfile);
       form.reset(toFormValues(nextProfile));
       setSaved(true);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.trust.current() });
     },
   });
 
@@ -184,6 +199,27 @@ export function ProfileScreen({
             <ArrowRight size={18} />
           </Link>
         </Button>
+      ) : null}
+
+      {trust.data ? (
+        <Card className="profile-trust-card">
+          <header>
+            <span><ShieldCheck size={18} /> Уровни доверия</span>
+            <strong>{trust.data.confirmed} из {trust.data.total}</strong>
+          </header>
+          <div>
+            {trust.data.checks.map((check) => (
+              <span className={`trust-check is-${check.status.toLowerCase()}`} key={check.type}>
+                {check.status === "CONFIRMED" ? <CircleCheck size={16} /> : <Clock3 size={16} />}
+                <i>
+                  <strong>{trustCheckLabel(check.type)}</strong>
+                  <small>{trustStatusLabel(check.status)}</small>
+                </i>
+              </span>
+            ))}
+          </div>
+          <p><ShieldQuestion size={14} /> Каждый пункт подтверждается независимо.</p>
+        </Card>
       ) : null}
 
       <form
@@ -430,4 +466,22 @@ function formatPhone(e164: string): string {
   return russian
     ? `+7 (${russian[1]}) ${russian[2]}-${russian[3]}-${russian[4]}`
     : e164;
+}
+
+function trustCheckLabel(type: TrustCheckType): string {
+  return {
+    INTERNAL_REVIEW: "Внутренняя проверка",
+    MAX_ACCOUNT: "Аккаунт MAX",
+    PHONE: "Номер телефона",
+    REQUIRED_FILES: "Обязательные документы",
+    REQUISITES_FORMAT: "Формат реквизитов",
+  }[type];
+}
+
+function trustStatusLabel(status: TrustCheckStatus): string {
+  return {
+    CONFIRMED: "Подтверждено",
+    PENDING: "Ожидает подтверждения",
+    REJECTED: "Требует исправления",
+  }[status];
 }

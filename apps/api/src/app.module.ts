@@ -20,6 +20,7 @@ import { ProfileModule } from "./profile/profile.module";
 import { RedisModule } from "./redis/redis.module";
 import { StorageModule } from "./storage/storage.module";
 import { TemplatesModule } from "./templates/templates.module";
+import { TrustModule } from "./trust/trust.module";
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { TemplatesModule } from "./templates/templates.module";
     ProfileModule,
     AdminModule,
     TemplatesModule,
+    TrustModule,
   ],
   providers: [
     {

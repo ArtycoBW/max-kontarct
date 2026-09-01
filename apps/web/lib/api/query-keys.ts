@@ -18,6 +18,9 @@ export const queryKeys = {
   normalization: {
     addressSuggestions: (query: string) => ["normalization", "address", query] as const,
   },
+  trust: {
+    current: () => ["trust", "current"] as const,
+  },
   deals: {
     all: ["deals"] as const,
     detail: (dealId: string) => [...queryKeys.deals.all, "detail", dealId] as const,

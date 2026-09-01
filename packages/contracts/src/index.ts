@@ -324,6 +324,38 @@ export interface NormalizedAddress {
   value: string;
 }
 
+export type TrustCheckType =
+  | "MAX_ACCOUNT"
+  | "PHONE"
+  | "REQUISITES_FORMAT"
+  | "REQUIRED_FILES"
+  | "INTERNAL_REVIEW";
+
+export type TrustCheckStatus = "PENDING" | "CONFIRMED" | "REJECTED";
+
+export type TrustCheckSource =
+  | "MAX"
+  | "DEV"
+  | "PROFILE"
+  | "DADATA"
+  | "FILES"
+  | "ADMIN"
+  | "SYSTEM";
+
+export interface UserTrustCheckResponse {
+  checkedAt: string | null;
+  source: TrustCheckSource;
+  status: TrustCheckStatus;
+  type: TrustCheckType;
+  updatedAt: string;
+}
+
+export interface UserTrustStatusResponse {
+  checks: UserTrustCheckResponse[];
+  confirmed: number;
+  total: number;
+}
+
 export interface AdminUserListItem {
   createdAt: string;
   displayName: string;
