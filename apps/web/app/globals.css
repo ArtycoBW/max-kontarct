@@ -1797,7 +1797,7 @@ button.service-status {
 .profile-form {
   display: grid;
   gap: 16px;
-  margin-top: 22px;
+  margin: 22px 0 20px;
   padding: 20px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -4350,6 +4350,12 @@ button.service-status {
   flex-direction: column;
   gap: 16px;
   padding-bottom: max(48px, calc(env(safe-area-inset-bottom) + 28px));
+}
+
+.deal-workspace-screen::after {
+  content: "";
+  display: block;
+  flex: 0 0 20px;
 }
 
 .deal-workspace-header { margin-bottom: 0; }
