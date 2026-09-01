@@ -358,6 +358,7 @@ export interface UserTrustStatusResponse {
 
 export type DealFileCategory = "REQUIREMENT" | "EVIDENCE";
 export type DealFileVisibility = "OWNER_ONLY" | "DEAL_PARTICIPANTS";
+export type DealFileReviewStatus = "PENDING" | "ACCEPTED" | "REJECTED";
 
 export interface DealFileResponse {
   category: DealFileCategory;
@@ -369,6 +370,8 @@ export interface DealFileResponse {
     isCurrentUser: boolean;
   };
   requirementId: string | null;
+  reviewComment: string | null;
+  reviewStatus: DealFileReviewStatus;
   sha256: string;
   sizeBytes: number;
   uploadedAt: string;
@@ -396,6 +399,32 @@ export interface DealDocumentsWorkspaceResponse {
 export interface UploadDealFileRequest {
   category: DealFileCategory;
   requirementId?: string;
+}
+
+export interface AdminFileReviewItem {
+  dealId: string;
+  dealTitle: string;
+  id: string;
+  mimeType: string;
+  originalName: string;
+  ownerDisplayName: string;
+  requirementTitle: string | null;
+  reviewComment: string | null;
+  reviewedAt: string | null;
+  reviewStatus: DealFileReviewStatus;
+  sizeBytes: number;
+  uploadedAt: string;
+  visibility: DealFileVisibility;
+}
+
+export interface AdminFileReviewListResponse {
+  items: AdminFileReviewItem[];
+  total: number;
+}
+
+export interface ReviewDealFileRequest {
+  comment: string | null;
+  status: Exclude<DealFileReviewStatus, "PENDING">;
 }
 
 export interface AdminUserListItem {

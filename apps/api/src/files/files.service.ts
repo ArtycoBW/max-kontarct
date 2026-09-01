@@ -1,7 +1,10 @@
 import type {
+  AdminFileReviewItem,
+  AdminFileReviewListResponse,
   DealDocumentsWorkspaceResponse,
   DealFileResponse,
   UploadDealFileRequest,
+  ReviewDealFileRequest,
 } from "@max-contract/contracts";
 import {
   BadRequestException,
@@ -12,6 +15,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import {
   DealFileCategory,
+  DealFileReviewStatus,
   DealFileVisibility,
   Prisma,
   TrustCheckSource,
@@ -171,6 +175,84 @@ export class FilesService {
     };
   }
 
+  async listForAdmin(): Promise<AdminFileReviewListResponse> {
+    const [files, total] = await Promise.all([
+      this.prisma.dealFile.findMany({
+        include: {
+          deal: { select: { title: true } },
+          owner: { include: { maxAccount: true, profile: true } },
+          requirement: { select: { title: true } },
+        },
+        orderBy: [{ reviewStatus: "asc" }, { uploadedAt: "desc" }],
+        take: 200,
+      }),
+      this.prisma.dealFile.count(),
+    ]);
+    return { items: files.map(toAdminFileReviewItem), total };
+  }
+
+  async adminDownload(fileId: string): Promise<{
+    file: { mimeType: string; originalName: string };
+    object: StoredObject;
+  }> {
+    const file = await this.prisma.dealFile.findUnique({ where: { id: fileId } });
+    if (!file) throw fileNotFound();
+    return {
+      file: { mimeType: file.mimeType, originalName: file.originalName },
+      object: await this.storage.getObject(file.objectKey),
+    };
+  }
+
+  async review(
+    reviewerUserId: string,
+    fileId: string,
+    input: ReviewDealFileRequest,
+    requestId?: string,
+  ): Promise<AdminFileReviewItem> {
+    const comment = input.comment?.trim() || null;
+    if (input.status === "REJECTED" && (!comment || comment.length < 3)) {
+      throw new BadRequestException({
+        code: "FILE_REVIEW_COMMENT_REQUIRED",
+        message: "При отклонении укажите комментарий не короче трёх символов",
+      });
+    }
+    return this.prisma.$transaction(async (transaction) => {
+      const current = await transaction.dealFile.findUnique({ where: { id: fileId } });
+      if (!current) throw fileNotFound();
+      const file = await transaction.dealFile.update({
+        data: {
+          reviewComment: comment,
+          reviewedAt: new Date(),
+          reviewedByUserId: reviewerUserId,
+          reviewStatus: input.status,
+        },
+        include: {
+          deal: { select: { title: true } },
+          owner: { include: { maxAccount: true, profile: true } },
+          requirement: { select: { title: true } },
+        },
+        where: { id: fileId },
+      });
+      await transaction.auditEvent.create({
+        data: {
+          actorUserId: reviewerUserId,
+          entityId: fileId,
+          entityType: "DealFile",
+          eventType: "DEAL_FILE_REVIEWED",
+          metadata: {
+            commentProvided: Boolean(comment),
+            dealId: file.dealId,
+            ownerUserId: file.ownerUserId,
+            status: file.reviewStatus,
+          },
+          requestId,
+        },
+      });
+      await syncInternalReviewTrust(transaction, file.ownerUserId, file.dealId, file.reviewStatus);
+      return toAdminFileReviewItem(file);
+    });
+  }
+
   private async loadDealForParticipant(userId: string, dealId: string) {
     const deal = await this.prisma.deal.findUnique({
       include: {
@@ -187,6 +269,58 @@ export class FilesService {
     }
     return deal;
   }
+}
+
+async function syncInternalReviewTrust(
+  transaction: Prisma.TransactionClient,
+  userId: string,
+  dealId: string,
+  latestStatus: DealFileReviewStatus,
+): Promise<void> {
+  const deal = await transaction.deal.findUnique({
+    select: {
+      templateVersion: {
+        select: { documentRequirements: { select: { id: true, required: true } } },
+      },
+    },
+    where: { id: dealId },
+  });
+  if (!deal) return;
+  const requiredIds = deal.templateVersion.documentRequirements
+    .filter(({ required }) => required)
+    .map(({ id }) => id);
+  const accepted = requiredIds.length
+    ? await transaction.dealFile.findMany({
+        distinct: ["requirementId"],
+        select: { requirementId: true },
+        where: {
+          dealId,
+          ownerUserId: userId,
+          requirementId: { in: requiredIds },
+          reviewStatus: DealFileReviewStatus.ACCEPTED,
+        },
+      })
+    : [];
+  const status = latestStatus === DealFileReviewStatus.REJECTED
+    ? TrustCheckStatus.REJECTED
+    : accepted.length === requiredIds.length
+      ? TrustCheckStatus.CONFIRMED
+      : TrustCheckStatus.PENDING;
+  await transaction.userTrustCheck.upsert({
+    create: {
+      checkedAt: status === TrustCheckStatus.PENDING ? null : new Date(),
+      source: TrustCheckSource.ADMIN,
+      status,
+      type: TrustCheckType.INTERNAL_REVIEW,
+      userId,
+    },
+    update: {
+      checkedAt: status === TrustCheckStatus.PENDING ? null : new Date(),
+      source: TrustCheckSource.ADMIN,
+      status,
+    },
+    where: { userId_type: { type: TrustCheckType.INTERNAL_REVIEW, userId } },
+  });
 }
 
 export function resolveFileVisibility(
@@ -244,6 +378,8 @@ function toFileResponse(
     owner: { maxAccount: { firstName: string | null; lastName: string | null } | null; profile: { firstName: string; lastName: string } | null };
     ownerUserId: string;
     requirementId: string | null;
+    reviewComment: string | null;
+    reviewStatus: "PENDING" | "ACCEPTED" | "REJECTED";
     sha256: string;
     sizeBytes: bigint;
     uploadedAt: Date;
@@ -262,6 +398,8 @@ function toFileResponse(
       isCurrentUser: file.ownerUserId === currentUserId,
     },
     requirementId: file.requirementId,
+    reviewComment: file.reviewComment,
+    reviewStatus: file.reviewStatus,
     sha256: file.sha256,
     sizeBytes: Number(file.sizeBytes),
     uploadedAt: file.uploadedAt.toISOString(),
@@ -271,4 +409,37 @@ function toFileResponse(
 
 function fileNotFound(): NotFoundException {
   return new NotFoundException({ code: "FILE_NOT_FOUND", message: "Файл не найден" });
+}
+
+function toAdminFileReviewItem(file: {
+  deal: { title: string };
+  dealId: string;
+  id: string;
+  mimeType: string;
+  originalName: string;
+  owner: { maxAccount: { firstName: string | null; lastName: string | null } | null; profile: { firstName: string; lastName: string } | null };
+  requirement: { title: string } | null;
+  reviewComment: string | null;
+  reviewedAt: Date | null;
+  reviewStatus: DealFileReviewStatus;
+  sizeBytes: bigint;
+  uploadedAt: Date;
+  visibility: DealFileVisibility;
+}): AdminFileReviewItem {
+  const person = file.owner.profile ?? file.owner.maxAccount;
+  return {
+    dealId: file.dealId,
+    dealTitle: file.deal.title,
+    id: file.id,
+    mimeType: file.mimeType,
+    originalName: file.originalName,
+    ownerDisplayName: [person?.firstName, person?.lastName].filter(Boolean).join(" ") || "Пользователь MAX",
+    requirementTitle: file.requirement?.title ?? null,
+    reviewComment: file.reviewComment,
+    reviewedAt: file.reviewedAt?.toISOString() ?? null,
+    reviewStatus: file.reviewStatus,
+    sizeBytes: Number(file.sizeBytes),
+    uploadedAt: file.uploadedAt.toISOString(),
+    visibility: file.visibility,
+  };
 }

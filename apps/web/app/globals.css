@@ -2016,6 +2016,47 @@ button.service-status {
 .upload-progress-card i b { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .18s ease; }
 .upload-success-card { color: #087c55; border-color: #bce8d7; background: #ebf8f2; }
 
+.uploaded-file-list i em { color: var(--destructive); font-size: 9px; font-style: normal; }
+
+.admin-file-reviews { display: grid; gap: 24px; }
+.admin-file-review-list { display: grid; gap: 12px; }
+.admin-file-review-card { display: grid; gap: 14px; padding: 18px; }
+.admin-file-review-card > header {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: center;
+}
+.admin-file-review-card > header > span { display: grid; width: 38px; height: 38px; border-radius: 12px; color: var(--accent); background: var(--accent-soft); place-items: center; }
+.admin-file-review-card > header i { display: grid; gap: 2px; min-width: 0; font-style: normal; }
+.admin-file-review-card > header small { color: var(--accent); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.admin-file-review-card > header strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.admin-file-review-card > header em { color: var(--muted-foreground); font-size: 10px; font-style: normal; }
+.admin-review-status { padding: 6px 9px; border-radius: 999px; font-size: 9px; font-weight: 700; }
+.admin-review-status.is-pending { color: #8d5d00; background: #fff4d5; }
+.admin-review-status.is-accepted { color: #087c55; background: #e5f6ef; }
+.admin-review-status.is-rejected { color: var(--destructive); background: var(--accent-soft); }
+.admin-file-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.admin-file-meta span { padding: 5px 8px; border-radius: 999px; color: var(--muted-foreground); font-size: 9px; background: var(--muted); }
+.admin-file-review-card > p { display: flex; gap: 7px; align-items: center; margin: 0; color: var(--destructive); font-size: 11px; }
+.admin-file-review-card > footer { display: flex; gap: 8px; justify-content: flex-end; }
+.admin-file-review-card > footer > small { color: var(--muted-foreground); font-size: 10px; }
+.admin-file-review-dialog { display: grid; gap: 16px; width: min(520px, calc(100vw - 28px)); max-height: calc(100dvh - 28px); overflow: auto; padding: 22px; }
+.admin-file-review-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; }
+.admin-file-review-dialog > header small { color: var(--accent); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.admin-file-review-dialog h2 { margin: 4px 0 0; font-size: 20px; }
+.admin-file-review-dialog > p { margin: 0; color: var(--muted-foreground); font-size: 12px; line-height: 1.5; }
+.admin-file-review-dialog > label { display: grid; gap: 7px; font-size: 11px; font-weight: 700; }
+.admin-file-review-dialog > footer { display: flex; gap: 9px; justify-content: flex-end; }
+
+@media (max-width: 700px) {
+  .admin-file-review-card > header { grid-template-columns: 36px minmax(0, 1fr); }
+  .admin-review-status { grid-column: 1 / -1; justify-self: start; }
+  .admin-file-review-card > footer { display: grid; grid-template-columns: 1fr; }
+  .admin-file-review-card > footer .button { width: 100%; }
+  .admin-file-review-dialog > footer { display: grid; grid-template-columns: 1fr 1fr; }
+}
+
 .profile-form-heading {
   display: flex;
   align-items: flex-start;

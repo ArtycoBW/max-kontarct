@@ -212,7 +212,7 @@ function FileList({ dealId, files }: { dealId: string; files: DealFileResponse[]
       {files.map((file) => (
         <a href={getDealFileDownloadUrl(dealId, file.id)} key={file.id} rel="noreferrer">
           <span><FileCheck2 size={16} /></span>
-          <i><strong>{file.originalName}</strong><small>{formatBytes(file.sizeBytes)} · {file.owner.isCurrentUser ? "ваш файл" : file.owner.displayName}</small></i>
+          <i><strong>{file.originalName}</strong><small>{formatBytes(file.sizeBytes)} · {file.owner.isCurrentUser ? "ваш файл" : file.owner.displayName} · {fileReviewLabel(file.reviewStatus)}</small>{file.reviewComment ? <em>{file.reviewComment}</em> : null}</i>
           <Download size={16} />
         </a>
       ))}
@@ -238,3 +238,4 @@ function DocumentsLoading({ onBack }: { onBack: () => void }) {
 
 function formatMegabytes(bytes: number): string { return `${Math.ceil(bytes / 1024 / 1024)} МБ`; }
 function formatBytes(bytes: number): string { return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} МБ` : `${Math.ceil(bytes / 1024)} КБ`; }
+function fileReviewLabel(status: DealFileResponse["reviewStatus"]): string { return { ACCEPTED: "принят", PENDING: "на проверке", REJECTED: "нужно исправить" }[status]; }

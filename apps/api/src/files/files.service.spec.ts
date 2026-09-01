@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await, @typescript-eslint/unbound-method */
 import { ConfigService } from "@nestjs/config";
-import { NotFoundException } from "@nestjs/common";
+import { BadRequestException, NotFoundException } from "@nestjs/common";
 import { DealFileVisibility } from "@prisma/client";
 
 import type { StorageService } from "../storage/storage.service";
@@ -18,8 +18,16 @@ describe("FilesService ACL", () => {
 
   beforeEach(() => {
     prisma = {
+      $transaction: jest.fn(async (callback: (transaction: any) => Promise<unknown>) => callback(prisma)),
+      auditEvent: { create: jest.fn() },
       deal: { findUnique: jest.fn(async () => deal([USER_ID, OTHER_USER_ID])) },
-      dealFile: { findFirst: jest.fn(), findMany: jest.fn(async () => []) },
+      dealFile: {
+        findFirst: jest.fn(),
+        findMany: jest.fn(async () => []),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+      },
+      userTrustCheck: { upsert: jest.fn() },
     };
     storage = {
       checkHealth: jest.fn(),
@@ -82,6 +90,41 @@ describe("FilesService ACL", () => {
     expect(resolveFileVisibility({ key: "property_document", title: "Документ на имущество" }))
       .toBe(DealFileVisibility.DEAL_PARTICIPANTS);
     expect(resolveFileVisibility(null)).toBe(DealFileVisibility.DEAL_PARTICIPANTS);
+  });
+
+  it("requires a meaningful comment when an administrator rejects a file", async () => {
+    await expect(service.review(USER_ID, FILE_ID, { comment: " ", status: "REJECTED" }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.dealFile.update).not.toHaveBeenCalled();
+  });
+
+  it("records a manual decision, audit event and internal trust status", async () => {
+    const reviewedAt = new Date("2026-09-01T12:00:00.000Z");
+    prisma.dealFile.findUnique.mockResolvedValue({ id: FILE_ID });
+    prisma.dealFile.update.mockResolvedValue({
+      deal: { title: "Аренда" },
+      dealId: DEAL_ID,
+      id: FILE_ID,
+      mimeType: "application/pdf",
+      originalName: "document.pdf",
+      owner: { maxAccount: null, profile: { firstName: "Иван", lastName: "Иванов" } },
+      ownerUserId: OTHER_USER_ID,
+      requirement: null,
+      reviewComment: null,
+      reviewedAt,
+      reviewStatus: "ACCEPTED",
+      sizeBytes: 10n,
+      uploadedAt: reviewedAt,
+      visibility: "DEAL_PARTICIPANTS",
+    });
+    prisma.deal.findUnique.mockResolvedValue({
+      templateVersion: { documentRequirements: [] },
+    });
+
+    await expect(service.review(USER_ID, FILE_ID, { comment: null, status: "ACCEPTED" }))
+      .resolves.toMatchObject({ reviewStatus: "ACCEPTED" });
+    expect(prisma.auditEvent.create).toHaveBeenCalled();
+    expect(prisma.userTrustCheck.upsert).toHaveBeenCalled();
   });
 });
 

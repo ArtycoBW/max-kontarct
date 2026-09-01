@@ -1,6 +1,8 @@
 import type {
   AdminAiGenerationListResponse,
   AdminAuditListResponse,
+  AdminFileReviewItem,
+  AdminFileReviewListResponse,
   AdminTemplateListResponse,
   AdminTemplateVersion,
   AdminUserListResponse,
@@ -15,6 +17,7 @@ import {
   Patch,
   Post,
   Req,
+  StreamableFile,
   UseGuards,
 } from "@nestjs/common";
 import {
@@ -30,6 +33,8 @@ import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
 import type { AuthenticatedRequest } from "../auth/auth.types";
+import { FilesService } from "../files/files.service";
+import { ReviewDealFileDto } from "./dto/admin-file-review.dto";
 import { UpdateAdminTemplateVersionDto } from "./dto/admin-template.dto";
 import { AdminService } from "./admin.service";
 
@@ -40,7 +45,40 @@ import { AdminService } from "./admin.service";
 @ApiCookieAuth("max_contract_session")
 @ApiForbiddenResponse({ description: "Роль USER не имеет доступа" })
 export class AdminController {
-  constructor(private readonly admin: AdminService) {}
+  constructor(
+    private readonly admin: AdminService,
+    private readonly files: FilesService,
+  ) {}
+
+  @Get("files")
+  @ApiOperation({ summary: "Материалы, разрешённые для ручной проверки" })
+  listFiles(): Promise<AdminFileReviewListResponse> {
+    return this.files.listForAdmin();
+  }
+
+  @Get("files/:fileId/content")
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: "Скачать материал для ручной проверки" })
+  async downloadFile(
+    @Param("fileId", new ParseUUIDPipe()) fileId: string,
+  ): Promise<StreamableFile> {
+    const result = await this.files.adminDownload(fileId);
+    return new StreamableFile(result.object.body, {
+      disposition: `attachment; filename*=UTF-8''${encodeURIComponent(result.file.originalName)}`,
+      type: result.file.mimeType,
+    });
+  }
+
+  @Patch("files/:fileId/review")
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: "Принять или отклонить материал вручную" })
+  reviewFile(
+    @Param("fileId", new ParseUUIDPipe()) fileId: string,
+    @Body() body: ReviewDealFileDto,
+    @Req() request: AuthenticatedRequest,
+  ): Promise<AdminFileReviewItem> {
+    return this.files.review(request.auth.user.id, fileId, body, request.id);
+  }
 
   @Get("users")
   @ApiOperation({ summary: "Безопасный список пользователей" })

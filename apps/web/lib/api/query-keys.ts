@@ -45,6 +45,7 @@ export const queryKeys = {
   admin: {
     all: ["admin"] as const,
     aiGenerations: () => [...queryKeys.admin.all, "ai-generations"] as const,
+    files: () => [...queryKeys.admin.all, "files"] as const,
     audit: () => [...queryKeys.admin.all, "audit"] as const,
     templates: () => [...queryKeys.admin.all, "templates"] as const,
     users: () => [...queryKeys.admin.all, "users"] as const,

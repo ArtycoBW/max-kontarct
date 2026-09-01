@@ -1,9 +1,12 @@
 import type {
   AdminAiGenerationListResponse,
+  AdminFileReviewItem,
+  AdminFileReviewListResponse,
   AdminAuditListResponse,
   AdminTemplateListResponse,
   AdminTemplateVersion,
   AdminUserListResponse,
+  ReviewDealFileRequest,
   UpdateAdminTemplateVersionRequest,
 } from "@max-contract/contracts";
 
@@ -15,6 +18,26 @@ export function getAdminUsers(): Promise<AdminUserListResponse> {
 
 export function getAdminAuditEvents(): Promise<AdminAuditListResponse> {
   return apiRequest<AdminAuditListResponse>("admin/audit");
+}
+
+export function getAdminFileReviews(): Promise<AdminFileReviewListResponse> {
+  return apiRequest<AdminFileReviewListResponse>("admin/files");
+}
+
+export function reviewAdminFile(
+  fileId: string,
+  body: ReviewDealFileRequest,
+): Promise<AdminFileReviewItem> {
+  return apiRequest<AdminFileReviewItem>(`admin/files/${encodeURIComponent(fileId)}/review`, {
+    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json" },
+    method: "PATCH",
+  });
+}
+
+export function getAdminFileDownloadUrl(fileId: string): string {
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
+  return `${base.replace(/\/$/, "")}/admin/files/${encodeURIComponent(fileId)}/content`;
 }
 
 export function getAdminTemplates(): Promise<AdminTemplateListResponse> {

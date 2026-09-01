@@ -12,6 +12,7 @@ import {
   Check,
   CircleAlert,
   FileStack,
+  FileSearch,
   RefreshCw,
   ScrollText,
   ShieldCheck,
@@ -23,6 +24,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { AdminAiGenerationsView } from "@/components/admin/ai-generations-view";
+import { AdminFileReviewsView } from "@/components/admin/file-reviews-view";
 import { AdminTemplatesView } from "@/components/admin/templates-view";
 import { useAuth } from "@/components/providers/auth-provider";
 import { Button } from "@/components/ui/button";
@@ -31,7 +33,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getAdminAuditEvents, getAdminUsers } from "@/lib/api/admin";
 import { queryKeys } from "@/lib/api/query-keys";
 
-type AdminTab = "users" | "templates" | "generations" | "audit";
+type AdminTab = "users" | "templates" | "generations" | "files" | "audit";
 
 export default function AdminPage() {
   const auth = useAuth();
@@ -117,6 +119,14 @@ export default function AdminPage() {
             <Bot size={17} /> Генерации ИИ
           </Button>
           <Button
+            className={activeTab === "files" ? "is-active" : undefined}
+            onClick={() => setActiveTab("files")}
+            type="button"
+            variant="unstyled"
+          >
+            <FileSearch size={17} /> Проверка файлов
+          </Button>
+          <Button
             className={activeTab === "audit" ? "is-active" : undefined}
             onClick={() => setActiveTab("audit")}
             type="button"
@@ -151,6 +161,7 @@ export default function AdminPage() {
           <AdminTemplatesView canManage={auth.user.role === "ADMIN"} />
         ) : null}
         {activeTab === "generations" ? <AdminAiGenerationsView /> : null}
+        {activeTab === "files" ? <AdminFileReviewsView canReview={auth.user.role === "ADMIN"} /> : null}
         {activeTab === "audit" ? <AuditView query={audit} /> : null}
       </section>
     </main>
@@ -273,6 +284,7 @@ function roleLabel(role: AuthUserRole): string {
 function tabTitle(tab: AdminTab): string {
   return {
     audit: "Журнал событий",
+    files: "Проверка материалов",
     generations: "Генерации ИИ",
     templates: "Шаблоны договоров",
     users: "Пользователи",
@@ -282,6 +294,7 @@ function tabTitle(tab: AdminTab): string {
 function tabCopy(tab: AdminTab): string {
   return {
     audit: "Контроль действий",
+    files: "Ручное решение",
     generations: "Контроль подготовки документов",
     templates: "Версии и требования",
     users: "Доступы и профили",
@@ -295,6 +308,8 @@ const AUDIT_EVENT_LABELS: Record<string, string> = {
   DEV_PHONE_VERIFIED: "Телефон подтверждён в тестовой среде",
   DEV_USER_ROLE_CHANGED: "Роль пользователя изменена",
   DEV_USER_SEEDED: "Тестовый пользователь создан",
+  DEAL_FILE_REVIEWED: "Материал сделки проверен",
+  DEAL_FILE_UPLOADED: "Материал сделки загружен",
   ADMIN_TEMPLATE_VERSION_ARCHIVED: "Версия шаблона перенесена в архив",
   ADMIN_TEMPLATE_VERSION_CREATED: "Создана версия шаблона",
   ADMIN_TEMPLATE_VERSION_PUBLISHED: "Опубликована версия шаблона",
@@ -313,6 +328,7 @@ const AUDIT_ENTITY_LABELS: Record<string, string> = {
   UserProfile: "Профиль пользователя",
   UserSession: "Сеанс пользователя",
   ContractTemplateVersion: "Версия шаблона договора",
+  DealFile: "Материал сделки",
 };
 
 function auditEventLabel(eventType: string): string {
