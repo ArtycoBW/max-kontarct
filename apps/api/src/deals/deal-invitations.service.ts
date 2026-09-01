@@ -30,6 +30,11 @@ import {
 import { PrismaService } from "../database/prisma.service";
 import { MaxBotService } from "../max-bot/max-bot.service";
 import { DealStateMachineService } from "./deal-state-machine.service";
+import {
+  createContractNumber,
+  hashFrozenSnapshot,
+  type FrozenDealSnapshot,
+} from "./deal-version-freeze";
 
 const invitationSelect = {
   acceptedAt: true,
@@ -57,8 +62,21 @@ const workspaceSelect = {
       user: {
         select: {
           maxAccount: { select: { firstName: true, lastName: true, maxUserId: true } },
-          phones: { select: { id: true }, take: 1 },
-          profile: { select: { firstName: true, lastName: true } },
+          phones: {
+            orderBy: [{ isPrimary: "desc" as const }, { verifiedAt: "desc" as const }],
+            select: { e164: true, id: true },
+            take: 1,
+          },
+          profile: {
+            select: {
+              addressValue: true,
+              birthDate: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+            },
+          },
         },
       },
     },
@@ -78,7 +96,11 @@ const workspaceSelect = {
     select: {
       approvals: { select: { approvedAt: true, id: true, partyId: true, status: true } },
       contractDraft: true,
+      contractNumber: true,
+      frozenAt: true,
+      frozenSnapshot: true,
       id: true,
+      snapshotHash: true,
       sourceGenerationId: true,
       terms: true,
       versionNumber: true,
@@ -563,6 +585,9 @@ export class DealInvitationsService {
               DealStatus.READY_TO_SIGN,
             )
         : record.status;
+      const freeze = nextStatus === DealStatus.READY_TO_SIGN
+        ? createFreeze(record, version, now)
+        : null;
       const updated = await transaction.deal.updateMany({
         data: { status: nextStatus, updatedAt: now },
         where: {
@@ -572,10 +597,48 @@ export class DealInvitationsService {
         },
       });
       if (updated.count !== 1) throw versionConflict();
-      const approval = await transaction.dealApproval.create({
-        data: { dealId, dealVersionId: version.id, partyId: party.id },
+      const approval = await transaction.dealApproval.upsert({
+        create: { dealId, dealVersionId: version.id, partyId: party.id },
         select: { approvedAt: true, id: true },
+        update: {
+          approvedAt: now,
+          invalidatedAt: null,
+          status: DealApprovalStatus.APPROVED,
+        },
+        where: {
+          dealVersionId_partyId: {
+            dealVersionId: version.id,
+            partyId: party.id,
+          },
+        },
       });
+      if (freeze) {
+        const frozen = await transaction.dealVersion.updateMany({
+          data: {
+            contractNumber: freeze.snapshot.contract.number,
+            frozenAt: now,
+            frozenSnapshot: freeze.snapshot as unknown as Prisma.InputJsonObject,
+            snapshotHash: freeze.hash,
+          },
+          where: { frozenAt: null, id: version.id },
+        });
+        if (frozen.count !== 1) throw versionConflict();
+        await transaction.auditEvent.create({
+          data: {
+            actorUserId: userId,
+            entityId: version.id,
+            entityType: "DealVersion",
+            eventType: "DEAL_VERSION_FROZEN",
+            metadata: {
+              contractNumber: freeze.snapshot.contract.number,
+              dealId,
+              frozenAt: now.toISOString(),
+              snapshotHash: freeze.hash,
+              versionNumber: version.versionNumber,
+            },
+          },
+        });
+      }
       await transaction.auditEvent.create({
         data: {
           actorUserId: userId,
@@ -701,6 +764,62 @@ function toWorkspace(record: WorkspaceRecord, userId: string): DealWorkspaceResp
 function displayName(user: WorkspaceRecord["parties"][number]["user"]): string {
   const profile = user.profile ?? user.maxAccount;
   return [profile?.lastName, profile?.firstName].filter(Boolean).join(" ") || "Участник сделки";
+}
+
+function createFreeze(
+  record: WorkspaceRecord,
+  version: WorkspaceRecord["versions"][number],
+  frozenAt: Date,
+): { hash: string; snapshot: FrozenDealSnapshot } {
+  if (!version.contractDraft) throw versionConflict();
+  const contractNumber = createContractNumber(record.id, version.versionNumber, frozenAt);
+  const parties = [...record.parties]
+    .sort((left, right) => left.role.localeCompare(right.role))
+    .map((party) => {
+      const phone = party.user.phones[0];
+      const profile = party.user.profile;
+      if (!phone || !profile) {
+        throw new ConflictException({
+          code: "DEAL_SIGNING_PROFILE_REQUIRED",
+          message: "Перед подписанием обе стороны должны заполнить профиль и подтвердить телефон",
+        });
+      }
+      return {
+        maxUserIdRef: party.user.maxAccount?.maxUserId ?? null,
+        partyId: party.id,
+        profile: {
+          address: profile.addressValue,
+          birthDate: profile.birthDate?.toISOString().slice(0, 10) ?? null,
+          email: profile.email,
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+          middleName: profile.middleName,
+        },
+        role: party.role,
+        userId: party.userId,
+        verifiedPhoneRef: phone.id,
+      };
+    });
+  const snapshot: FrozenDealSnapshot = {
+    contract: {
+      draft: version.contractDraft,
+      number: contractNumber,
+    },
+    deal: {
+      id: record.id,
+      templateSlug: record.templateVersion.template.slug,
+      templateTitle: record.templateVersion.template.title,
+      templateVersion: record.templateVersion.versionNumber,
+      title: record.title,
+      versionId: version.id,
+      versionNumber: version.versionNumber,
+    },
+    frozenAt: frozenAt.toISOString(),
+    parties,
+    schemaVersion: "deal-signature-v1",
+    terms: version.terms,
+  };
+  return { hash: hashFrozenSnapshot(snapshot), snapshot };
 }
 
 function toInvitationResponse(record: InvitationRecord): DealInvitationResponse {

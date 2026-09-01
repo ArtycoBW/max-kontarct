@@ -21,7 +21,8 @@ describe("DealInvitationsService", () => {
   const transaction = {
     auditEvent: { create: jest.fn() },
     deal: { updateMany: jest.fn() },
-    dealApproval: { create: jest.fn() },
+    dealApproval: { create: jest.fn(), upsert: jest.fn() },
+    dealVersion: { updateMany: jest.fn() },
     dealInvitation: {
       create: jest.fn(),
       findFirst: jest.fn(),
@@ -70,6 +71,11 @@ describe("DealInvitationsService", () => {
     jest.clearAllMocks();
     dealFindFirst.mockResolvedValue(workspaceRecord());
     transaction.deal.updateMany.mockResolvedValue({ count: 1 });
+    transaction.dealVersion.updateMany.mockResolvedValue({ count: 1 });
+    transaction.dealApproval.upsert.mockResolvedValue({
+      approvedAt: new Date("2026-08-31T12:00:00.000Z"),
+      id: "80000000-0000-4000-8000-000000000001",
+    });
     transaction.dealInvitation.findFirst.mockResolvedValue(null);
     transaction.dealInvitation.updateMany.mockResolvedValue({ count: 0 });
     transaction.dealInvitation.create.mockImplementation(async ({ data }) => ({
@@ -237,6 +243,39 @@ describe("DealInvitationsService", () => {
     ).rejects.toBeInstanceOf(ConflictException);
     expect(transaction.dealParty.create).not.toHaveBeenCalled();
   });
+
+  it("freezes an exact canonical snapshot before READY_TO_SIGN", async () => {
+    dealFindFirst.mockResolvedValue(workspaceRecord({
+      parties: [initiatorParty(), counterpartyParty()],
+      status: DealStatus.TERMS_REVIEW,
+      versions: [{
+        ...workspaceRecord().versions[0],
+        approvals: [{
+          approvedAt: new Date("2026-08-31T11:59:00.000Z"),
+          id: "81000000-0000-4000-8000-000000000001",
+          partyId: initiatorParty().id,
+          status: "APPROVED",
+        }],
+      }],
+    }));
+
+    const result = await service.approve(counterpartyId, dealId, versionId, {
+      expectedDealUpdatedAt: "2026-08-31T12:00:00.000Z",
+    });
+
+    expect(result.dealStatus).toBe(DealStatus.READY_TO_SIGN);
+    expect(transaction.dealVersion.updateMany).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        contractNumber: expect.stringMatching(/^МК-\d{8}-[A-F0-9]{8}-V1$/),
+        frozenSnapshot: expect.objectContaining({ schemaVersion: "deal-signature-v1" }),
+        snapshotHash: expect.stringMatching(/^[a-f0-9]{64}$/),
+      }),
+      where: { frozenAt: null, id: versionId },
+    });
+    expect(transaction.auditEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ eventType: "DEAL_VERSION_FROZEN" }),
+    });
+  });
 });
 
 function workspaceRecord(overrides: Record<string, unknown> = {}) {
@@ -279,8 +318,11 @@ function initiatorParty() {
     role: DealPartyRole.INITIATOR,
     user: {
       maxAccount: { firstName: "Артур", lastName: "Балашев", maxUserId: "111" },
-      phones: [{ id: "phone-1" }],
-      profile: { firstName: "Артур", lastName: "Балашев" },
+      phones: [{ e164: "+79990000001", id: "phone-1" }],
+      profile: {
+        addressValue: "г. Москва", birthDate: null, email: null,
+        firstName: "Артур", lastName: "Балашев", middleName: null,
+      },
     },
     userId: initiatorId,
   };
@@ -292,8 +334,11 @@ function counterpartyParty() {
     role: DealPartyRole.COUNTERPARTY,
     user: {
       maxAccount: { firstName: "Мария", lastName: "Иванова", maxUserId: "222" },
-      phones: [{ id: "phone-2" }],
-      profile: { firstName: "Мария", lastName: "Иванова" },
+      phones: [{ e164: "+79990000002", id: "phone-2" }],
+      profile: {
+        addressValue: "г. Москва", birthDate: null, email: null,
+        firstName: "Мария", lastName: "Иванова", middleName: null,
+      },
     },
     userId: counterpartyId,
   };

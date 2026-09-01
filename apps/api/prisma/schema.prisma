@@ -447,6 +447,10 @@ model DealVersion {
   terms              Json
   contractDraft      Json?    @map("contract_draft")
   changeSummary      String?  @map("change_summary") @db.VarChar(500)
+  frozenSnapshot     Json?    @map("frozen_snapshot")
+  snapshotHash       String?  @map("snapshot_hash") @db.Char(64)
+  frozenAt           DateTime? @map("frozen_at") @db.Timestamptz(3)
+  contractNumber     String?  @unique(map: "deal_versions_contract_number_key") @map("contract_number") @db.VarChar(64)
   createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 

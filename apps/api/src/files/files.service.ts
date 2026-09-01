@@ -14,9 +14,11 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import {
+  DealApprovalStatus,
   DealFileCategory,
   DealFileReviewStatus,
   DealFileVisibility,
+  DealStatus,
   Prisma,
   TrustCheckSource,
   TrustCheckStatus,
@@ -154,6 +156,7 @@ export class FilesService {
           },
         });
         await syncRequiredFilesTrust(transaction, userId, dealId, deal.templateVersion.documentRequirements);
+        await syncDealDocumentsStatus(transaction, dealId, userId);
         return record;
       });
       return toFileResponse(created, userId);
@@ -253,6 +256,7 @@ export class FilesService {
         },
       });
       await syncInternalReviewTrust(transaction, file.ownerUserId, file.dealId, file.reviewStatus);
+      await syncDealReviewStatus(transaction, file.dealId, reviewerUserId);
       return toAdminFileReviewItem(file);
     });
   }
@@ -324,6 +328,130 @@ async function syncInternalReviewTrust(
       status,
     },
     where: { userId_type: { type: TrustCheckType.INTERNAL_REVIEW, userId } },
+  });
+}
+
+async function syncDealDocumentsStatus(
+  transaction: Prisma.TransactionClient,
+  dealId: string,
+  actorUserId: string,
+): Promise<void> {
+  const deal = await transaction.deal.findUnique({
+    select: {
+      parties: { select: { userId: true } },
+      status: true,
+      templateVersion: {
+        select: { documentRequirements: { select: { id: true, required: true } } },
+      },
+    },
+    where: { id: dealId },
+  });
+  if (!deal || deal.status !== DealStatus.DOCUMENTS_PENDING) return;
+  const requiredIds = deal.templateVersion.documentRequirements
+    .filter(({ required }) => required)
+    .map(({ id }) => id);
+  const uploads = await transaction.dealFile.findMany({
+    select: { ownerUserId: true, requirementId: true },
+    where: {
+      category: DealFileCategory.REQUIREMENT,
+      dealId,
+      requirementId: { in: requiredIds },
+    },
+  });
+  const complete = deal.parties.every((party) =>
+    requiredIds.every((requirementId) =>
+      uploads.some((file) =>
+        file.ownerUserId === party.userId && file.requirementId === requirementId,
+      ),
+    ),
+  );
+  if (!complete) return;
+  const updated = await transaction.deal.updateMany({
+    data: { status: DealStatus.DOCUMENTS_REVIEW, updatedAt: new Date() },
+    where: { id: dealId, status: DealStatus.DOCUMENTS_PENDING },
+  });
+  if (updated.count !== 1) return;
+  await transaction.auditEvent.create({
+    data: {
+      actorUserId,
+      entityId: dealId,
+      entityType: "Deal",
+      eventType: "DEAL_DOCUMENTS_SUBMITTED",
+      metadata: { requiredDocumentsPerParty: requiredIds.length },
+    },
+  });
+}
+
+async function syncDealReviewStatus(
+  transaction: Prisma.TransactionClient,
+  dealId: string,
+  reviewerUserId: string,
+): Promise<void> {
+  const deal = await transaction.deal.findUnique({
+    select: {
+      parties: { select: { userId: true } },
+      status: true,
+      templateVersion: {
+        select: { documentRequirements: { select: { id: true, required: true } } },
+      },
+      versions: {
+        orderBy: { versionNumber: "desc" },
+        select: { id: true },
+        take: 1,
+      },
+    },
+    where: { id: dealId },
+  });
+  if (
+    !deal ||
+    (deal.status !== DealStatus.DOCUMENTS_PENDING &&
+      deal.status !== DealStatus.DOCUMENTS_REVIEW)
+  ) return;
+  const version = deal.versions[0];
+  if (!version) return;
+  const requiredIds = deal.templateVersion.documentRequirements
+    .filter(({ required }) => required)
+    .map(({ id }) => id);
+  const accepted = await transaction.dealFile.findMany({
+    select: { ownerUserId: true, requirementId: true },
+    where: {
+      dealId,
+      requirementId: { in: requiredIds },
+      reviewStatus: DealFileReviewStatus.ACCEPTED,
+    },
+  });
+  const complete = deal.parties.every((party) =>
+    requiredIds.every((requirementId) =>
+      accepted.some((file) =>
+        file.ownerUserId === party.userId && file.requirementId === requirementId,
+      ),
+    ),
+  );
+  if (!complete) return;
+  const now = new Date();
+  const updated = await transaction.deal.updateMany({
+    data: { status: DealStatus.TERMS_REVIEW, updatedAt: now },
+    where: {
+      id: dealId,
+      status: { in: [DealStatus.DOCUMENTS_PENDING, DealStatus.DOCUMENTS_REVIEW] },
+    },
+  });
+  if (updated.count !== 1) return;
+  const reset = await transaction.dealApproval.updateMany({
+    data: { invalidatedAt: now, status: DealApprovalStatus.REVOKED },
+    where: { dealVersionId: version.id, status: DealApprovalStatus.APPROVED },
+  });
+  await transaction.auditEvent.create({
+    data: {
+      actorUserId: reviewerUserId,
+      entityId: dealId,
+      entityType: "Deal",
+      eventType: "DEAL_DOCUMENTS_APPROVED",
+      metadata: {
+        resetApprovals: reset.count,
+        versionId: version.id,
+      },
+    },
   });
 }
 

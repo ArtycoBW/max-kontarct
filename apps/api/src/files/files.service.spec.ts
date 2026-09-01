@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await, @typescript-eslint/unbound-method */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await, @typescript-eslint/unbound-method */
 import { ConfigService } from "@nestjs/config";
 import { BadRequestException, NotFoundException } from "@nestjs/common";
-import { DealFileVisibility } from "@prisma/client";
+import { DealFileVisibility, DealStatus } from "@prisma/client";
 
 import type { StorageService } from "../storage/storage.service";
 import { FilesService, resolveFileVisibility } from "./files.service";
@@ -20,7 +20,11 @@ describe("FilesService ACL", () => {
     prisma = {
       $transaction: jest.fn(async (callback: (transaction: any) => Promise<unknown>) => callback(prisma)),
       auditEvent: { create: jest.fn() },
-      deal: { findUnique: jest.fn(async () => deal([USER_ID, OTHER_USER_ID])) },
+      deal: {
+        findUnique: jest.fn(async () => deal([USER_ID, OTHER_USER_ID])),
+        updateMany: jest.fn(async () => ({ count: 1 })),
+      },
+      dealApproval: { updateMany: jest.fn(async () => ({ count: 2 })) },
       dealFile: {
         findFirst: jest.fn(),
         findMany: jest.fn(async () => []),
@@ -125,6 +129,45 @@ describe("FilesService ACL", () => {
       .resolves.toMatchObject({ reviewStatus: "ACCEPTED" });
     expect(prisma.auditEvent.create).toHaveBeenCalled();
     expect(prisma.userTrustCheck.upsert).toHaveBeenCalled();
+  });
+
+  it("opens repeated terms approval after every required document is accepted", async () => {
+    const reviewedAt = new Date("2026-09-01T12:00:00.000Z");
+    const requirementId = "40000000-0000-4000-8000-000000000001";
+    prisma.dealFile.findUnique.mockResolvedValue({ id: FILE_ID });
+    prisma.dealFile.update.mockResolvedValue({
+      deal: { title: "Аренда" }, dealId: DEAL_ID, id: FILE_ID,
+      mimeType: "application/pdf", originalName: "document.pdf",
+      owner: { maxAccount: null, profile: { firstName: "Иван", lastName: "Иванов" } },
+      ownerUserId: OTHER_USER_ID, requirement: { title: "Документ" },
+      requirementId, reviewComment: null, reviewedAt, reviewStatus: "ACCEPTED",
+      sizeBytes: 10n, uploadedAt: reviewedAt, visibility: "DEAL_PARTICIPANTS",
+    });
+    prisma.deal.findUnique
+      .mockResolvedValueOnce({
+        templateVersion: { documentRequirements: [{ id: requirementId, required: true }] },
+      })
+      .mockResolvedValueOnce({
+        parties: [{ userId: USER_ID }, { userId: OTHER_USER_ID }],
+        status: DealStatus.DOCUMENTS_REVIEW,
+        templateVersion: { documentRequirements: [{ id: requirementId, required: true }] },
+        versions: [{ id: "50000000-0000-4000-8000-000000000001" }],
+      });
+    prisma.dealFile.findMany
+      .mockResolvedValueOnce([{ requirementId }])
+      .mockResolvedValueOnce([
+        { ownerUserId: USER_ID, requirementId },
+        { ownerUserId: OTHER_USER_ID, requirementId },
+      ]);
+
+    await service.review(USER_ID, FILE_ID, { comment: null, status: "ACCEPTED" });
+
+    expect(prisma.deal.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: DealStatus.TERMS_REVIEW }),
+    }));
+    expect(prisma.dealApproval.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: "REVOKED" }),
+    }));
   });
 });
 
