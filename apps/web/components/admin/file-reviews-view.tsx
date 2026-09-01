@@ -70,7 +70,13 @@ export function AdminFileReviewsView({ canReview }: { canReview: boolean }) {
               <b className={`admin-review-status is-${file.reviewStatus.toLowerCase()}`}>{reviewStatusLabel(file.reviewStatus)}</b>
             </header>
             <div className="admin-file-meta"><span>{formatBytes(file.sizeBytes)}</span><span>{mimeTypeLabel(file.mimeType)}</span><span>{file.visibility === "OWNER_ONLY" ? "Только владелец" : "Участники сделки"}</span></div>
-            {file.reviewComment ? <p><CircleAlert size={14} /> {file.reviewComment}</p> : null}
+            <div
+              aria-label={file.reviewComment ? "Комментарий к проверке" : undefined}
+              aria-hidden={file.reviewComment ? undefined : true}
+              className={`admin-file-review-comment${file.reviewComment ? "" : " is-empty"}`}
+            >
+              {file.reviewComment ? <><CircleAlert size={14} /><span>{file.reviewComment}</span></> : null}
+            </div>
             <footer>
               {canReview ? <Button asChild variant="outline"><a href={getAdminFileDownloadUrl(file.id)}><Download size={15} /> Скачать</a></Button> : null}
               {canReview ? <Button onClick={() => { setSelected(file); setComment(file.reviewComment ?? ""); }}><ShieldCheck size={15} /> Проверить</Button> : <small>Только администратор может открыть файл и принять решение.</small>}
