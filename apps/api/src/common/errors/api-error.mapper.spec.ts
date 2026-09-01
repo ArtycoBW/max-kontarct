@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
+import { MulterError } from "multer";
 
 import { mapApiError } from "./api-error.mapper";
 
@@ -55,6 +56,15 @@ describe("mapApiError", () => {
       details: null,
       message: "Внутренняя ошибка сервиса",
       status: 500,
+    });
+  });
+
+  it("maps an oversized multipart upload to a precise safe error", () => {
+    expect(mapApiError(new MulterError("LIMIT_FILE_SIZE"))).toEqual({
+      code: "FILE_TOO_LARGE",
+      details: null,
+      message: "Файл превышает допустимый размер",
+      status: 413,
     });
   });
 });

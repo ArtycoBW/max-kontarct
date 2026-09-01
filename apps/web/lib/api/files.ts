@@ -8,6 +8,38 @@ import { ApiError, apiRequest } from "./client";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
 
+export interface UploadCandidateIssue {
+  description: string;
+  title: string;
+}
+
+export function validateUploadCandidate(
+  file: Pick<File, "name" | "size" | "type">,
+  maxBytes: number,
+  allowedMimeTypes: readonly string[],
+): UploadCandidateIssue | null {
+  if (file.size === 0) {
+    return {
+      description: "Выберите непустой документ или изображение.",
+      title: "Файл пустой",
+    };
+  }
+  if (file.size > maxBytes) {
+    return {
+      description: `Размер «${file.name}» — ${formatMegabytes(file.size)}. Выберите файл меньшего размера.`,
+      title: `Файл больше ${formatMegabytes(maxBytes)}`,
+    };
+  }
+  const declaredType = file.type === "image/jpg" ? "image/jpeg" : file.type;
+  if (!allowedMimeTypes.includes(declaredType)) {
+    return {
+      description: "Можно загрузить PDF, JPEG, PNG или WebP.",
+      title: "Неподдерживаемый формат файла",
+    };
+  }
+  return null;
+}
+
 export function getDealDocuments(dealId: string): Promise<DealDocumentsWorkspaceResponse> {
   return apiRequest(`deals/${encodeURIComponent(dealId)}/files`);
 }
@@ -38,7 +70,7 @@ export function uploadDealFile(
       message: "Не удалось загрузить файл. Проверьте соединение.",
     }));
     request.onload = () => {
-      const body = parseBody(request.responseText);
+      const body = normalizeUploadError(request.status, parseBody(request.responseText));
       if (request.status < 200 || request.status >= 300) {
         reject(new ApiError(request.status, body));
         return;
@@ -52,6 +84,25 @@ export function uploadDealFile(
     form.append("file", file);
     request.send(form);
   });
+}
+
+function normalizeUploadError(
+  status: number,
+  body: { code?: string; details?: unknown; message?: string },
+): { code?: string; details?: unknown; message?: string } {
+  if (body.message) return body;
+  if (status === 413) {
+    return {
+      code: "FILE_TOO_LARGE",
+      message: "Файл превышает допустимый размер 20 МБ",
+    };
+  }
+  return body;
+}
+
+function formatMegabytes(bytes: number): string {
+  const megabytes = bytes / 1024 / 1024;
+  return `${Number.isInteger(megabytes) ? megabytes : megabytes.toFixed(1)} МБ`;
 }
 
 function parseBody(value: string): { code?: string; details?: unknown; message?: string } {

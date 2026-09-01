@@ -69,7 +69,7 @@ export function AdminFileReviewsView({ canReview }: { canReview: boolean }) {
               <i><small>{file.requirementTitle ?? "Материал сделки"}</small><strong>{file.originalName}</strong><em>{file.dealTitle} · {file.ownerDisplayName}</em></i>
               <b className={`admin-review-status is-${file.reviewStatus.toLowerCase()}`}>{reviewStatusLabel(file.reviewStatus)}</b>
             </header>
-            <div className="admin-file-meta"><span>{formatBytes(file.sizeBytes)}</span><span>{file.mimeType}</span><span>{file.visibility === "OWNER_ONLY" ? "Только владелец" : "Участники сделки"}</span></div>
+            <div className="admin-file-meta"><span>{formatBytes(file.sizeBytes)}</span><span>{mimeTypeLabel(file.mimeType)}</span><span>{file.visibility === "OWNER_ONLY" ? "Только владелец" : "Участники сделки"}</span></div>
             {file.reviewComment ? <p><CircleAlert size={14} /> {file.reviewComment}</p> : null}
             <footer>
               {canReview ? <Button asChild variant="outline"><a href={getAdminFileDownloadUrl(file.id)}><Download size={15} /> Скачать</a></Button> : null}
@@ -103,4 +103,13 @@ function reviewStatusLabel(status: DealFileReviewStatus): string {
 
 function formatBytes(bytes: number): string {
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} МБ` : `${Math.ceil(bytes / 1024)} КБ`;
+}
+
+function mimeTypeLabel(mimeType: string): string {
+  return {
+    "application/pdf": "Документ PDF",
+    "image/jpeg": "Изображение JPEG",
+    "image/png": "Изображение PNG",
+    "image/webp": "Изображение WebP",
+  }[mimeType] ?? "Файл";
 }

@@ -31,6 +31,7 @@ import {
   getDealDocuments,
   getDealFileDownloadUrl,
   uploadDealFile,
+  validateUploadCandidate,
 } from "@/lib/api/files";
 import { queryKeys } from "@/lib/api/query-keys";
 
@@ -87,6 +88,13 @@ function DealDocuments({ dealId, onBack }: { dealId: string; onBack: () => void 
     category: DealFileCategory,
     requirement?: DealDocumentRequirementResponse,
   ) => {
+    const candidateIssue = workspace.data
+      ? validateUploadCandidate(file, workspace.data.maxUploadBytes, workspace.data.allowedMimeTypes)
+      : null;
+    if (candidateIssue) {
+      toast.error(candidateIssue.title, { description: candidateIssue.description });
+      return;
+    }
     setSuccess(null);
     setUpload({ label: requirement?.title ?? "Материал сделки", progress: 0 });
     try {

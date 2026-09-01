@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus } from "@nestjs/common";
+import { MulterError } from "multer";
 
 export interface MappedApiError {
   code: string;
@@ -52,6 +53,22 @@ function defaultForStatus(status: number): Pick<MappedApiError, "code" | "messag
 }
 
 export function mapApiError(exception: unknown): MappedApiError {
+  if (exception instanceof MulterError) {
+    if (exception.code === "LIMIT_FILE_SIZE") {
+      return {
+        code: "FILE_TOO_LARGE",
+        details: null,
+        message: "Файл превышает допустимый размер",
+        status: HttpStatus.PAYLOAD_TOO_LARGE,
+      };
+    }
+    return {
+      code: "FILE_UPLOAD_INVALID",
+      details: null,
+      message: "Не удалось обработать загружаемый файл",
+      status: HttpStatus.BAD_REQUEST,
+    };
+  }
   if (!(exception instanceof HttpException)) {
     return {
       code: "INTERNAL_SERVER_ERROR",

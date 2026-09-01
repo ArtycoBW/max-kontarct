@@ -14,6 +14,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -91,9 +92,16 @@ export function DealWorkspaceScreen({
         expectedDealUpdatedAt: workspace.data.updatedAt,
       });
     },
-    onSuccess: () => {
-      setNotice("Вы согласовали текущую версию условий.");
-      void refreshWorkspace(queryClient, dealId);
+    onError: (error: Error) => {
+      const message = error instanceof ApiError
+        ? error.message
+        : "Не удалось сохранить согласование. Повторите попытку.";
+      toast.error("Согласование не сохранено", { description: message });
+    },
+    onSuccess: async (result) => {
+      setNotice(`Версия согласована · ${result.totalApproved} из ${workspace.data?.approvals.required ?? result.totalApproved}`);
+      toast.success("Согласование сохранено");
+      await refreshWorkspace(queryClient, dealId);
     },
   });
 
@@ -114,9 +122,11 @@ export function DealWorkspaceScreen({
   const currentInvitation = issuedInvitation ?? deal.invitation;
   const canApprove =
     deal.status === "COUNTERPARTY_JOINED" || deal.status === "TERMS_REVIEW";
-  const profileRequired =
-    deal.currentUserRole === "COUNTERPARTY" &&
-    deal.counterparty?.profileCompleted === false;
+  const currentParty = deal.currentUserRole === "COUNTERPARTY"
+    ? deal.counterparty
+    : deal.initiator;
+  const profileRequired = currentParty?.profileCompleted === false;
+  const versionApproved = deal.approvals.currentUserApproved || approval.isSuccess;
   const visibleParty =
     deal.currentUserRole === "COUNTERPARTY" ? deal.initiator : deal.counterparty;
 
@@ -227,20 +237,31 @@ export function DealWorkspaceScreen({
 
       {profileRequired ? (
         <Card className="form-message is-warning">
-          <strong>Заполните данные контрагента</strong>
-          <span>Они нужны для согласования версии и будущих документов.</span>
+          <strong>Сначала заполните профиль</strong>
+          <span>Фамилия, имя и основные данные нужны для согласования версии и подготовки документов.</span>
           <Button onClick={onOpenProfile}>Заполнить профиль</Button>
+        </Card>
+      ) : null}
+
+      {approval.error && !profileRequired ? (
+        <Card className="form-message is-error" role="alert">
+          <strong>Согласование не сохранено</strong>
+          <span>{approval.error instanceof ApiError ? approval.error.message : "Повторите попытку"}</span>
         </Card>
       ) : null}
 
       {canApprove && !profileRequired ? (
         <Button
           className="full-width"
-          disabled={deal.approvals.currentUserApproved || approval.isPending}
+          disabled={versionApproved || approval.isPending}
           onClick={() => approval.mutate()}
         >
           <Check size={18} />
-          {deal.approvals.currentUserApproved ? "Версия согласована" : `Согласовать версию ${deal.versionNumber}`}
+          {approval.isPending
+            ? "Сохраняем согласование…"
+            : versionApproved
+              ? "Версия согласована"
+              : `Согласовать версию ${deal.versionNumber}`}
         </Button>
       ) : null}
 

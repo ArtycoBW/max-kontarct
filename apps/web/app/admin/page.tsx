@@ -147,7 +147,7 @@ export default function AdminPage() {
         </Button>
       </aside>
 
-      <section className="admin-content">
+      <section className={`admin-content${activeTab === "files" ? " is-files" : ""}`}>
         <header className="admin-header">
           <div>
             <p>{tabCopy(activeTab)}</p>

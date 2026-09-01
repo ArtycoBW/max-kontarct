@@ -20,9 +20,17 @@ export function validateUploadedFile(
   if (!mimeType || mimeType !== declared) {
     throw invalidFile("Формат файла не соответствует его содержимому");
   }
-  const originalName = sanitizeFilename(file.originalname);
+  const originalName = sanitizeFilename(normalizeUploadedFilename(file.originalname));
   if (!originalName) throw invalidFile("У файла должно быть корректное название");
   return { mimeType, originalName };
+}
+
+export function normalizeUploadedFilename(value: string): string {
+  const decoded = Buffer.from(value, "latin1").toString("utf8");
+  if (decoded.includes("\uFFFD")) return value.normalize("NFC");
+  const currentCyrillic = countCyrillic(value);
+  const decodedCyrillic = countCyrillic(decoded);
+  return (decodedCyrillic > currentCyrillic ? decoded : value).normalize("NFC");
 }
 
 export function detectMimeType(body: Buffer): string | null {
@@ -53,6 +61,10 @@ function sanitizeFilename(value: string): string {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 255);
+}
+
+function countCyrillic(value: string): number {
+  return [...value].filter((character) => /[А-Яа-яЁё]/.test(character)).length;
 }
 
 function invalidFile(message: string): BadRequestException {

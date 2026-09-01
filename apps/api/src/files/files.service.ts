@@ -30,7 +30,11 @@ import {
   type StorageService,
   type StoredObject,
 } from "../storage/storage.service";
-import { ALLOWED_FILE_MIME_TYPES, validateUploadedFile } from "./file-validation";
+import {
+  ALLOWED_FILE_MIME_TYPES,
+  normalizeUploadedFilename,
+  validateUploadedFile,
+} from "./file-validation";
 
 const PRIVATE_REQUIREMENT_PATTERN = /(passport|identity|personal|удостовер|паспорт)/i;
 
@@ -170,7 +174,7 @@ export class FilesService {
       throw fileNotFound();
     }
     return {
-      file: { mimeType: file.mimeType, originalName: file.originalName },
+      file: { mimeType: file.mimeType, originalName: normalizeUploadedFilename(file.originalName) },
       object: await this.storage.getObject(file.objectKey),
     };
   }
@@ -198,7 +202,7 @@ export class FilesService {
     const file = await this.prisma.dealFile.findUnique({ where: { id: fileId } });
     if (!file) throw fileNotFound();
     return {
-      file: { mimeType: file.mimeType, originalName: file.originalName },
+      file: { mimeType: file.mimeType, originalName: normalizeUploadedFilename(file.originalName) },
       object: await this.storage.getObject(file.objectKey),
     };
   }
@@ -392,7 +396,7 @@ function toFileResponse(
     category: file.category,
     id: file.id,
     mimeType: file.mimeType,
-    originalName: file.originalName,
+    originalName: normalizeUploadedFilename(file.originalName),
     owner: {
       displayName: [person?.firstName, person?.lastName].filter(Boolean).join(" ") || "Участник сделки",
       isCurrentUser: file.ownerUserId === currentUserId,
@@ -432,7 +436,7 @@ function toAdminFileReviewItem(file: {
     dealTitle: file.deal.title,
     id: file.id,
     mimeType: file.mimeType,
-    originalName: file.originalName,
+    originalName: normalizeUploadedFilename(file.originalName),
     ownerDisplayName: [person?.firstName, person?.lastName].filter(Boolean).join(" ") || "Пользователь MAX",
     requirementTitle: file.requirement?.title ?? null,
     reviewComment: file.reviewComment,
