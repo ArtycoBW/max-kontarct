@@ -36,6 +36,7 @@ const DEVELOPMENT_DEFAULTS = {
   MINIO_ENDPOINT: "http://localhost:9100",
   MINIO_REGION: "ru-central1",
   MINIO_SECRET_KEY: "max_contract_dev_secret",
+  S3_FORCE_PATH_STYLE: true,
   PUBLIC_WEB_URL: "http://localhost:3000",
   REDIS_URL: "redis://localhost:6381",
   THROTTLE_LIMIT: 120,
@@ -56,10 +57,6 @@ const REQUIRED_PRODUCTION_KEYS = [
   "CONSENT_STATUS_NOTIFICATIONS_VERSION",
   "CONSENT_TERMS_VERSION",
   "DATABASE_URL",
-  "MINIO_ACCESS_KEY",
-  "MINIO_BUCKET",
-  "MINIO_ENDPOINT",
-  "MINIO_SECRET_KEY",
   "MAX_BOT_TOKEN",
   "MAX_WEBHOOK_SECRET",
   "PUBLIC_WEB_URL",
@@ -147,6 +144,18 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
 
     if (missing.length > 0) {
       throw new Error(`Missing production environment variables: ${missing.join(", ")}`);
+    }
+
+    const storageMissing = [
+      ["S3_ACCESS_KEY", "MINIO_ACCESS_KEY", "MINIO_ROOT_USER"],
+      ["S3_SECRET_KEY", "MINIO_SECRET_KEY", "MINIO_ROOT_PASSWORD"],
+      ["S3_BUCKET", "MINIO_BUCKET"],
+      ["S3_ENDPOINT", "MINIO_ENDPOINT"],
+    ].filter((aliases) => !aliases.some((key) =>
+      typeof input[key] === "string" && input[key].trim().length > 0,
+    ));
+    if (storageMissing.length > 0) {
+      throw new Error("Missing production S3 storage variables");
     }
   }
 
@@ -342,6 +351,36 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
     ),
     MINIO_SECRET_KEY: readString(
       input.MINIO_SECRET_KEY ?? input.MINIO_ROOT_PASSWORD,
+      DEVELOPMENT_DEFAULTS.MINIO_SECRET_KEY,
+    ),
+    S3_ACCESS_KEY: readString(
+      input.S3_ACCESS_KEY ?? input.MINIO_ACCESS_KEY ?? input.MINIO_ROOT_USER,
+      DEVELOPMENT_DEFAULTS.MINIO_ACCESS_KEY,
+    ),
+    S3_AUTO_CREATE_BUCKET: parseBoolean(
+      input.S3_AUTO_CREATE_BUCKET ?? input.MINIO_AUTO_CREATE_BUCKET,
+      nodeEnv !== "production" && DEVELOPMENT_DEFAULTS.MINIO_AUTO_CREATE_BUCKET,
+      "S3_AUTO_CREATE_BUCKET",
+    ),
+    S3_BUCKET: readString(
+      input.S3_BUCKET ?? input.MINIO_BUCKET,
+      DEVELOPMENT_DEFAULTS.MINIO_BUCKET,
+    ),
+    S3_ENDPOINT: readString(
+      input.S3_ENDPOINT ?? input.MINIO_ENDPOINT,
+      DEVELOPMENT_DEFAULTS.MINIO_ENDPOINT,
+    ),
+    S3_FORCE_PATH_STYLE: parseBoolean(
+      input.S3_FORCE_PATH_STYLE,
+      DEVELOPMENT_DEFAULTS.S3_FORCE_PATH_STYLE,
+      "S3_FORCE_PATH_STYLE",
+    ),
+    S3_REGION: readString(
+      input.S3_REGION ?? input.MINIO_REGION,
+      DEVELOPMENT_DEFAULTS.MINIO_REGION,
+    ),
+    S3_SECRET_KEY: readString(
+      input.S3_SECRET_KEY ?? input.MINIO_SECRET_KEY ?? input.MINIO_ROOT_PASSWORD,
       DEVELOPMENT_DEFAULTS.MINIO_SECRET_KEY,
     ),
     NODE_ENV: nodeEnv,

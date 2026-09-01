@@ -1,6 +1,6 @@
 import { Global, Module } from "@nestjs/common";
 
-import { MinioStorageService } from "./minio-storage.service";
+import { S3StorageService } from "./s3-storage.service";
 import { STORAGE_SERVICE } from "./storage.service";
 
 @Global()
@@ -9,7 +9,7 @@ import { STORAGE_SERVICE } from "./storage.service";
   providers: [
     {
       provide: STORAGE_SERVICE,
-      useClass: MinioStorageService,
+      useClass: S3StorageService,
     },
   ],
 })

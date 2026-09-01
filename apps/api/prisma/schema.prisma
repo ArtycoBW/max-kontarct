@@ -121,6 +121,20 @@ enum TrustCheckSource {
   @@map("trust_check_source")
 }
 
+enum DealFileCategory {
+  REQUIREMENT
+  EVIDENCE
+
+  @@map("deal_file_category")
+}
+
+enum DealFileVisibility {
+  OWNER_ONLY
+  DEAL_PARTICIPANTS
+
+  @@map("deal_file_visibility")
+}
+
 model User {
   id         String    @id @default(uuid()) @db.Uuid
   role       UserRole  @default(USER)
@@ -141,6 +155,7 @@ model User {
   profile        UserProfile?
   sessions       UserSession[]
   trustChecks    UserTrustCheck[]
+  dealFiles      DealFile[]       @relation("DealFileOwner")
 
   @@index([role], map: "users_role_idx")
   @@map("users")
@@ -363,6 +378,7 @@ model Deal {
   parties         DealParty[]
   versions        DealVersion[]
   invitations     DealInvitation[]
+  files           DealFile[]
 
   @@index([initiatorUserId, status, updatedAt], map: "deals_initiator_status_updated_idx")
   @@index([status, updatedAt], map: "deals_status_updated_idx")
@@ -457,6 +473,33 @@ model DealApproval {
   @@map("deal_approvals")
 }
 
+model DealFile {
+  id              String             @id @default(uuid()) @db.Uuid
+  dealId          String             @map("deal_id") @db.Uuid
+  ownerUserId     String             @map("owner_user_id") @db.Uuid
+  requirementId   String?            @map("requirement_id") @db.Uuid
+  category        DealFileCategory
+  visibility      DealFileVisibility
+  bucket          String             @db.VarChar(128)
+  objectKey       String             @unique(map: "deal_files_object_key_key") @map("object_key") @db.VarChar(255)
+  originalName    String             @map("original_name") @db.VarChar(255)
+  mimeType        String             @map("mime_type") @db.VarChar(100)
+  sizeBytes       BigInt             @map("size_bytes")
+  sha256          String             @db.Char(64)
+  uploadedAt      DateTime           @default(now()) @map("uploaded_at") @db.Timestamptz(3)
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  deal        Deal                         @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  owner       User                         @relation("DealFileOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  requirement TemplateDocumentRequirement? @relation(fields: [requirementId], references: [id], onDelete: Restrict)
+
+  @@index([dealId, category, uploadedAt], map: "deal_files_deal_category_uploaded_idx")
+  @@index([ownerUserId, uploadedAt], map: "deal_files_owner_uploaded_idx")
+  @@index([requirementId], map: "deal_files_requirement_id_idx")
+  @@map("deal_files")
+}
+
 model TemplateDocumentRequirement {
   id                String   @id @default(uuid()) @db.Uuid
   templateVersionId String   @map("template_version_id") @db.Uuid
@@ -469,6 +512,7 @@ model TemplateDocumentRequirement {
   updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   templateVersion ContractTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Cascade)
+  files           DealFile[]
 
   @@unique([templateVersionId, key], map: "template_document_requirements_version_key_key")
   @@index([templateVersionId, sortOrder], map: "template_document_requirements_version_sort_idx")
