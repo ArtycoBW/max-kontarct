@@ -18,6 +18,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { SigningFlow } from "@/components/signing/signing-flow";
 import { ApiError } from "@/lib/api/client";
 import { startDealAgreement } from "@/lib/api/deals";
 import {
@@ -129,6 +130,7 @@ export function DealWorkspaceScreen({
   const versionApproved = deal.approvals.currentUserApproved || approval.isSuccess;
   const visibleParty =
     deal.currentUserRole === "COUNTERPARTY" ? deal.initiator : deal.counterparty;
+  const signingVisible = ["READY_TO_SIGN", "SIGNED_BY_ONE", "SIGNED", "COMPLETED"].includes(deal.status);
 
   const shareInvitation = async () => {
     if (!issuedInvitation?.shareUrl || !issuedInvitation.shareText) return;
@@ -171,7 +173,9 @@ export function DealWorkspaceScreen({
 
       {notice ? <p className="deal-workspace-notice" role="status"><Check size={15} />{notice}</p> : null}
 
-      <section className="deal-workspace-section">
+      {signingVisible ? <SigningFlow dealId={dealId} /> : null}
+
+      {!signingVisible ? <section className="deal-workspace-section">
         <h2>Стороны и приглашение</h2>
         {visibleParty ? (
           <Card className="deal-party-card">
@@ -214,9 +218,9 @@ export function DealWorkspaceScreen({
             Отозвать приглашение
           </Button>
         ) : null}
-      </section>
+      </section> : null}
 
-      <section className="deal-workspace-section">
+      {!signingVisible ? <section className="deal-workspace-section">
         <div className="deal-workspace-section-heading">
           <h2>Условия сделки</h2>
           <span>{deal.approvals.totalApproved} из {deal.approvals.required} согласовано</span>
@@ -233,7 +237,7 @@ export function DealWorkspaceScreen({
             ))}
           </Card>
         ) : <Card className="form-message"><strong>Проект договора готовится</strong></Card>}
-      </section>
+      </section> : null}
 
       {profileRequired ? (
         <Card className="form-message is-warning">

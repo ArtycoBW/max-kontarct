@@ -25,6 +25,8 @@ export const queryKeys = {
     all: ["deals"] as const,
     detail: (dealId: string) => [...queryKeys.deals.all, "detail", dealId] as const,
     list: () => [...queryKeys.deals.all, "list"] as const,
+    signing: (dealId: string) =>
+      [...queryKeys.deals.all, "signing", dealId] as const,
     versions: (dealId: string) =>
       [...queryKeys.deals.all, "versions", dealId] as const,
     workspace: (dealId: string) =>

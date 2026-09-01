@@ -186,6 +186,51 @@ export interface DealApprovalResponse {
   versionNumber: number;
 }
 
+export interface PepAgreementResponse {
+  documentHash: string;
+  paragraphs: string[];
+  title: string;
+  version: string;
+}
+
+export interface DealSigningPartyStatus {
+  displayName: string;
+  isCurrentUser: boolean;
+  role: DealPartyRole;
+  signedAt: string | null;
+}
+
+export interface DealSigningStateResponse {
+  contractNumber: string;
+  currentUserSigned: boolean;
+  dealId: string;
+  documentHash: string;
+  parties: DealSigningPartyStatus[];
+  pepAgreement: PepAgreementResponse;
+  requiredSignatures: number;
+  status: DealStatus;
+  totalSignatures: number;
+  versionId: string;
+  versionNumber: number;
+}
+
+export interface IssueSigningOtpRequest {
+  pepAccepted: true;
+  versionId: string;
+}
+
+export interface IssueSigningOtpResponse {
+  channel: "FAKE" | "MAX_TEST" | "SMSC";
+  expiresAt: string;
+  maskedPhone: string;
+  resendAvailableAt: string;
+}
+
+export interface ConfirmDealSignatureRequest {
+  code: string;
+  versionId: string;
+}
+
 export interface DealListResponse {
   items: DealListItem[];
   total: number;

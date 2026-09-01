@@ -4734,6 +4734,33 @@ button.service-status {
 .deal-contract-preview h3 { margin: 14px 0 6px; font-size: 12px; }
 .deal-contract-preview p { margin: 0 0 7px; color: var(--app-muted); font-size: 10px; line-height: 1.5; }
 
+.signing-flow { display: grid; gap: 15px; padding-bottom: 4px; }
+.signing-state-icon { display: grid; width: 68px; height: 68px; margin: 5px auto 0; place-items: center; border-radius: 50%; color: var(--app-accent); background: var(--app-accent-soft); }
+.signing-state-icon.is-success { color: #08734b; background: #e8f8f0; }
+.signing-title { display: grid; gap: 7px; text-align: center; }
+.signing-title p { margin: 0; color: var(--app-accent); font-size: 9px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.signing-title h2 { margin: 0; font-size: 25px; line-height: 1.05; letter-spacing: -.04em; }
+.signing-title span { color: var(--app-muted); font-size: 11px; line-height: 1.5; }
+.signing-agreement { max-height: 250px; overflow-y: auto; padding: 16px; scroll-padding-bottom: 16px; }
+.signing-agreement > strong { display: block; margin-bottom: 10px; font-size: 13px; }
+.signing-agreement p { margin: 0 0 9px; color: var(--app-muted); font-size: 10px; line-height: 1.5; }
+.signing-agreement dl { display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; margin: 14px 0 2px; padding-top: 12px; border-top: 1px solid var(--app-border); font-size: 9px; }
+.signing-agreement dt { color: var(--app-muted); }
+.signing-agreement dd { margin: 0; font-weight: 700; }
+.signing-consent { display: flex; align-items: flex-start; gap: 11px; padding: 14px; border: 1px solid var(--app-border); border-radius: 15px; font-size: 10px; line-height: 1.45; }
+.signing-consent input { width: 18px; height: 18px; margin: 0; flex: 0 0 auto; accent-color: var(--app-accent); }
+.signing-otp-inputs { display: flex; justify-content: center; gap: 10px; margin: 8px 0 2px; }
+.signing-otp-inputs input { width: 54px; height: 62px; border: 1px solid var(--app-border); border-radius: 15px; background: var(--app-surface); text-align: center; color: var(--app-text); font-size: 24px; font-weight: 700; outline: none; }
+.signing-otp-inputs input:focus { border-color: var(--app-accent); box-shadow: 0 0 0 3px var(--app-accent-soft); }
+.signing-resend, .signing-integrity { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 0; color: var(--app-muted); font-size: 9px; line-height: 1.45; }
+.signing-party-list { display: grid; gap: 0; padding: 4px 14px; }
+.signing-party-list > div { display: grid; gap: 4px; padding: 13px 0; border-bottom: 1px solid var(--app-border); }
+.signing-party-list > div:last-child { border-bottom: 0; }
+.signing-party-list span { display: flex; align-items: center; gap: 8px; }
+.signing-party-list svg { color: #159b68; }
+.signing-party-list strong { font-size: 11px; }
+.signing-party-list small { padding-left: 25px; color: var(--app-muted); font-size: 9px; }
+
 .invitation-entry-screen { min-height: 100%; padding-bottom: 24px; }
 .invitation-entry-icon {
   display: grid;

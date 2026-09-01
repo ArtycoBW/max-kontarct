@@ -165,6 +165,7 @@ model User {
   trustChecks    UserTrustCheck[]
   dealFiles      DealFile[]       @relation("DealFileOwner")
   reviewedDealFiles DealFile[]    @relation("DealFileReviewer")
+  dealSignatures    DealSignature[]
 
   @@index([role], map: "users_role_idx")
   @@map("users")
@@ -215,6 +216,7 @@ model UserPhone {
   updatedAt  DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  signatures DealSignature[]
 
   @@index([userId], map: "user_phones_user_id_idx")
   @@map("user_phones")
@@ -388,6 +390,7 @@ model Deal {
   versions        DealVersion[]
   invitations     DealInvitation[]
   files           DealFile[]
+  signatures      DealSignature[]
 
   @@index([initiatorUserId, status, updatedAt], map: "deals_initiator_status_updated_idx")
   @@index([status, updatedAt], map: "deals_status_updated_idx")
@@ -428,6 +431,7 @@ model DealParty {
   updatedAt DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   approvals DealApproval[]
+  signatures DealSignature[]
   deal      Deal           @relation(fields: [dealId], references: [id], onDelete: Cascade)
   user      User           @relation(fields: [userId], references: [id], onDelete: Restrict)
 
@@ -455,6 +459,7 @@ model DealVersion {
   updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   approvals        DealApproval[]
+  signatures       DealSignature[]
   createdBy        User           @relation("DealVersionAuthor", fields: [createdByUserId], references: [id], onDelete: Restrict)
   deal             Deal           @relation(fields: [dealId], references: [id], onDelete: Cascade)
   sourceGeneration AiGeneration?  @relation(fields: [sourceGenerationId], references: [id], onDelete: SetNull)
@@ -464,6 +469,36 @@ model DealVersion {
   @@index([dealId, createdAt], map: "deal_versions_deal_created_idx")
   @@index([createdByUserId], map: "deal_versions_created_by_user_id_idx")
   @@map("deal_versions")
+}
+
+model DealSignature {
+  id                 String   @id @default(uuid()) @db.Uuid
+  dealId             String   @map("deal_id") @db.Uuid
+  dealVersionId      String   @map("deal_version_id") @db.Uuid
+  partyId            String   @map("party_id") @db.Uuid
+  userId             String   @map("user_id") @db.Uuid
+  verifiedPhoneId    String   @map("verified_phone_id") @db.Uuid
+  maxUserIdRef       String?  @map("max_user_id_ref") @db.VarChar(128)
+  pepDocumentVersion String   @map("pep_document_version") @db.VarChar(64)
+  documentHash       String   @map("document_hash") @db.Char(64)
+  otpChannel         String   @map("otp_channel") @db.VarChar(16)
+  providerMessageId  String?  @map("provider_message_id") @db.VarChar(128)
+  ipAddress          String?  @map("ip_address") @db.VarChar(64)
+  userAgent          String?  @map("user_agent") @db.VarChar(512)
+  signedAt           DateTime @default(now()) @map("signed_at") @db.Timestamptz(3)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  deal          Deal        @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  dealVersion   DealVersion @relation(fields: [dealVersionId, dealId], references: [id, dealId], onDelete: Cascade)
+  party         DealParty   @relation(fields: [partyId, dealId], references: [id, dealId], onDelete: Cascade)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  verifiedPhone UserPhone   @relation(fields: [verifiedPhoneId], references: [id], onDelete: Restrict)
+
+  @@unique([dealVersionId, partyId], map: "deal_signatures_version_party_key")
+  @@index([dealId, signedAt], map: "deal_signatures_deal_signed_idx")
+  @@index([userId, signedAt], map: "deal_signatures_user_signed_idx")
+  @@index([documentHash], map: "deal_signatures_document_hash_idx")
+  @@map("deal_signatures")
 }
 
 model DealApproval {
