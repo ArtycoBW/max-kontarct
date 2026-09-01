@@ -4768,7 +4768,7 @@ button.service-status {
 .signing-consent { display: flex; align-items: flex-start; gap: 11px; padding: 14px; border: 1px solid var(--app-border); border-radius: 15px; font-size: 10px; line-height: 1.45; }
 .signing-consent input { width: 18px; height: 18px; margin: 0; flex: 0 0 auto; accent-color: var(--app-accent); }
 .signing-otp-inputs { display: flex; justify-content: center; gap: 10px; margin: 8px 0 2px; }
-.signing-otp-inputs input { width: 54px; height: 62px; border: 1px solid var(--app-border); border-radius: 15px; background: var(--app-surface); text-align: center; color: var(--app-text); font-size: 24px; font-weight: 700; outline: none; }
+.signing-otp-inputs input { width: 54px; height: 62px; border: 1px solid #d8cac8; border-radius: 15px; background: var(--app-surface-soft); text-align: center; color: var(--app-text); font-size: 24px; font-weight: 700; outline: none; }
 .signing-otp-inputs input:focus { border-color: var(--app-accent); box-shadow: 0 0 0 3px var(--app-accent-soft); }
 .signing-resend, .signing-integrity { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 0; color: var(--app-muted); font-size: 9px; line-height: 1.45; }
 .signing-package-note { margin: -4px 8px 0; text-align: center; color: var(--app-muted); font-size: 9px; line-height: 1.45; }

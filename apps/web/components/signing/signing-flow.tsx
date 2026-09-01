@@ -130,8 +130,8 @@ function OtpStep({ delivery, digits, isConfirming, isResending, onBack, onConfir
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => { window.clearTimeout(initial); window.clearInterval(timer); };
   }, []);
-  const resendSeconds = Math.max(0, Math.ceil((new Date(delivery.resendAvailableAt).getTime() - now) / 1_000));
-  const expiresSeconds = Math.max(0, Math.ceil((new Date(delivery.expiresAt).getTime() - now) / 1_000));
+  const resendSeconds = now === 0 ? 60 : Math.max(0, Math.ceil((new Date(delivery.resendAvailableAt).getTime() - now) / 1_000));
+  const expiresSeconds = now === 0 ? 300 : Math.max(0, Math.ceil((new Date(delivery.expiresAt).getTime() - now) / 1_000));
   return (
     <section className="signing-flow signing-otp" aria-label="Код подписи">
       <div className="signing-state-icon"><KeyRound size={32} /></div>

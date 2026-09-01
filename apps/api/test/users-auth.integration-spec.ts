@@ -6,6 +6,7 @@ import {
   AiGenerationStatus,
   ConsentSource,
   ConsentType,
+  DealArtifactType,
   DealPartyRole,
   DealStatus,
   PhoneVerificationSource,
@@ -108,9 +109,11 @@ describe("users/auth database foundation (integration)", () => {
         "contract_template_versions",
         "contract_templates",
         "deal_approvals",
+        "deal_artifacts",
         "deal_files",
         "deal_invitations",
         "deal_parties",
+        "deal_signatures",
         "deal_versions",
         "deals",
         "max_accounts",
@@ -123,6 +126,160 @@ describe("users/auth database foundation (integration)", () => {
         "template_document_requirements",
       ]),
     );
+  });
+
+  it("keeps frozen versions, signatures and final artifacts immutable and unique", async () => {
+    const templateVersion = await database.contractTemplateVersion.findFirstOrThrow({
+      where: { status: TemplateVersionStatus.PUBLISHED },
+    });
+    const [initiator, counterparty] = await Promise.all([
+      database.user.create({
+        data: {
+          phones: {
+            create: {
+              e164: "+79990000001",
+              isPrimary: true,
+              source: PhoneVerificationSource.MAX,
+              verifiedAt: new Date(),
+            },
+          },
+        },
+        include: { phones: true },
+      }),
+      database.user.create({
+        data: {
+          phones: {
+            create: {
+              e164: "+79990000002",
+              isPrimary: true,
+              source: PhoneVerificationSource.MAX,
+              verifiedAt: new Date(),
+            },
+          },
+        },
+        include: { phones: true },
+      }),
+    ]);
+    const deal = await database.deal.create({
+      data: {
+        initiatorUserId: initiator.id,
+        status: DealStatus.READY_TO_SIGN,
+        templateVersionId: templateVersion.id,
+        title: "Подписание замороженной версии",
+      },
+    });
+    const [initiatorParty, counterpartyParty] = await Promise.all([
+      database.dealParty.create({
+        data: {
+          dealId: deal.id,
+          role: DealPartyRole.INITIATOR,
+          userId: initiator.id,
+        },
+      }),
+      database.dealParty.create({
+        data: {
+          dealId: deal.id,
+          role: DealPartyRole.COUNTERPARTY,
+          userId: counterparty.id,
+        },
+      }),
+    ]);
+    const snapshotHash = "a".repeat(64);
+    const version = await database.dealVersion.create({
+      data: {
+        contractDraft: { sections: [] },
+        contractNumber: `МК-IT-${randomUUID()}`,
+        createdByUserId: initiator.id,
+        dealId: deal.id,
+        frozenAt: new Date("2026-09-01T12:00:00.000Z"),
+        frozenSnapshot: {
+          dealId: deal.id,
+          frozenAt: "2026-09-01T12:00:00.000Z",
+          parties: [],
+          schemaVersion: "deal-signature-v1",
+          terms: { amount: 50_000 },
+        },
+        snapshotHash,
+        terms: { amount: 50_000 },
+        versionNumber: 1,
+      },
+    });
+
+    await expect(
+      database.dealVersion.update({
+        data: { terms: { amount: 60_000 } },
+        where: { id: version.id },
+      }),
+    ).rejects.toBeDefined();
+
+    await database.dealSignature.create({
+      data: {
+        dealId: deal.id,
+        dealVersionId: version.id,
+        documentHash: snapshotHash,
+        otpChannel: "MAX_TEST",
+        partyId: initiatorParty.id,
+        pepDocumentVersion: "stage-pep-v1",
+        userId: initiator.id,
+        verifiedPhoneId: initiator.phones[0]!.id,
+      },
+    });
+    await expect(
+      database.dealSignature.create({
+        data: {
+          dealId: deal.id,
+          dealVersionId: version.id,
+          documentHash: snapshotHash,
+          otpChannel: "MAX_TEST",
+          partyId: initiatorParty.id,
+          pepDocumentVersion: "stage-pep-v1",
+          userId: initiator.id,
+          verifiedPhoneId: initiator.phones[0]!.id,
+        },
+      }),
+    ).rejects.toMatchObject({ code: "P2002" });
+    await database.dealSignature.create({
+      data: {
+        dealId: deal.id,
+        dealVersionId: version.id,
+        documentHash: snapshotHash,
+        otpChannel: "MAX_TEST",
+        partyId: counterpartyParty.id,
+        pepDocumentVersion: "stage-pep-v1",
+        userId: counterparty.id,
+        verifiedPhoneId: counterparty.phones[0]!.id,
+      },
+    });
+
+    await database.dealArtifact.create({
+      data: {
+        bucket: "integration",
+        dealId: deal.id,
+        dealVersionId: version.id,
+        mimeType: "application/pdf",
+        objectKey: `${deal.id}/final.pdf`,
+        originalName: "contract.pdf",
+        publicCode: randomUUID().replaceAll("-", ""),
+        sha256: "b".repeat(64),
+        sizeBytes: 128n,
+        type: DealArtifactType.FINAL_PDF,
+      },
+    });
+    await expect(
+      database.dealArtifact.create({
+        data: {
+          bucket: "integration",
+          dealId: deal.id,
+          dealVersionId: version.id,
+          mimeType: "application/pdf",
+          objectKey: `${deal.id}/final-copy.pdf`,
+          originalName: "contract-copy.pdf",
+          sha256: "c".repeat(64),
+          sizeBytes: 128n,
+          type: DealArtifactType.FINAL_PDF,
+        },
+      }),
+    ).rejects.toMatchObject({ code: "P2002" });
   });
 
   it("enforces one active invitation and accepts it atomically", async () => {
