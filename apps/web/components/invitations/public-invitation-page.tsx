@@ -41,19 +41,6 @@ export function PublicInvitationPage({
   );
   const active = invitation.state === "ACTIVE";
 
-  const continueInMax = () => {
-    if (!acknowledged) {
-      setAcknowledged(true);
-      return;
-    }
-    if (!deeplink) return;
-    if (window.WebApp?.openMaxLink) {
-      window.WebApp.openMaxLink(deeplink);
-      return;
-    }
-    window.location.assign(deeplink);
-  };
-
   return (
     <main className="public-invite-page">
       <section className="public-invite-shell">
@@ -116,18 +103,22 @@ export function PublicInvitationPage({
             ) : null}
 
             <div className="public-invite-actions">
-              <Button
-                className="full-width"
-                disabled={!token}
-                onClick={continueInMax}
-                type="button"
-              >
-                {acknowledged ? (
-                  <>Продолжить оформление <ArrowRight size={18} /></>
-                ) : (
+              {acknowledged && deeplink ? (
+                <Button asChild className="full-width">
+                  <a href={deeplink}>
+                    Продолжить оформление <ArrowRight size={18} />
+                  </a>
+                </Button>
+              ) : (
+                <Button
+                  className="full-width"
+                  disabled={!token}
+                  onClick={() => setAcknowledged(true)}
+                  type="button"
+                >
                   <>Я ознакомился <Check size={18} /></>
-                )}
-              </Button>
+                </Button>
+              )}
               {acknowledged ? (
                 <p><ExternalLink size={14} /> Оформление продолжится внутри MAX.</p>
               ) : null}

@@ -1,6 +1,7 @@
 "use client";
 
 import type { AuthUser } from "@max-contract/contracts";
+import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   createContext,
@@ -47,7 +48,10 @@ async function bootstrapSession() {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const requiresSession = !pathname.startsWith("/invite/");
   const session = useQuery({
+    enabled: requiresSession,
     queryFn: bootstrapSession,
     queryKey: queryKeys.auth.me(),
     retry: false,
@@ -57,10 +61,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
-        error: session.error,
-        isPending: session.isPending,
+        error: requiresSession ? session.error : null,
+        isPending: requiresSession && session.isPending,
         retry: () => void session.refetch(),
-        user: session.data?.user ?? null,
+        user: requiresSession ? (session.data?.user ?? null) : null,
       }}
     >
       {children}
