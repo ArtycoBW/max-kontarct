@@ -48,6 +48,31 @@ describe("DealArtifactsService", () => {
     expect(transaction.auditEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({ eventType: "FINAL_PDF_CREATED" }) });
     expect(result.downloadUrl).toBe("/api/v1/deals/deal-1/artifacts/final-pdf");
   });
+
+  it("verifies the stored bytes without exposing party data", async () => {
+    const sha256 = createHash("sha256").update(pdf).digest("hex");
+    const prisma = { dealArtifact: { findUnique: jest.fn(async () => ({
+      deal: { status: DealStatus.SIGNED },
+      dealVersion: { contractNumber: "МК-20260901-ABCDEF12-V1", signatures: [{ signedAt: new Date("2026-09-01T12:01:00.000Z") }] },
+      objectKey: "private/final.pdf", sha256, type: DealArtifactType.FINAL_PDF,
+    })) } };
+    const service = new DealArtifactsService(
+      new ConfigService({ PUBLIC_WEB_URL: "https://www.max-kontrakt.ru", S3_BUCKET: "private-bucket" }),
+      prisma as unknown as PrismaService,
+      { getObject: jest.fn(async () => ({ body: pdf, contentType: "application/pdf" })) } as unknown as StorageService,
+    );
+
+    const result = await service.verifyPublic("abcdefghijklmnopqrst");
+
+    expect(result).toEqual({
+      contractNumber: "МК-20260901-ABCDEF12-V1",
+      documentStatus: "SIGNED",
+      integrity: "VALID",
+      sha256,
+      signedAt: "2026-09-01T12:01:00.000Z",
+    });
+    expect(JSON.stringify(result)).not.toMatch(/phone|passport|email|address|party/i);
+  });
 });
 
 function signedDeal() {

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 
-import type { DealArtifactSummary } from "@max-contract/contracts";
+import type { DealArtifactSummary, PublicDocumentVerificationResponse } from "@max-contract/contracts";
 import { ConflictException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { DealArtifactType, DealStatus, Prisma } from "@prisma/client";
@@ -125,6 +125,42 @@ export class DealArtifactsService {
     return {
       artifact: { mimeType: artifact.mimeType, originalName: artifact.originalName },
       object: await this.storage.getObject(artifact.objectKey),
+    };
+  }
+
+  async verifyPublic(publicCode: string): Promise<PublicDocumentVerificationResponse> {
+    if (!/^[A-Za-z0-9_-]{20}$/.test(publicCode)) throw artifactNotFound();
+    const artifact = await this.prisma.dealArtifact.findUnique({
+      select: {
+        deal: { select: { status: true } },
+        dealVersion: {
+          select: {
+            contractNumber: true,
+            signatures: { orderBy: { signedAt: "desc" }, select: { signedAt: true }, take: 1 },
+          },
+        },
+        objectKey: true,
+        sha256: true,
+        type: true,
+      },
+      where: { publicCode },
+    });
+    const signedAt = artifact?.dealVersion.signatures[0]?.signedAt;
+    const contractNumber = artifact?.dealVersion.contractNumber;
+    if (!artifact || artifact.type !== DealArtifactType.FINAL_PDF || !signedAt || !contractNumber) throw artifactNotFound();
+    let integrity: PublicDocumentVerificationResponse["integrity"] = "UNAVAILABLE";
+    try {
+      const object = await this.storage.getObject(artifact.objectKey);
+      integrity = createHash("sha256").update(object.body).digest("hex") === artifact.sha256 ? "VALID" : "INVALID";
+    } catch {
+      integrity = "UNAVAILABLE";
+    }
+    return {
+      contractNumber,
+      documentStatus: artifact.deal.status === DealStatus.COMPLETED ? "COMPLETED" : "SIGNED",
+      integrity,
+      sha256: artifact.sha256,
+      signedAt: signedAt.toISOString(),
     };
   }
 }

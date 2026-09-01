@@ -211,6 +211,14 @@ export interface DealArtifactSummary {
   type: "FINAL_PDF" | "EVIDENCE_ZIP";
 }
 
+export interface PublicDocumentVerificationResponse {
+  contractNumber: string;
+  documentStatus: "SIGNED" | "COMPLETED";
+  integrity: "VALID" | "INVALID" | "UNAVAILABLE";
+  sha256: string;
+  signedAt: string;
+}
+
 export interface DealSigningStateResponse {
   contractNumber: string;
   currentUserSigned: boolean;
