@@ -49,4 +49,21 @@ describe("validateEnvironment AI settings", () => {
       NODE_ENV: "development",
     })).toThrow("DADATA_API_TOKEN and DADATA_SECRET_KEY");
   });
+
+  it("validates OTP limits and SMSC credentials", () => {
+    expect(validateEnvironment({ NODE_ENV: "development" })).toMatchObject({
+      OTP_MAX_ATTEMPTS: 5,
+      OTP_RESEND_SECONDS: 60,
+      OTP_TTL_SECONDS: 300,
+      SMS_PROVIDER: "fake",
+    });
+    expect(() => validateEnvironment({
+      NODE_ENV: "development",
+      SMS_PROVIDER: "smsc",
+    })).toThrow("SMSC_API_KEY or SMSC_LOGIN and SMSC_PASSWORD");
+    expect(() => validateEnvironment({
+      NODE_ENV: "development",
+      OTP_TTL_SECONDS: 10,
+    })).toThrow("OTP_TTL_SECONDS");
+  });
 });

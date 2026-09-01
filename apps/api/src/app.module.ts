@@ -20,6 +20,7 @@ import { OnboardingModule } from "./onboarding/onboarding.module";
 import { ProfileModule } from "./profile/profile.module";
 import { RedisModule } from "./redis/redis.module";
 import { StorageModule } from "./storage/storage.module";
+import { SigningModule } from "./signing/signing.module";
 import { TemplatesModule } from "./templates/templates.module";
 import { TrustModule } from "./trust/trust.module";
 
@@ -50,6 +51,7 @@ import { TrustModule } from "./trust/trust.module";
     FilesModule,
     RedisModule,
     StorageModule,
+    SigningModule,
     AiModule,
     HealthModule,
     AuthModule,

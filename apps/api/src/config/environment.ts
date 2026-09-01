@@ -4,6 +4,7 @@ const DEVELOPMENT_DEFAULTS = {
   AUTH_COOKIE_NAME: "max_contract_session",
   AUTH_REDIS_PREFIX: "max-contract:auth",
   AUTH_SESSION_TTL_SECONDS: 7 * 24 * 60 * 60,
+  CONSENT_ELECTRONIC_SIGNATURE_VERSION: "dev-pep-v1",
   CONSENT_PERSONAL_DATA_VERSION: "dev-v1",
   CONSENT_STATUS_NOTIFICATIONS_VERSION: "dev-v1",
   CONSENT_TERMS_VERSION: "dev-v1",
@@ -37,6 +38,17 @@ const DEVELOPMENT_DEFAULTS = {
   MINIO_ENDPOINT: "http://localhost:9100",
   MINIO_REGION: "ru-central1",
   MINIO_SECRET_KEY: "max_contract_dev_secret",
+  OTP_HMAC_SECRET: "dev-only-otp-hmac-secret-change-me",
+  OTP_MAX_ATTEMPTS: 5,
+  OTP_RESEND_SECONDS: 60,
+  OTP_TTL_SECONDS: 5 * 60,
+  SMS_PROVIDER: "fake",
+  SMSC_API_KEY: "",
+  SMSC_API_URL: "https://smsc.ru",
+  SMSC_LOGIN: "",
+  SMSC_PASSWORD: "",
+  SMSC_SENDER: "",
+  SMSC_TIMEOUT_MS: 5_000,
   S3_FORCE_PATH_STYLE: true,
   PUBLIC_WEB_URL: "http://localhost:3000",
   REDIS_URL: "redis://localhost:6381",
@@ -54,12 +66,14 @@ const DEVELOPMENT_DEFAULTS = {
 
 const REQUIRED_PRODUCTION_KEYS = [
   "CORS_ORIGINS",
+  "CONSENT_ELECTRONIC_SIGNATURE_VERSION",
   "CONSENT_PERSONAL_DATA_VERSION",
   "CONSENT_STATUS_NOTIFICATIONS_VERSION",
   "CONSENT_TERMS_VERSION",
   "DATABASE_URL",
   "MAX_BOT_TOKEN",
   "MAX_WEBHOOK_SECRET",
+  "OTP_HMAC_SECRET",
   "PUBLIC_WEB_URL",
   "REDIS_URL",
 ] as const;
@@ -204,6 +218,20 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
     throw new Error("DADATA_API_TOKEN and DADATA_SECRET_KEY are required for DaData");
   }
 
+  const smsProvider = readString(
+    input.SMS_PROVIDER,
+    nodeEnv === "production" ? "disabled" : DEVELOPMENT_DEFAULTS.SMS_PROVIDER,
+  );
+  if (!new Set(["disabled", "fake", "max-test", "smsc"]).has(smsProvider)) {
+    throw new Error("SMS_PROVIDER must be disabled, fake, max-test or smsc");
+  }
+  const smscApiKey = readString(input.SMSC_API_KEY, DEVELOPMENT_DEFAULTS.SMSC_API_KEY);
+  const smscLogin = readString(input.SMSC_LOGIN, DEVELOPMENT_DEFAULTS.SMSC_LOGIN);
+  const smscPassword = readString(input.SMSC_PASSWORD, DEVELOPMENT_DEFAULTS.SMSC_PASSWORD);
+  if (smsProvider === "smsc" && !smscApiKey && (!smscLogin || !smscPassword)) {
+    throw new Error("SMSC_API_KEY or SMSC_LOGIN and SMSC_PASSWORD are required for SMSC");
+  }
+
   return {
     ...input,
     AI_PROVIDER: aiProvider,
@@ -230,6 +258,10 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
     CORS_ORIGINS: readString(
       input.CORS_ORIGINS,
       DEVELOPMENT_DEFAULTS.CORS_ORIGINS,
+    ),
+    CONSENT_ELECTRONIC_SIGNATURE_VERSION: readString(
+      input.CONSENT_ELECTRONIC_SIGNATURE_VERSION,
+      DEVELOPMENT_DEFAULTS.CONSENT_ELECTRONIC_SIGNATURE_VERSION,
     ),
     CONSENT_PERSONAL_DATA_VERSION: readString(
       input.CONSENT_PERSONAL_DATA_VERSION,
@@ -391,7 +423,48 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
       input.S3_SECRET_KEY ?? input.MINIO_SECRET_KEY ?? input.MINIO_ROOT_PASSWORD,
       DEVELOPMENT_DEFAULTS.MINIO_SECRET_KEY,
     ),
+    SMS_PROVIDER: smsProvider,
+    SMSC_API_KEY: smscApiKey,
+    SMSC_API_URL: readString(
+      input.SMSC_API_URL,
+      DEVELOPMENT_DEFAULTS.SMSC_API_URL,
+    ).replace(/\/$/, ""),
+    SMSC_LOGIN: smscLogin,
+    SMSC_PASSWORD: smscPassword,
+    SMSC_SENDER: readString(input.SMSC_SENDER, DEVELOPMENT_DEFAULTS.SMSC_SENDER),
+    SMSC_TIMEOUT_MS: parseBoundedInteger(
+      input.SMSC_TIMEOUT_MS,
+      DEVELOPMENT_DEFAULTS.SMSC_TIMEOUT_MS,
+      "SMSC_TIMEOUT_MS",
+      500,
+      30_000,
+    ),
     NODE_ENV: nodeEnv,
+    OTP_HMAC_SECRET: readString(
+      input.OTP_HMAC_SECRET,
+      DEVELOPMENT_DEFAULTS.OTP_HMAC_SECRET,
+    ),
+    OTP_MAX_ATTEMPTS: parseBoundedInteger(
+      input.OTP_MAX_ATTEMPTS,
+      DEVELOPMENT_DEFAULTS.OTP_MAX_ATTEMPTS,
+      "OTP_MAX_ATTEMPTS",
+      1,
+      10,
+    ),
+    OTP_RESEND_SECONDS: parseBoundedInteger(
+      input.OTP_RESEND_SECONDS,
+      DEVELOPMENT_DEFAULTS.OTP_RESEND_SECONDS,
+      "OTP_RESEND_SECONDS",
+      15,
+      10 * 60,
+    ),
+    OTP_TTL_SECONDS: parseBoundedInteger(
+      input.OTP_TTL_SECONDS,
+      DEVELOPMENT_DEFAULTS.OTP_TTL_SECONDS,
+      "OTP_TTL_SECONDS",
+      60,
+      15 * 60,
+    ),
     PUBLIC_WEB_URL: readString(
       input.PUBLIC_WEB_URL,
       DEVELOPMENT_DEFAULTS.PUBLIC_WEB_URL,
