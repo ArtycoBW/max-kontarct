@@ -30,6 +30,9 @@ export const queryKeys = {
     workspace: (dealId: string) =>
       [...queryKeys.deals.all, "workspace", dealId] as const,
   },
+  files: {
+    workspace: (dealId: string) => ["files", "workspace", dealId] as const,
+  },
   templates: {
     all: ["templates"] as const,
     clarification: (sessionId: string) =>

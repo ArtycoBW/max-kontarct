@@ -34,11 +34,13 @@ export function DealWorkspaceScreen({
   onBack,
   onEdit,
   onOpenProfile,
+  onOpenDocuments,
 }: {
   dealId: string;
   onBack: () => void;
   onEdit: () => void;
   onOpenProfile: () => void;
+  onOpenDocuments: () => void;
 }) {
   const queryClient = useQueryClient();
   const [issuedInvitation, setIssuedInvitation] =
@@ -244,6 +246,12 @@ export function DealWorkspaceScreen({
 
       {deal.status === "DRAFT" ? (
         <Button className="full-width" onClick={onEdit} variant="secondary">Редактировать черновик</Button>
+      ) : null}
+
+      {deal.counterparty ? (
+        <Button className="full-width" onClick={onOpenDocuments} variant="secondary">
+          <FileCheck2 size={18} /> Документы сделки
+        </Button>
       ) : null}
 
       {issueInvitation.error ? (

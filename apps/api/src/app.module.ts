@@ -14,6 +14,7 @@ import { PrismaModule } from "./database/prisma.module";
 import { DataNormalizationModule } from "./data-normalization/data-normalization.module";
 import { DealsModule } from "./deals/deals.module";
 import { HealthModule } from "./health/health.module";
+import { FilesModule } from "./files/files.module";
 import { MaxBotModule } from "./max-bot/max-bot.module";
 import { OnboardingModule } from "./onboarding/onboarding.module";
 import { ProfileModule } from "./profile/profile.module";
@@ -46,6 +47,7 @@ import { TrustModule } from "./trust/trust.module";
     PrismaModule,
     DataNormalizationModule,
     DealsModule,
+    FilesModule,
     RedisModule,
     StorageModule,
     AiModule,

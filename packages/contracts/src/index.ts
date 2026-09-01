@@ -356,6 +356,48 @@ export interface UserTrustStatusResponse {
   total: number;
 }
 
+export type DealFileCategory = "REQUIREMENT" | "EVIDENCE";
+export type DealFileVisibility = "OWNER_ONLY" | "DEAL_PARTICIPANTS";
+
+export interface DealFileResponse {
+  category: DealFileCategory;
+  id: string;
+  mimeType: string;
+  originalName: string;
+  owner: {
+    displayName: string;
+    isCurrentUser: boolean;
+  };
+  requirementId: string | null;
+  sha256: string;
+  sizeBytes: number;
+  uploadedAt: string;
+  visibility: DealFileVisibility;
+}
+
+export interface DealDocumentRequirementResponse {
+  description: string | null;
+  id: string;
+  required: boolean;
+  title: string;
+  uploads: DealFileResponse[];
+}
+
+export interface DealDocumentsWorkspaceResponse {
+  allowedMimeTypes: string[];
+  dealId: string;
+  dealStatus: DealStatus;
+  dealTitle: string;
+  evidenceFiles: DealFileResponse[];
+  maxUploadBytes: number;
+  requirements: DealDocumentRequirementResponse[];
+}
+
+export interface UploadDealFileRequest {
+  category: DealFileCategory;
+  requirementId?: string;
+}
+
 export interface AdminUserListItem {
   createdAt: string;
   displayName: string;

@@ -29,7 +29,6 @@ import {
   FolderOpen,
   Handshake,
   Home,
-  LockKeyhole,
   PenLine,
   Plus,
   RefreshCw,
@@ -52,6 +51,7 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { ProfileScreen } from "@/components/profile/profile-screen";
 import { DealWorkspaceScreen } from "@/components/deals/deal-workspace-screen";
+import { DocumentsScreen } from "@/components/files/documents-screen";
 import { InvitationEntryScreen } from "@/components/invitations/invitation-entry-screen";
 import {
   parseQuestionnaireSchema,
@@ -1951,31 +1951,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function DocumentsScreen() {
-  return (
-    <div className="screen-content">
-      <ScreenHeader eyebrow="Защищённое хранилище" title="Документы" />
-      <p className="screen-copy">
-        Здесь хранятся файлы выбранной сделки. Доступ есть только у её участников.
-      </p>
-      <Card className="center-state">
-        <span className="state-icon">
-          <Files size={31} />
-        </span>
-        <h2>Пока нет документов</h2>
-        <p>Состав документов определяется выбранным типом договора.</p>
-      </Card>
-      <Card className="security-note">
-        <LockKeyhole size={18} />
-        <span>
-          <strong>Приватное хранение</strong>
-          <small>Доступ проверяется сервером перед каждым скачиванием.</small>
-        </span>
-      </Card>
-    </div>
-  );
-}
-
 function BottomNavigation({
   active,
   onChange,
@@ -2015,6 +1990,8 @@ function ActiveScreen({
   onNavigate,
   onEditDeal,
   onOpenDraft,
+  onOpenDocuments,
+  onClearDocumentDeal,
   phone,
 }: {
   active: AppTab;
@@ -2023,6 +2000,8 @@ function ActiveScreen({
   onNavigate: (tab: AppTab) => void;
   onEditDeal: (dealId: string) => void;
   onOpenDraft: (dealId: string) => void;
+  onOpenDocuments: (dealId: string) => void;
+  onClearDocumentDeal: () => void;
   phone: VerifiedPhone;
 }) {
   if (active === "home") {
@@ -2046,10 +2025,19 @@ function ActiveScreen({
         onBack={() => onNavigate("deals")}
         onEdit={() => onEditDeal(selectedDealId)}
         onOpenProfile={() => onNavigate("profile")}
+        onOpenDocuments={() => onOpenDocuments(selectedDealId)}
       />
     );
   }
-  if (active === "documents") return <DocumentsScreen />;
+  if (active === "documents") {
+    return (
+      <DocumentsScreen
+        dealId={selectedDealId}
+        onBack={onClearDocumentDeal}
+        onSelectDeal={onOpenDocuments}
+      />
+    );
+  }
   return <ProfileScreen fallbackPhone={phone} />;
 }
 
@@ -2535,7 +2523,7 @@ function AppWorkspace({
 
   const navigate = (tab: AppTab) => {
     if (tab === "create") setDraftId(null);
-    if (tab !== "deal") setSelectedDealId(null);
+    if (tab !== "deal" && tab !== "documents") setSelectedDealId(null);
     setActive(tab);
   };
 
@@ -2547,6 +2535,16 @@ function AppWorkspace({
   const editDeal = (dealId: string) => {
     setDraftId(dealId);
     setActive("create");
+  };
+
+  const openDocuments = (dealId: string) => {
+    setSelectedDealId(dealId);
+    setActive("documents");
+  };
+
+  const clearDocumentDeal = () => {
+    setSelectedDealId(null);
+    setActive("documents");
   };
 
   useEffect(() => {
@@ -2578,6 +2576,8 @@ function AppWorkspace({
                 onEditDeal={editDeal}
                 onNavigate={navigate}
                 onOpenDraft={openDeal}
+                onOpenDocuments={openDocuments}
+                onClearDocumentDeal={clearDocumentDeal}
                 phone={phone}
               />
             </motion.div>
