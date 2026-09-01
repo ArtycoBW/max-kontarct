@@ -38,4 +38,15 @@ describe("validateEnvironment AI settings", () => {
       "MAX_WEBHOOK_SECRET",
     );
   });
+
+  it("uses a mock address provider by default and validates DaData credentials", () => {
+    expect(validateEnvironment({ NODE_ENV: "development" })).toMatchObject({
+      DATA_NORMALIZATION_PROVIDER: "mock",
+      DADATA_TIMEOUT_MS: 5_000,
+    });
+    expect(() => validateEnvironment({
+      DATA_NORMALIZATION_PROVIDER: "dadata",
+      NODE_ENV: "development",
+    })).toThrow("DADATA_API_TOKEN and DADATA_SECRET_KEY");
+  });
 });

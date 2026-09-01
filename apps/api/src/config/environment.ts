@@ -8,6 +8,10 @@ const DEVELOPMENT_DEFAULTS = {
   CONSENT_STATUS_NOTIFICATIONS_VERSION: "dev-v1",
   CONSENT_TERMS_VERSION: "dev-v1",
   CONTRACT_GENERATION_QUEUE_PREFIX: "max-contract",
+  DADATA_API_TOKEN: "",
+  DADATA_SECRET_KEY: "",
+  DADATA_TIMEOUT_MS: 5_000,
+  DATA_NORMALIZATION_PROVIDER: "mock",
   DEAL_INVITATION_TTL_SECONDS: 3 * 24 * 60 * 60,
   CORS_ORIGINS: "http://localhost:3000,http://localhost:3002",
   DATABASE_URL:
@@ -171,6 +175,25 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
     );
   }
 
+  const dataNormalizationProvider = readString(
+    input.DATA_NORMALIZATION_PROVIDER,
+    DEVELOPMENT_DEFAULTS.DATA_NORMALIZATION_PROVIDER,
+  );
+  if (!new Set(["mock", "dadata"]).has(dataNormalizationProvider)) {
+    throw new Error("DATA_NORMALIZATION_PROVIDER must be mock or dadata");
+  }
+  const dadataApiToken = readString(
+    input.DADATA_API_TOKEN,
+    DEVELOPMENT_DEFAULTS.DADATA_API_TOKEN,
+  );
+  const dadataSecretKey = readString(
+    input.DADATA_SECRET_KEY,
+    DEVELOPMENT_DEFAULTS.DADATA_SECRET_KEY,
+  );
+  if (dataNormalizationProvider === "dadata" && (!dadataApiToken || !dadataSecretKey)) {
+    throw new Error("DADATA_API_TOKEN and DADATA_SECRET_KEY are required for DaData");
+  }
+
   return {
     ...input,
     AI_PROVIDER: aiProvider,
@@ -225,6 +248,16 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
       input.DATABASE_URL,
       DEVELOPMENT_DEFAULTS.DATABASE_URL,
     ),
+    DADATA_API_TOKEN: dadataApiToken,
+    DADATA_SECRET_KEY: dadataSecretKey,
+    DADATA_TIMEOUT_MS: parseBoundedInteger(
+      input.DADATA_TIMEOUT_MS,
+      DEVELOPMENT_DEFAULTS.DADATA_TIMEOUT_MS,
+      "DADATA_TIMEOUT_MS",
+      500,
+      30_000,
+    ),
+    DATA_NORMALIZATION_PROVIDER: dataNormalizationProvider,
     DEV_MAX_FIRST_NAME: readString(
       input.DEV_MAX_FIRST_NAME,
       DEVELOPMENT_DEFAULTS.DEV_MAX_FIRST_NAME,

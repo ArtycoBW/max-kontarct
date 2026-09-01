@@ -9,13 +9,14 @@ import {
   CircleAlert,
   LockKeyhole,
   Mail,
+  MapPin,
   RefreshCw,
   Save,
   ShieldCheck,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useState, type ReactNode } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -26,10 +27,15 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/components/providers/auth-provider";
 import { getProfile, updateProfile } from "@/lib/api/profile";
+import { getAddressSuggestions, normalizeAddress } from "@/lib/api/data-normalization";
 import { queryKeys } from "@/lib/api/query-keys";
 
 const PERSON_NAME = /^[\p{L}][\p{L}\p{M}' -]*$/u;
 const profileSchema = z.object({
+  address: z.string().trim().max(500, "Не более 500 символов").refine(
+    (value) => !value || value.length >= 5,
+    "Укажите адрес подробнее",
+  ),
   birthDate: z.string().refine(
     (value) => !value || (value >= "1900-01-01" && value <= today()),
     "Укажите корректную дату рождения",
@@ -54,6 +60,7 @@ const profileSchema = z.object({
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
 const emptyProfile: ProfileFormValues = {
+  address: "",
   birthDate: "",
   email: "",
   firstName: "",
@@ -80,7 +87,17 @@ export function ProfileScreen({
     resolver: zodResolver(profileSchema),
   });
   const mutation = useMutation({
-    mutationFn: (body: UpdateUserProfileRequest) => updateProfile(body),
+    mutationFn: async (values: ProfileFormValues) => {
+      const address = values.address ? await normalizeAddress(values.address) : null;
+      return updateProfile({
+        address,
+        birthDate: values.birthDate || null,
+        email: values.email || null,
+        firstName: values.firstName,
+        lastName: values.lastName,
+        middleName: values.middleName || null,
+      } satisfies UpdateUserProfileRequest);
+    },
     onSuccess: (nextProfile) => {
       queryClient.setQueryData(queryKeys.profile.current(), nextProfile);
       form.reset(toFormValues(nextProfile));
@@ -172,15 +189,7 @@ export function ProfileScreen({
       <form
         className="profile-form"
         onChange={() => setSaved(false)}
-        onSubmit={form.handleSubmit((values) =>
-          mutation.mutate({
-            birthDate: values.birthDate || null,
-            email: values.email || null,
-            firstName: values.firstName,
-            lastName: values.lastName,
-            middleName: values.middleName || null,
-          }),
-        )}
+        onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
       >
         <div className="profile-form-heading">
           <div>
@@ -246,6 +255,22 @@ export function ProfileScreen({
             />
           </div>
         </ProfileField>
+        <ProfileField error={form.formState.errors.address?.message} inputId="profile-address" label="Адрес регистрации">
+          <Controller
+            control={form.control}
+            name="address"
+            render={({ field }) => (
+              <AddressAutocomplete
+                invalid={Boolean(form.formState.errors.address)}
+                onChange={(value) => {
+                  field.onChange(value);
+                  setSaved(false);
+                }}
+                value={field.value}
+              />
+            )}
+          />
+        </ProfileField>
 
         <Card className="verified-contact-card">
           <LockKeyhole size={18} />
@@ -308,6 +333,67 @@ function ProfileLoading() {
   );
 }
 
+function AddressAutocomplete({
+  invalid,
+  onChange,
+  value,
+}: {
+  invalid: boolean;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  const [focused, setFocused] = useState(false);
+  const query = useDeferredValue(value.trim());
+  const suggestions = useQuery({
+    enabled: focused && query.length >= 3,
+    queryFn: () => getAddressSuggestions(query),
+    queryKey: queryKeys.normalization.addressSuggestions(query),
+    retry: false,
+    staleTime: 60_000,
+  });
+
+  return (
+    <div className="address-autocomplete">
+      <div className="input-with-icon">
+        <MapPin size={16} />
+        <Input
+          aria-autocomplete="list"
+          aria-expanded={focused && Boolean(suggestions.data?.items.length)}
+          aria-invalid={invalid}
+          autoComplete="street-address"
+          id="profile-address"
+          maxLength={500}
+          onBlur={() => window.setTimeout(() => setFocused(false), 100)}
+          onChange={(event) => onChange(event.target.value)}
+          onFocus={() => setFocused(true)}
+          placeholder="Начните вводить адрес"
+          role="combobox"
+          value={value}
+        />
+      </div>
+      {focused && suggestions.data?.items.length ? (
+        <Card className="address-suggestions" role="listbox">
+          {suggestions.data.items.map((suggestion) => (
+            <button
+              key={`${suggestion.value}:${suggestion.fiasId ?? ""}`}
+              aria-selected={suggestion.value === value}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange(suggestion.value);
+                setFocused(false);
+              }}
+              role="option"
+              type="button"
+            >
+              <MapPin size={14} /> {suggestion.value}
+            </button>
+          ))}
+        </Card>
+      ) : null}
+    </div>
+  );
+}
+
 function personName(label: string) {
   return z
     .string()
@@ -322,6 +408,7 @@ function today(): string {
 }
 
 function toFormValues(profile: {
+  address: { value: string } | null;
   birthDate: string | null;
   email: string | null;
   firstName: string;
@@ -329,6 +416,7 @@ function toFormValues(profile: {
   middleName: string | null;
 }): ProfileFormValues {
   return {
+    address: profile.address?.value ?? "",
     birthDate: profile.birthDate ?? "",
     email: profile.email ?? "",
     firstName: profile.firstName,

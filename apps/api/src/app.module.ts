@@ -11,6 +11,7 @@ import { ApiExceptionFilter } from "./common/errors/api-exception.filter";
 import { createLoggerParams } from "./common/logging/logger.config";
 import { validateEnvironment } from "./config/environment";
 import { PrismaModule } from "./database/prisma.module";
+import { DataNormalizationModule } from "./data-normalization/data-normalization.module";
 import { DealsModule } from "./deals/deals.module";
 import { HealthModule } from "./health/health.module";
 import { MaxBotModule } from "./max-bot/max-bot.module";
@@ -42,6 +43,7 @@ import { TemplatesModule } from "./templates/templates.module";
       ],
     }),
     PrismaModule,
+    DataNormalizationModule,
     DealsModule,
     RedisModule,
     StorageModule,

@@ -41,6 +41,20 @@ export class ProfileService {
       : null;
 
     return {
+      address: user.profile?.addressValue
+        ? {
+            city: user.profile.addressCity,
+            fiasId: user.profile.addressFiasId,
+            house: user.profile.addressHouse,
+            kladrId: user.profile.addressKladrId,
+            postalCode: user.profile.addressPostalCode,
+            qualityCode: user.profile.addressQualityCode,
+            region: user.profile.addressRegion,
+            source: user.profile.addressSource === "DADATA" ? "DADATA" : "MOCK",
+            street: user.profile.addressStreet,
+            value: user.profile.addressValue,
+          }
+        : null,
       birthDate: user.profile?.birthDate
         ? toDateOnly(user.profile.birthDate)
         : null,
@@ -80,6 +94,7 @@ export class ProfileService {
               "middleName",
               "birthDate",
               "email",
+              "address",
             ],
           },
           requestId,
@@ -110,6 +125,17 @@ function normalizeProfile(input: UpdateUserProfileRequest) {
   }
 
   return {
+    addressCity: input.address?.city ?? null,
+    addressFiasId: input.address?.fiasId ?? null,
+    addressHouse: input.address?.house ?? null,
+    addressKladrId: input.address?.kladrId ?? null,
+    addressNormalizedAt: input.address ? new Date() : null,
+    addressPostalCode: input.address?.postalCode ?? null,
+    addressQualityCode: input.address?.qualityCode ?? null,
+    addressRegion: input.address?.region ?? null,
+    addressSource: input.address?.source ?? null,
+    addressStreet: input.address?.street ?? null,
+    addressValue: input.address?.value.trim() ?? null,
     birthDate,
     email: input.email?.trim().toLowerCase() || null,
     firstName: input.firstName.trim(),

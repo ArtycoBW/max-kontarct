@@ -272,6 +272,7 @@ export interface MaxContactRequest {
 }
 
 export interface UserProfileResponse {
+  address: NormalizedAddress | null;
   birthDate: string | null;
   email: string | null;
   firstName: string;
@@ -283,11 +284,44 @@ export interface UserProfileResponse {
 }
 
 export interface UpdateUserProfileRequest {
+  address: NormalizedAddress | null;
   birthDate: string | null;
   email: string | null;
   firstName: string;
   lastName: string;
   middleName: string | null;
+}
+
+export interface AddressSuggestion {
+  city: string | null;
+  fiasId: string | null;
+  house: string | null;
+  postalCode: string | null;
+  region: string | null;
+  street: string | null;
+  unrestrictedValue: string;
+  value: string;
+}
+
+export interface AddressSuggestionListResponse {
+  items: AddressSuggestion[];
+}
+
+export interface NormalizeAddressRequest {
+  address: string;
+}
+
+export interface NormalizedAddress {
+  city: string | null;
+  fiasId: string | null;
+  house: string | null;
+  kladrId: string | null;
+  postalCode: string | null;
+  qualityCode: string | null;
+  region: string | null;
+  source: "DADATA" | "MOCK";
+  street: string | null;
+  value: string;
 }
 
 export interface AdminUserListItem {

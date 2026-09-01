@@ -15,6 +15,9 @@ export const queryKeys = {
     all: ["profile"] as const,
     current: () => [...queryKeys.profile.all, "current"] as const,
   },
+  normalization: {
+    addressSuggestions: (query: string) => ["normalization", "address", query] as const,
+  },
   deals: {
     all: ["deals"] as const,
     detail: (dealId: string) => [...queryKeys.deals.all, "detail", dealId] as const,
