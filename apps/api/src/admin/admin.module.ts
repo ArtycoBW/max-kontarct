@@ -4,10 +4,11 @@ import { AuthModule } from "../auth/auth.module";
 import { FilesModule } from "../files/files.module";
 import { TemplateSchemaValidator } from "../templates/template-schema.validator";
 import { AdminController } from "./admin.controller";
+import { AdminFilesController } from "./admin-files.controller";
 import { AdminService } from "./admin.service";
 
 @Module({
-  controllers: [AdminController],
+  controllers: [AdminController, AdminFilesController],
   imports: [AuthModule, FilesModule],
   providers: [AdminService, TemplateSchemaValidator],
 })
