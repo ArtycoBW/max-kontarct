@@ -156,10 +156,11 @@ function OtpStep({ delivery, digits, isConfirming, isResending, onBack, onConfir
 function SignedState({ state }: { state: DealSigningStateResponse }) {
   const completed = state.totalSignatures >= state.requiredSignatures;
   const documentReady = Boolean(state.finalPdf);
+  const dealCompleted = state.status === "COMPLETED";
   return (
     <section className="signing-flow signing-signed" aria-live="polite">
       <div className="signing-state-icon is-success"><CheckCircle2 size={36} /></div>
-      <div className="signing-title"><p>{completed ? "Подписано обеими сторонами" : "Ваша подпись сохранена"}</p><h2>{documentReady ? "Итоговый документ готов" : completed ? "Готовим итоговый документ" : "Ждём вторую сторону"}</h2><span>{documentReady ? "PDF сохранён в закрытом хранилище и доступен только участникам сделки." : completed ? "PDF и технический пакет материалов формируются на сервере." : "Сообщим в MAX, когда контрагент подпишет эту же версию."}</span></div>
+      <div className="signing-title"><p>{dealCompleted ? "Сделка завершена" : completed ? "Подписано обеими сторонами" : "Ваша подпись сохранена"}</p><h2>{dealCompleted ? "Договор и материалы готовы" : documentReady ? "Итоговый документ готов" : completed ? "Готовим итоговый документ" : "Ждём вторую сторону"}</h2><span>{dealCompleted ? "Обе подписи зафиксированы, итоговые файлы сохранены. Эта страница — карточка завершённой сделки." : documentReady ? "PDF сохранён в закрытом хранилище и доступен только участникам сделки." : completed ? "PDF и технический пакет материалов формируются на сервере." : "Сообщим в MAX, когда контрагент подпишет эту же версию."}</span></div>
       <Card className="signing-party-list">
         {state.parties.map((party) => <div key={`${party.role}-${party.displayName}`}><span>{party.signedAt ? <CheckCircle2 size={17} /> : <Clock3 size={17} />}<strong>{party.displayName}{party.isCurrentUser ? " · вы" : ""}</strong></span><small>{party.signedAt ? `Подписано ${formatDateTime(party.signedAt)}` : "Ожидаем подпись"}</small></div>)}
       </Card>

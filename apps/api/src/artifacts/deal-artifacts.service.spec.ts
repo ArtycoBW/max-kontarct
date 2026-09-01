@@ -73,6 +73,32 @@ describe("DealArtifactsService", () => {
     });
     expect(JSON.stringify(result)).not.toMatch(/phone|passport|email|address|party/i);
   });
+
+  it("marks a signed deal completed only after the evidence package exists", async () => {
+    const transaction = {
+      auditEvent: { create: jest.fn(async () => ({})) },
+      deal: { findUnique: jest.fn(), updateMany: jest.fn(async () => ({ count: 1 })) },
+    };
+    const prisma = { $transaction: jest.fn(async (callback) => callback(transaction)) };
+    const service = new DealArtifactsService(
+      new ConfigService({ PUBLIC_WEB_URL: "https://www.max-kontrakt.ru", S3_BUCKET: "private-bucket" }),
+      prisma as unknown as PrismaService,
+      {} as StorageService,
+    );
+    const packageCheck = jest.spyOn(service, "ensureEvidencePackage").mockResolvedValue({
+      createdAt: "2026-09-01T12:02:00.000Z", downloadUrl: "package", id: "artifact-2", mimeType: "application/zip",
+      originalName: "Материалы.zip", sha256: "b".repeat(64), sizeBytes: 100, type: "EVIDENCE_ZIP",
+    });
+
+    await expect(service.completeDeal("deal-1")).resolves.toBe(true);
+
+    expect(packageCheck).toHaveBeenCalledWith("deal-1");
+    expect(transaction.deal.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ status: DealStatus.COMPLETED }),
+      where: { id: "deal-1", status: DealStatus.SIGNED },
+    }));
+    expect(transaction.auditEvent.create).toHaveBeenCalledWith({ data: expect.objectContaining({ eventType: "DEAL_COMPLETED" }) });
+  });
 });
 
 function signedDeal() {

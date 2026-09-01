@@ -89,7 +89,7 @@ describe("SigningService", () => {
 function createService(prisma: Record<string, any>, otp: Record<string, any>) {
   return new SigningService(
     new ConfigService({ CONSENT_ELECTRONIC_SIGNATURE_VERSION: "pep-v1" }),
-    { ensureEvidencePackage: jest.fn(async () => ({})), ensureFinalPdf: jest.fn(async () => ({})) } as unknown as DealArtifactsService,
+    { completeDeal: jest.fn(async () => true), ensureEvidencePackage: jest.fn(async () => ({})), ensureFinalPdf: jest.fn(async () => ({})) } as unknown as DealArtifactsService,
     { sendUserNotification: jest.fn(async () => true) } as unknown as MaxBotService,
     otp as unknown as OtpService,
     prisma as unknown as PrismaService,

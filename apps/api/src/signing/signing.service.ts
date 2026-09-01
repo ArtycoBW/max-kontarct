@@ -173,8 +173,10 @@ export class SigningService {
     assertSigningOpen(context.status);
     const party = requireParty(context, userId);
     if (version.signatures.some((signature) => signature.partyId === party.id)) {
-      if (version.signatures.length >= context.parties.length) await this.artifacts.ensureFinalPdf(dealId);
-      if (version.signatures.length >= context.parties.length) await this.artifacts.ensureEvidencePackage(dealId);
+      if (version.signatures.length >= context.parties.length) {
+        const completed = await this.artifacts.completeDeal(dealId);
+        if (completed) this.notifyCompleted(context, userId, dealId);
+      }
       return this.state(userId, dealId);
     }
 
@@ -249,21 +251,14 @@ export class SigningService {
       return signature;
     });
 
-    for (const other of context.parties.filter(({ userId: id }) => id !== userId)) {
-      void this.maxBot.sendUserNotification(
-        other.user.maxAccount?.maxUserId ?? "",
-        context.parties.length === version.signatures.length + 1
-          ? "Договор подписан обеими сторонами. Готовим итоговый документ."
-          : "Вторая сторона подписала договор. Откройте сделку, чтобы поставить свою подпись.",
-      );
-    }
     void result;
     const nextState = await this.state(userId, dealId);
     if (nextState.totalSignatures >= nextState.requiredSignatures) {
-      await this.artifacts.ensureFinalPdf(dealId);
-      await this.artifacts.ensureEvidencePackage(dealId);
+      const completed = await this.artifacts.completeDeal(dealId);
+      if (completed) this.notifyCompleted(context, userId, dealId);
       return this.state(userId, dealId);
     }
+    this.notifyWaitingParty(context, userId, dealId);
     return nextState;
   }
 
@@ -274,6 +269,26 @@ export class SigningService {
     });
     if (!context) throw dealNotFound();
     return context;
+  }
+
+  private notifyCompleted(context: SigningContext, userId: string, dealId: string): void {
+    for (const other of context.parties.filter(({ userId: id }) => id !== userId)) {
+      void this.maxBot.sendUserNotification(
+        other.user.maxAccount?.maxUserId ?? "",
+        "Сделка завершена. Подписанный договор и пакет материалов готовы к скачиванию.",
+        `deal_${dealId.replaceAll("-", "")}`,
+      );
+    }
+  }
+
+  private notifyWaitingParty(context: SigningContext, userId: string, dealId: string): void {
+    for (const other of context.parties.filter(({ userId: id }) => id !== userId)) {
+      void this.maxBot.sendUserNotification(
+        other.user.maxAccount?.maxUserId ?? "",
+        "Вторая сторона подписала договор. Откройте сделку, чтобы поставить свою подпись.",
+        `deal_${dealId.replaceAll("-", "")}`,
+      );
+    }
   }
 }
 

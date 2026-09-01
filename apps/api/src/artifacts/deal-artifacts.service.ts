@@ -220,6 +220,29 @@ export class DealArtifactsService {
     }
   }
 
+  async completeDeal(dealId: string): Promise<boolean> {
+    await this.ensureEvidencePackage(dealId);
+    const now = new Date();
+    return this.prisma.$transaction(async (transaction) => {
+      const updated = await transaction.deal.updateMany({
+        data: { completedAt: now, status: DealStatus.COMPLETED, updatedAt: now },
+        where: { id: dealId, status: DealStatus.SIGNED },
+      });
+      if (updated.count === 0) {
+        const deal = await transaction.deal.findUnique({ select: { status: true }, where: { id: dealId } });
+        if (deal?.status === DealStatus.COMPLETED) return false;
+        throw new ConflictException({ code: "DEAL_COMPLETION_CONFLICT", message: "Не удалось завершить сделку" });
+      }
+      await transaction.auditEvent.create({ data: {
+        entityId: dealId,
+        entityType: "Deal",
+        eventType: "DEAL_COMPLETED",
+        metadata: { completedAt: now.toISOString(), dealId },
+      } });
+      return true;
+    });
+  }
+
   async download(userId: string, dealId: string, type: DealArtifactType): Promise<{
     artifact: { mimeType: string; originalName: string };
     object: StoredObject;
