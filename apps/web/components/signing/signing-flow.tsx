@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { queryKeys } from "@/lib/api/query-keys";
+import { ACTIVE_DEAL_REFRESH_MS } from "@/lib/api/deal-refresh";
 import { confirmDealSignature, getDealSigningState, issueDealSigningOtp } from "@/lib/api/signing";
 
 export function SigningFlow({ dealId }: { dealId: string }) {
@@ -22,8 +23,11 @@ export function SigningFlow({ dealId }: { dealId: string }) {
     queryKey: queryKeys.deals.signing(dealId),
     refetchInterval: (query) => {
       const state = query.state.data;
-      return state?.currentUserSigned && state.totalSignatures < state.requiredSignatures ? 6_000 : false;
+      return state?.status === "COMPLETED" && state.finalPdf && state.evidencePackage ? false : ACTIVE_DEAL_REFRESH_MS;
     },
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    staleTime: 0,
   });
   const issue = useMutation({
     mutationFn: () => {
@@ -95,11 +99,12 @@ function AgreementStep({ accepted, onAccepted, onIssue, pending, state }: {
   return (
     <section className="signing-flow" aria-label="Подписание договора">
       <div className="signing-state-icon"><KeyRound size={32} /></div>
-      <div className="signing-title"><p>ПЭП · версия {state.pepAgreement.version}</p><h2>Простая электронная подпись</h2><span>Одноразовый код подпишет только договор № {state.contractNumber}.</span></div>
+      <div className="signing-title"><p>Соглашение о ПЭП</p><h2>Простая электронная подпись</h2><span>Одноразовый код подпишет только договор № {state.contractNumber}.</span></div>
       <Card className="signing-agreement">
         <strong>{state.pepAgreement.title}</strong>
         {state.pepAgreement.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
-        <dl><dt>Версия договора</dt><dd>{state.versionNumber}</dd><dt>SHA-256</dt><dd title={state.documentHash}>{shortHash(state.documentHash)}</dd></dl>
+        <dl><dt>Подписываемая редакция</dt><dd>Версия № {state.versionNumber}</dd></dl>
+        <details className="signing-fingerprint"><summary>Контрольный отпечаток (SHA-256)</summary><p>Этот отпечаток связывает подпись с неизменным текстом и данными договора. Это не код из сообщения.</p><code>{state.documentHash}</code><small>Версия соглашения: {state.pepAgreement.version}</small></details>
       </Card>
       <label className="signing-consent">
         <input checked={accepted} onChange={(event) => onAccepted(event.target.checked)} type="checkbox" />

@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -280,6 +281,81 @@ describe("users/auth database foundation (integration)", () => {
         },
       }),
     ).rejects.toMatchObject({ code: "P2002" });
+  });
+
+  it("migrates preliminary approvals without changing frozen or completed deals", async () => {
+    const template = await database.contractTemplateVersion.findFirstOrThrow({
+      include: { documentRequirements: { where: { required: true } } },
+      where: { status: TemplateVersionStatus.PUBLISHED },
+    });
+    expect(template.documentRequirements.length).toBeGreaterThan(0);
+    const [initiator, counterparty] = await Promise.all([
+      database.user.create({ data: {} }),
+      database.user.create({ data: {} }),
+    ]);
+    const cases = [
+      { accepted: false, frozen: false, status: DealStatus.COUNTERPARTY_JOINED, expected: DealStatus.DOCUMENTS_PENDING },
+      { accepted: true, frozen: false, status: DealStatus.DOCUMENTS_REVIEW, expected: DealStatus.TERMS_REVIEW },
+      { accepted: false, frozen: true, status: DealStatus.READY_TO_SIGN, expected: DealStatus.READY_TO_SIGN },
+      { accepted: false, frozen: true, status: DealStatus.COMPLETED, expected: DealStatus.COMPLETED },
+    ];
+    const fixtures = [];
+    for (const scenario of cases) {
+      const deal = await database.deal.create({ data: {
+        initiatorUserId: initiator.id,
+        status: scenario.status,
+        templateVersionId: template.id,
+        title: "Проверка миграции согласований",
+      } });
+      const parties = await Promise.all([
+        database.dealParty.create({ data: { dealId: deal.id, userId: initiator.id, role: DealPartyRole.INITIATOR } }),
+        database.dealParty.create({ data: { dealId: deal.id, userId: counterparty.id, role: DealPartyRole.COUNTERPARTY } }),
+      ]);
+      const version = await database.dealVersion.create({ data: {
+        createdByUserId: initiator.id,
+        dealId: deal.id,
+        versionNumber: 1,
+        terms: {},
+        ...(scenario.frozen ? {
+          contractNumber: `МК-MIG-${randomUUID()}`,
+          frozenAt: new Date(),
+          frozenSnapshot: { terms: {} },
+          snapshotHash: "d".repeat(64),
+        } : {}),
+      } });
+      const approval = await database.dealApproval.create({ data: {
+        dealId: deal.id, dealVersionId: version.id, partyId: parties[0]!.id,
+      } });
+      if (scenario.accepted) {
+        await database.dealFile.createMany({ data: parties.flatMap((party) => template.documentRequirements.map((requirement) => ({
+          bucket: "integration",
+          category: "REQUIREMENT" as const,
+          dealId: deal.id,
+          mimeType: "application/pdf",
+          objectKey: `migration/${randomUUID()}.pdf`,
+          originalName: "Документ.pdf",
+          ownerUserId: party.userId,
+          requirementId: requirement.id,
+          reviewStatus: "ACCEPTED" as const,
+          sha256: "e".repeat(64),
+          sizeBytes: 128n,
+          visibility: "OWNER_ONLY" as const,
+        }))) });
+      }
+      fixtures.push({ approval, deal, scenario, version });
+    }
+    const sql = readFileSync(path.resolve(__dirname, "../prisma/migrations/20260903000000_single_final_approval/migration.sql"), "utf8");
+    await database.$executeRawUnsafe(sql);
+    for (const { approval, deal, scenario, version } of fixtures) {
+      const stored = await database.deal.findUniqueOrThrow({ where: { id: deal.id } });
+      const storedApproval = await database.dealApproval.findUniqueOrThrow({ where: { id: approval.id } });
+      expect(stored.status).toBe(scenario.expected);
+      expect(storedApproval.status).toBe(scenario.frozen ? "APPROVED" : "REVOKED");
+      if (scenario.frozen) {
+        expect(stored.updatedAt).toEqual(deal.updatedAt);
+        expect(await database.dealVersion.findUniqueOrThrow({ where: { id: version.id } })).toEqual(version);
+      }
+    }
   });
 
   it("enforces one active invitation and accepts it atomically", async () => {

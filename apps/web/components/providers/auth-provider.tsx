@@ -17,6 +17,7 @@ import {
 import { ApiError } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/query-keys";
 import { getMaxInitData, waitForMaxWebApp } from "@/lib/max/bridge";
+import { isPublicRoute } from "@/lib/routing/public-routes";
 
 interface AuthContextValue {
   error: Error | null;
@@ -49,7 +50,7 @@ async function bootstrapSession() {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const requiresSession = !pathname.startsWith("/invite/");
+  const requiresSession = !isPublicRoute(pathname);
   const session = useQuery({
     enabled: requiresSession,
     queryFn: bootstrapSession,

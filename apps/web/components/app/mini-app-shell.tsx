@@ -198,6 +198,9 @@ function DealsScreen({
   const deals = useQuery({
     queryFn: getDeals,
     queryKey: queryKeys.deals.list(),
+    refetchInterval: 5_000,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
   const hasDeals = Boolean(deals.data?.items.length);
 

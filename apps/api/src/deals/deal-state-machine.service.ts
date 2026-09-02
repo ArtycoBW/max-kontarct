@@ -19,6 +19,7 @@ const transitionGraph: Readonly<Record<DealStatus, readonly DealStatus[]>> = {
   ],
   [DealStatus.COUNTERPARTY_JOINED]: [
     DealStatus.DOCUMENTS_PENDING,
+    DealStatus.TERMS_REVIEW,
     DealStatus.CANCELED,
   ],
   [DealStatus.DOCUMENTS_PENDING]: [

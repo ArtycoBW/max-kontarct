@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Manrope } from "next/font/google";
-import Script from "next/script";
 import type { ReactNode } from "react";
 
 import { AppProviders } from "@/components/providers/app-providers";
@@ -32,12 +31,6 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="ru">
       <body className={manrope.variable}>
-        {process.env.NODE_ENV === "production" ? (
-          <Script
-            src="https://st.max.ru/js/max-web-app.js"
-            strategy="beforeInteractive"
-          />
-        ) : null}
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

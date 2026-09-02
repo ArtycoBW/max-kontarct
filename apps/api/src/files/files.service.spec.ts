@@ -131,7 +131,7 @@ describe("FilesService ACL", () => {
     expect(prisma.userTrustCheck.upsert).toHaveBeenCalled();
   });
 
-  it("opens repeated terms approval after every required document is accepted", async () => {
+  it("opens final terms approval after every required document is accepted", async () => {
     const reviewedAt = new Date("2026-09-01T12:00:00.000Z");
     const requirementId = "40000000-0000-4000-8000-000000000001";
     prisma.dealFile.findUnique.mockResolvedValue({ id: FILE_ID });

@@ -226,6 +226,8 @@ export class FilesService {
     return this.prisma.$transaction(async (transaction) => {
       const current = await transaction.dealFile.findUnique({ where: { id: fileId } });
       if (!current) throw fileNotFound();
+      // Serialize file decisions with approval/freeze updates of the same deal.
+      await transaction.deal.updateMany({ data: { updatedAt: new Date() }, where: { id: current.dealId } });
       const file = await transaction.dealFile.update({
         data: {
           reviewComment: comment,
@@ -346,7 +348,7 @@ async function syncDealDocumentsStatus(
     },
     where: { id: dealId },
   });
-  if (!deal || deal.status !== DealStatus.DOCUMENTS_PENDING) return;
+  if (!deal || (deal.status !== DealStatus.DOCUMENTS_PENDING && deal.status !== DealStatus.COUNTERPARTY_JOINED)) return;
   const requiredIds = deal.templateVersion.documentRequirements
     .filter(({ required }) => required)
     .map(({ id }) => id);
@@ -368,7 +370,7 @@ async function syncDealDocumentsStatus(
   if (!complete) return;
   const updated = await transaction.deal.updateMany({
     data: { status: DealStatus.DOCUMENTS_REVIEW, updatedAt: new Date() },
-    where: { id: dealId, status: DealStatus.DOCUMENTS_PENDING },
+    where: { id: dealId, status: { in: [DealStatus.DOCUMENTS_PENDING, DealStatus.COUNTERPARTY_JOINED] } },
   });
   if (updated.count !== 1) return;
   await transaction.auditEvent.create({
@@ -404,7 +406,7 @@ async function syncDealReviewStatus(
   });
   if (
     !deal ||
-    (deal.status !== DealStatus.DOCUMENTS_PENDING &&
+    (deal.status !== DealStatus.COUNTERPARTY_JOINED && deal.status !== DealStatus.DOCUMENTS_PENDING &&
       deal.status !== DealStatus.DOCUMENTS_REVIEW)
   ) return;
   const version = deal.versions[0];
@@ -433,7 +435,7 @@ async function syncDealReviewStatus(
     data: { status: DealStatus.TERMS_REVIEW, updatedAt: now },
     where: {
       id: dealId,
-      status: { in: [DealStatus.DOCUMENTS_PENDING, DealStatus.DOCUMENTS_REVIEW] },
+      status: { in: [DealStatus.COUNTERPARTY_JOINED, DealStatus.DOCUMENTS_PENDING, DealStatus.DOCUMENTS_REVIEW] },
     },
   });
   if (updated.count !== 1) return;

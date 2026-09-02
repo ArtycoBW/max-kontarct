@@ -34,6 +34,7 @@ import {
   validateUploadCandidate,
 } from "@/lib/api/files";
 import { queryKeys } from "@/lib/api/query-keys";
+import { dealRefreshInterval } from "@/lib/api/deal-refresh";
 
 export function DocumentsScreen({
   dealId,
@@ -80,6 +81,10 @@ function DealDocuments({ dealId, onBack }: { dealId: string; onBack: () => void 
   const workspace = useQuery({
     queryFn: () => getDealDocuments(dealId),
     queryKey: queryKeys.files.workspace(dealId),
+    refetchInterval: (query) => dealRefreshInterval(query.state.data?.dealStatus),
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    staleTime: 0,
     retry: false,
   });
 
@@ -107,6 +112,7 @@ function DealDocuments({ dealId, onBack }: { dealId: string; onBack: () => void 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.files.workspace(dealId) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.trust.current() }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.deals.workspace(dealId) }),
       ]);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Не удалось загрузить файл");

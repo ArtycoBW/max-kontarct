@@ -2129,10 +2129,13 @@ button.service-status {
 .admin-file-review-comment.is-empty { visibility: hidden; }
 .admin-file-review-card > footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: auto; }
 .admin-file-review-card > footer > small { color: var(--muted-foreground); font-size: 10px; }
-.admin-file-review-dialog { display: grid; gap: 16px; width: min(520px, calc(100vw - 28px)); max-height: calc(100dvh - 28px); overflow: auto; padding: 22px; }
-.admin-file-review-dialog > header { display: flex; align-items: flex-start; justify-content: space-between; }
+.admin-file-review-dialog { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; width: min(520px, calc(100vw - 28px)); max-width: 100%; min-width: 0; max-height: calc(100dvh - 28px); overflow-x: hidden; overflow-y: auto; padding: 22px; }
+.admin-file-review-dialog > * { min-width: 0; max-width: 100%; }
+.admin-file-review-dialog > header { display: flex; min-width: 0; gap: 12px; align-items: flex-start; justify-content: space-between; }
+.admin-file-review-dialog > header > span { min-width: 0; flex: 1; }
+.admin-file-review-dialog > header > .button { flex: 0 0 auto; }
 .admin-file-review-dialog > header small { color: var(--accent); font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
-.admin-file-review-dialog h2 { margin: 4px 0 0; font-size: 20px; }
+.admin-file-review-dialog h2 { margin: 4px 0 0; font-size: 18px; line-height: 1.35; overflow-wrap: anywhere; }
 .admin-file-review-dialog > p { margin: 0; color: var(--muted-foreground); font-size: 12px; line-height: 1.5; }
 .admin-file-review-dialog > label { display: grid; gap: 7px; font-size: 11px; font-weight: 700; }
 .admin-file-review-dialog > footer { display: flex; gap: 9px; justify-content: flex-end; }
@@ -4765,6 +4768,11 @@ button.service-status {
 .signing-agreement dl { display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; margin: 14px 0 2px; padding-top: 12px; border-top: 1px solid var(--app-border); font-size: 9px; }
 .signing-agreement dt { color: var(--app-muted); }
 .signing-agreement dd { margin: 0; font-weight: 700; }
+.signing-fingerprint { min-width: 0; margin-top: 14px; font-size: 10px; }
+.signing-fingerprint summary { cursor: pointer; font-weight: 700; }
+.signing-fingerprint p { margin-top: 9px; }
+.signing-fingerprint code { display: block; overflow-wrap: anywhere; line-height: 1.6; }
+.signing-fingerprint small { display: block; margin-top: 8px; color: var(--app-muted); overflow-wrap: anywhere; }
 .signing-consent { display: flex; align-items: flex-start; gap: 11px; padding: 14px; border: 1px solid var(--app-border); border-radius: 15px; font-size: 10px; line-height: 1.45; }
 .signing-consent input { width: 18px; height: 18px; margin: 0; flex: 0 0 auto; accent-color: var(--app-accent); }
 .signing-otp-inputs { display: flex; justify-content: center; gap: 10px; margin: 8px 0 2px; }

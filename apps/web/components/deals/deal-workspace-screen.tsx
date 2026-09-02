@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SigningFlow } from "@/components/signing/signing-flow";
 import { ApiError } from "@/lib/api/client";
+import { dealRefreshInterval } from "@/lib/api/deal-refresh";
 import { startDealAgreement } from "@/lib/api/deals";
 import {
   approveDealVersion,
@@ -51,8 +52,10 @@ export function DealWorkspaceScreen({
   const workspace = useQuery({
     queryFn: () => getDealWorkspace(dealId),
     queryKey: queryKeys.deals.workspace(dealId),
-    refetchInterval: (query) =>
-      query.state.data?.status === "INVITED" ? 8_000 : false,
+    refetchInterval: (query) => dealRefreshInterval(query.state.data?.status),
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    staleTime: 0,
   });
   const issueInvitation = useMutation({
     mutationFn: async (replaceActive: boolean) => {
@@ -99,8 +102,8 @@ export function DealWorkspaceScreen({
         : "Не удалось сохранить согласование. Повторите попытку.";
       toast.error("Согласование не сохранено", { description: message });
     },
-    onSuccess: async (result) => {
-      setNotice(`Версия согласована · ${result.totalApproved} из ${workspace.data?.approvals.required ?? result.totalApproved}`);
+    onSuccess: async () => {
+      setNotice("");
       toast.success("Согласование сохранено");
       await refreshWorkspace(queryClient, dealId);
     },
@@ -121,13 +124,13 @@ export function DealWorkspaceScreen({
 
   const deal = workspace.data;
   const currentInvitation = issuedInvitation ?? deal.invitation;
-  const canApprove =
-    deal.status === "COUNTERPARTY_JOINED" || deal.status === "TERMS_REVIEW";
+  const canApprove = deal.status === "TERMS_REVIEW";
+  const documentsPending = ["COUNTERPARTY_JOINED", "DOCUMENTS_PENDING", "DOCUMENTS_REVIEW"].includes(deal.status);
   const currentParty = deal.currentUserRole === "COUNTERPARTY"
     ? deal.counterparty
     : deal.initiator;
   const profileRequired = currentParty?.profileCompleted === false;
-  const versionApproved = deal.approvals.currentUserApproved || approval.isSuccess;
+  const versionApproved = deal.approvals.currentUserApproved;
   const visibleParty =
     deal.currentUserRole === "COUNTERPARTY" ? deal.initiator : deal.counterparty;
   const signingVisible = ["READY_TO_SIGN", "SIGNED_BY_ONE", "SIGNED", "COMPLETED"].includes(deal.status);
@@ -172,6 +175,7 @@ export function DealWorkspaceScreen({
       </Card>
 
       {notice ? <p className="deal-workspace-notice" role="status"><Check size={15} />{notice}</p> : null}
+      {!notice && deal.approvals.currentUserApproved ? <p className="deal-workspace-notice" role="status"><Check size={15} />Версия согласована · {deal.approvals.totalApproved} из {deal.approvals.required}</p> : null}
 
       {signingVisible ? <SigningFlow dealId={dealId} /> : null}
 
@@ -229,10 +233,10 @@ export function DealWorkspaceScreen({
           <Card className="deal-contract-preview">
             <strong>{deal.contractDraft.title}</strong>
             <p>{deal.contractDraft.preamble}</p>
-            {deal.contractDraft.sections.slice(0, 3).map((section) => (
+            {deal.contractDraft.sections.map((section) => (
               <div key={section.heading}>
                 <h3>{section.heading}</h3>
-                {section.clauses.slice(0, 3).map((clause) => <p key={clause}>{clause}</p>)}
+                {section.clauses.map((clause) => <p key={clause}>{clause}</p>)}
               </div>
             ))}
           </Card>
@@ -268,6 +272,8 @@ export function DealWorkspaceScreen({
               : `Согласовать версию ${deal.versionNumber}`}
         </Button>
       ) : null}
+
+      {documentsPending ? <Card className="form-message"><strong>{deal.status === "DOCUMENTS_REVIEW" ? "Документы на проверке" : "Сначала подготовьте документы"}</strong><span>Когда обязательные документы обеих сторон будут приняты, откроется финальное согласование этой версии договора.</span></Card> : null}
 
       {deal.status === "DRAFT" ? (
         <Button className="full-width" onClick={onEdit} variant="secondary">Редактировать черновик</Button>

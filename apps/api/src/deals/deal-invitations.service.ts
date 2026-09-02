@@ -21,6 +21,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import {
   DealApprovalStatus,
+  DealFileReviewStatus,
   DealPartyRole,
   DealStatus,
   ConsentType,
@@ -84,6 +85,7 @@ const workspaceSelect = {
   status: true,
   templateVersion: {
     select: {
+      documentRequirements: { select: { id: true, required: true } },
       id: true,
       template: { select: { slug: true, title: true } },
       versionNumber: true,
@@ -410,7 +412,16 @@ export class DealInvitationsService {
         acceptedAt: true,
         acceptedByUserId: true,
         createdByUserId: true,
-        deal: { select: { id: true, initiatorUserId: true, status: true } },
+        deal: {
+          select: {
+            id: true,
+            initiatorUserId: true,
+            status: true,
+            templateVersion: {
+              select: { documentRequirements: { where: { required: true }, select: { id: true } } },
+            },
+          },
+        },
         expiresAt: true,
         id: true,
         revokedAt: true,
@@ -491,9 +502,15 @@ export class DealInvitationsService {
           DealStatus.INVITED,
         );
       }
-      const nextStatus = this.stateMachine.transition(
+      this.stateMachine.transition(
         DealStatus.INVITED,
         DealStatus.COUNTERPARTY_JOINED,
+      );
+      const nextStatus = this.stateMachine.transition(
+        DealStatus.COUNTERPARTY_JOINED,
+        invitation.deal.templateVersion.documentRequirements.length
+          ? DealStatus.DOCUMENTS_PENDING
+          : DealStatus.TERMS_REVIEW,
       );
       const updated = await transaction.deal.updateMany({
         data: { status: nextStatus, updatedAt: now },
@@ -541,13 +558,10 @@ export class DealInvitationsService {
     const record = await this.findWorkspace(dealId, userId);
     const version = requireWorkspaceVersion(record);
     if (version.id !== versionId) throw versionConflict();
-    if (
-      record.status !== DealStatus.COUNTERPARTY_JOINED &&
-      record.status !== DealStatus.TERMS_REVIEW
-    ) {
+    if (record.status !== DealStatus.TERMS_REVIEW) {
       throw new ConflictException({
         code: "DEAL_APPROVAL_NOT_ALLOWED",
-        message: "Согласование условий недоступно на текущем этапе",
+        message: "Согласование откроется после принятия обязательных документов обеих сторон",
       });
     }
     const party = record.parties.find(({ userId: id }) => id === userId);
@@ -575,15 +589,7 @@ export class DealInvitationsService {
       const totalApproved = currentApprovals + 1;
       const allApproved = totalApproved === record.parties.length;
       const nextStatus = allApproved
-        ? record.status === DealStatus.COUNTERPARTY_JOINED
-          ? this.stateMachine.transition(
-              DealStatus.COUNTERPARTY_JOINED,
-              DealStatus.DOCUMENTS_PENDING,
-            )
-          : this.stateMachine.transition(
-              DealStatus.TERMS_REVIEW,
-              DealStatus.READY_TO_SIGN,
-            )
+        ? this.stateMachine.transition(DealStatus.TERMS_REVIEW, DealStatus.READY_TO_SIGN)
         : record.status;
       const freeze = nextStatus === DealStatus.READY_TO_SIGN
         ? createFreeze(record, version, now)
@@ -597,6 +603,24 @@ export class DealInvitationsService {
         },
       });
       if (updated.count !== 1) throw versionConflict();
+      const requiredIds = record.templateVersion.documentRequirements
+        .filter(({ required }) => required)
+        .map(({ id }) => id);
+      const accepted = await transaction.dealFile.findMany({
+        select: { ownerUserId: true, requirementId: true },
+        where: { dealId, requirementId: { in: requiredIds }, reviewStatus: DealFileReviewStatus.ACCEPTED },
+      });
+      const documentsAccepted = record.parties.length === 2 && record.parties.every((item) =>
+        requiredIds.every((requirementId) => accepted.some((file) =>
+          file.ownerUserId === item.userId && file.requirementId === requirementId,
+        )),
+      );
+      if (!documentsAccepted) {
+        throw new ConflictException({
+          code: "DEAL_APPROVAL_DOCUMENTS_REQUIRED",
+          message: "Дождитесь принятия обязательных документов обеих сторон",
+        });
+      }
       const approval = await transaction.dealApproval.upsert({
         create: { dealId, dealVersionId: version.id, partyId: party.id },
         select: { approvedAt: true, id: true },

@@ -15,7 +15,7 @@ export function PublicVerificationPage({ verification }: { verification: PublicD
 
         <div className="public-invite-heading public-verify-heading">
           <p className="screen-eyebrow">Публичная проверка</p>
-          <h1>{valid ? "Документ подлинный" : "Нужна проверка"}</h1>
+          <h1>{valid ? "Целостность подтверждена" : "Нужна проверка"}</h1>
           <p>{integrityDescription(verification.integrity)}</p>
         </div>
 

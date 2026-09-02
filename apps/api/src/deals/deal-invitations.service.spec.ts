@@ -21,6 +21,7 @@ describe("DealInvitationsService", () => {
   const transaction = {
     auditEvent: { create: jest.fn() },
     deal: { updateMany: jest.fn() },
+    dealFile: { findMany: jest.fn() },
     dealApproval: { create: jest.fn(), upsert: jest.fn() },
     dealVersion: { updateMany: jest.fn() },
     dealInvitation: {
@@ -71,6 +72,7 @@ describe("DealInvitationsService", () => {
     jest.clearAllMocks();
     dealFindFirst.mockResolvedValue(workspaceRecord());
     transaction.deal.updateMany.mockResolvedValue({ count: 1 });
+    transaction.dealFile.findMany.mockResolvedValue([]);
     transaction.dealVersion.updateMany.mockResolvedValue({ count: 1 });
     transaction.dealApproval.upsert.mockResolvedValue({
       approvedAt: new Date("2026-08-31T12:00:00.000Z"),
@@ -209,7 +211,7 @@ describe("DealInvitationsService", () => {
     dealFindFirst.mockResolvedValueOnce(
       workspaceRecord({
         parties: [initiatorParty(), counterpartyParty()],
-        status: DealStatus.COUNTERPARTY_JOINED,
+        status: DealStatus.DOCUMENTS_PENDING,
       }),
     );
 
@@ -223,7 +225,7 @@ describe("DealInvitationsService", () => {
     });
     expect(transaction.deal.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ status: DealStatus.COUNTERPARTY_JOINED }),
+        data: expect.objectContaining({ status: DealStatus.DOCUMENTS_PENDING }),
       }),
     );
     expect(result.currentUserRole).toBe(DealPartyRole.COUNTERPARTY);
@@ -245,9 +247,14 @@ describe("DealInvitationsService", () => {
   });
 
   it("freezes an exact canonical snapshot before READY_TO_SIGN", async () => {
+    transaction.dealFile.findMany.mockResolvedValue([
+      { ownerUserId: initiatorId, requirementId: "required-identity" },
+      { ownerUserId: counterpartyId, requirementId: "required-identity" },
+    ]);
     dealFindFirst.mockResolvedValue(workspaceRecord({
       parties: [initiatorParty(), counterpartyParty()],
       status: DealStatus.TERMS_REVIEW,
+      templateVersion: { ...workspaceRecord().templateVersion, documentRequirements: [{ id: "required-identity", required: true }] },
       versions: [{
         ...workspaceRecord().versions[0],
         approvals: [{
@@ -276,6 +283,23 @@ describe("DealInvitationsService", () => {
       data: expect.objectContaining({ eventType: "DEAL_VERSION_FROZEN" }),
     });
   });
+
+  it("does not accept preliminary agreement while documents are pending", async () => {
+    dealFindFirst.mockResolvedValue(workspaceRecord({ parties: [initiatorParty(), counterpartyParty()], status: DealStatus.DOCUMENTS_PENDING }));
+    await expect(service.approve(initiatorId, dealId, versionId, { expectedDealUpdatedAt: "2026-08-31T12:00:00.000Z" }))
+      .rejects.toMatchObject({ response: expect.objectContaining({ code: "DEAL_APPROVAL_NOT_ALLOWED" }) });
+    expect(transaction.dealApproval.upsert).not.toHaveBeenCalled();
+  });
+
+  it("checks accepted documents of both parties even when the status says terms review", async () => {
+    const record = workspaceRecord({ parties: [initiatorParty(), counterpartyParty()], status: DealStatus.TERMS_REVIEW });
+    dealFindFirst.mockResolvedValue({ ...record, templateVersion: { ...record.templateVersion, documentRequirements: [{ id: "required-identity", required: true }] } });
+    transaction.dealFile.findMany.mockResolvedValue([{ ownerUserId: initiatorId, requirementId: "required-identity" }]);
+    await expect(service.approve(counterpartyId, dealId, versionId, { expectedDealUpdatedAt: "2026-08-31T12:00:00.000Z" }))
+      .rejects.toMatchObject({ response: expect.objectContaining({ code: "DEAL_APPROVAL_DOCUMENTS_REQUIRED" }) });
+    expect(transaction.dealApproval.upsert).not.toHaveBeenCalled();
+    expect(transaction.dealVersion.updateMany).not.toHaveBeenCalled();
+  });
 });
 
 function workspaceRecord(overrides: Record<string, unknown> = {}) {
@@ -287,6 +311,7 @@ function workspaceRecord(overrides: Record<string, unknown> = {}) {
     parties: [initiatorParty()],
     status: DealStatus.COLLECTING_DATA,
     templateVersion: {
+      documentRequirements: [],
       id: "50000000-0000-4000-8000-000000000001",
       template: { slug: "property-rental", title: "Аренда имущества" },
       versionNumber: 1,
@@ -360,7 +385,7 @@ function joinInvitation(token: string) {
     acceptedAt: null,
     acceptedByUserId: null,
     createdByUserId: initiatorId,
-    deal: { id: dealId, initiatorUserId: initiatorId, status: DealStatus.INVITED },
+    deal: { id: dealId, initiatorUserId: initiatorId, status: DealStatus.INVITED, templateVersion: { documentRequirements: [{ id: "required-identity" }] } },
     expiresAt: new Date(Date.now() + 60_000),
     id: invitationId,
     revokedAt: null,

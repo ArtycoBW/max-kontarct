@@ -32,6 +32,8 @@ export function AdminFileReviewsView({ canReview }: { canReview: boolean }) {
   const files = useQuery({
     queryFn: getAdminFileReviews,
     queryKey: queryKeys.admin.files(),
+    refetchInterval: 5_000,
+    refetchOnWindowFocus: true,
     retry: false,
   });
   const review = useMutation({
@@ -87,7 +89,7 @@ export function AdminFileReviewsView({ canReview }: { canReview: boolean }) {
 
       {selected ? (
         <div className="admin-editor-backdrop" role="presentation">
-          <Card aria-labelledby="file-review-title" className="admin-file-review-dialog" role="dialog">
+          <Card aria-labelledby="file-review-title" aria-modal="true" className="admin-file-review-dialog" role="dialog">
             <header><span><small>Ручная проверка</small><h2 id="file-review-title">{selected.originalName}</h2></span><Button aria-label="Закрыть" onClick={() => setSelected(null)} size="icon" variant="ghost"><X size={18} /></Button></header>
             <p>Откройте файл, сопоставьте его с требованием и зафиксируйте решение. Система не делает выводов о личности автоматически.</p>
             <Button asChild variant="outline"><a href={getAdminFileDownloadUrl(selected.id)}><Download size={15} /> Скачать материал</a></Button>
