@@ -19,6 +19,7 @@ export function issueDealSigningOtp(
     body: JSON.stringify(body),
     headers: { "Content-Type": "application/json" },
     method: "POST",
+    timeoutMs: 30_000,
   });
 }
 
@@ -30,5 +31,7 @@ export function confirmDealSignature(
     body: JSON.stringify(body),
     headers: { "Content-Type": "application/json" },
     method: "POST",
+    // The second signature also persists the final PDF and the materials archive.
+    timeoutMs: 60_000,
   });
 }

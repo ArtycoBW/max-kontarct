@@ -20,10 +20,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SigningFlow } from "@/components/signing/signing-flow";
 import { ApiError } from "@/lib/api/client";
+import { approveCurrentDeal } from "@/lib/api/approve-current-deal";
 import { dealRefreshInterval } from "@/lib/api/deal-refresh";
 import { startDealAgreement } from "@/lib/api/deals";
 import {
-  approveDealVersion,
   createDealInvitation,
   getDealWorkspace,
   markDealInvitationSent,
@@ -92,9 +92,7 @@ export function DealWorkspaceScreen({
   const approval = useMutation({
     mutationFn: () => {
       if (!workspace.data) throw new Error("Сделка ещё загружается");
-      return approveDealVersion(dealId, workspace.data.versionId, {
-        expectedDealUpdatedAt: workspace.data.updatedAt,
-      });
+      return approveCurrentDeal(dealId, workspace.data);
     },
     onError: (error: Error) => {
       const message = error instanceof ApiError

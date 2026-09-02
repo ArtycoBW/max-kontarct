@@ -181,6 +181,14 @@ describe("DealInvitationsService", () => {
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  it.each(["expired", "revoked"])("rejects a %s invitation before joining", async (kind) => {
+    const token = "correct-token-value-1234567890ab";
+    const invitation = { ...joinInvitation(token), expiresAt: kind === "expired" ? new Date(0) : new Date(Date.now() + 60_000), revokedAt: kind === "revoked" ? new Date() : null };
+    invitationFindUnique.mockResolvedValue(invitation);
+    await expect(service.join(counterpartyId, { publicCode: "AbCdEfGhIjKl", token })).rejects.toMatchObject({ status: 409 });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it("denies private deal data before the user has joined", async () => {
     dealFindFirst.mockResolvedValue(null);
 
@@ -194,14 +202,13 @@ describe("DealInvitationsService", () => {
     );
   });
 
-  it("joins the second party atomically after phone and consents", async () => {
+  it("joins atomically with required consents even when notifications were declined", async () => {
     const token = "correct-token-value-1234567890ab";
     invitationFindUnique.mockResolvedValue(joinInvitation(token));
     prisma.user.findUnique.mockResolvedValue({
       consents: [
         { documentVersion: "personal-v1", granted: true, type: ConsentType.PERSONAL_DATA },
         { documentVersion: "terms-v1", granted: true, type: ConsentType.TERMS_OF_USE },
-        { documentVersion: "notifications-v1", granted: true, type: ConsentType.STATUS_NOTIFICATIONS },
       ],
       maxAccount: { maxUserId: "222" },
       phones: [{ id: "phone" }],
@@ -231,7 +238,7 @@ describe("DealInvitationsService", () => {
     expect(result.currentUserRole).toBe(DealPartyRole.COUNTERPARTY);
   });
 
-  it("requires all onboarding consents before joining", async () => {
+  it("requires mandatory onboarding consents before joining", async () => {
     const token = "correct-token-value-1234567890ab";
     invitationFindUnique.mockResolvedValue(joinInvitation(token));
     prisma.user.findUnique.mockResolvedValue({

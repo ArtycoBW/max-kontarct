@@ -203,6 +203,8 @@ function UploadButton({ accept, disabled, label, onSelect }: { accept: string; d
     <>
       <input
         accept={accept}
+        aria-label="Загрузить файл"
+        tabIndex={-1}
         className="is-visually-hidden"
         onChange={(event) => {
           const file = event.target.files?.[0];

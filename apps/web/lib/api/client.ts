@@ -1,5 +1,5 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
-const REQUEST_TIMEOUT_MS = 5_000;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 type ApiRequestOptions = RequestInit & { timeoutMs?: number };
 
@@ -43,7 +43,8 @@ export async function apiRequest<T>(
   path: string,
   init: ApiRequestOptions = {},
 ): Promise<T> {
-  const { timeoutMs = REQUEST_TIMEOUT_MS, ...requestInit } = init;
+  const isMutation = init.method && !["GET", "HEAD"].includes(init.method.toUpperCase());
+  const { timeoutMs = isMutation ? 30_000 : REQUEST_TIMEOUT_MS, ...requestInit } = init;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 

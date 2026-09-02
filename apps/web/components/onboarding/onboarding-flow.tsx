@@ -63,7 +63,7 @@ const consentRows: ConsentRowDefinition[] = [
     type: "TERMS_OF_USE",
   },
   {
-    copy: "Можно отключить в настройках",
+    copy: "Необязательно для работы со сделками",
     icon: Bell,
     label: "Уведомления о статусах",
     required: false,
@@ -106,7 +106,7 @@ export function OnboardingFlow({
 
       const result = await requestMaxContact();
       if (result.kind !== "max") {
-        throw new Error("MAX Bridge не передал контакт");
+        throw new Error("MAX не передал номер телефона. Повторите подтверждение.");
       }
       return verifyMaxPhone(result.contact);
     },
@@ -200,8 +200,7 @@ function ConsentScreen({
       <div className="onboarding-content">
         <OnboardingHeader eyebrow="Шаг 1 из 2" title="Согласия" />
         <p className="onboarding-copy">
-          Для начала работы подтвердите обязательные условия. Настройки можно
-          изменить позже.
+          Для начала работы подтвердите обязательные условия.
         </p>
 
         <div className="consent-list">
@@ -273,8 +272,7 @@ function PhoneScreen({
           title="Ваш номер телефона"
         />
         <p className="onboarding-copy">
-          MAX попросит разрешение передать номер. Он нужен для подтверждений и
-          не передаётся третьим лицам.
+          Разрешите MAX передать ваш номер для входа и подтверждения подписи.
         </p>
 
         <div className="phone-hero" aria-hidden="true">
@@ -287,7 +285,7 @@ function PhoneScreen({
           <ShieldCheck size={18} />
           <span>
             <strong>Только номер из MAX</strong>
-            <small>Сервер проверит цифровую подпись перед сохранением.</small>
+            <small>Подтвердим номер, связанный с вашим аккаунтом.</small>
           </span>
         </Card>
 
@@ -303,7 +301,7 @@ function PhoneScreen({
 
         <div className="phone-privacy-note">
           <LockKeyhole size={15} />
-          Вручную введённый номер не считается подтверждённым MAX.
+          Подтверждённый номер понадобится для подписания договора.
         </div>
       </div>
 

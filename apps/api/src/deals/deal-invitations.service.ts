@@ -456,7 +456,6 @@ export class DealInvitationsService {
     const requiredConsents = [
       [ConsentType.PERSONAL_DATA, this.config.getOrThrow<string>("CONSENT_PERSONAL_DATA_VERSION")],
       [ConsentType.TERMS_OF_USE, this.config.getOrThrow<string>("CONSENT_TERMS_VERSION")],
-      [ConsentType.STATUS_NOTIFICATIONS, this.config.getOrThrow<string>("CONSENT_STATUS_NOTIFICATIONS_VERSION")],
     ] as const;
     const consentsCompleted = requiredConsents.every(([type, version]) =>
       user?.consents.some(
