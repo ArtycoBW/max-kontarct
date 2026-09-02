@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily MAX-Contract backup
+
+[Timer]
+OnCalendar=*-*-* 03:20:00 UTC
+RandomizedDelaySec=10min
+Persistent=true
+Unit=max-contract-backup.service
+
+[Install]
+WantedBy=timers.target
