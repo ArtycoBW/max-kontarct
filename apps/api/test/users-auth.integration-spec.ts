@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { ConfigService } from "@nestjs/config";
 
 import {
   AiGenerationStatus,
@@ -17,6 +18,9 @@ import {
 
 import { PrismaService } from "../src/database/prisma.service";
 import { DealStateMachineService } from "../src/deals/deal-state-machine.service";
+import { DealInvitationsService } from "../src/deals/deal-invitations.service";
+import { FilesService } from "../src/files/files.service";
+import type { MaxBotService } from "../src/max-bot/max-bot.service";
 import { DealsRepository } from "../src/deals/deals.repository";
 import { DealsService } from "../src/deals/deals.service";
 import { TemplatesRepository } from "../src/templates/templates.repository";
@@ -304,6 +308,7 @@ describe("users/auth database foundation (integration)", () => {
       const deal = await database.deal.create({ data: {
         initiatorUserId: initiator.id,
         status: scenario.status,
+        completedAt: scenario.status === DealStatus.COMPLETED ? new Date() : null,
         templateVersionId: template.id,
         title: "Проверка миграции согласований",
       } });
@@ -337,6 +342,8 @@ describe("users/auth database foundation (integration)", () => {
           ownerUserId: party.userId,
           requirementId: requirement.id,
           reviewStatus: "ACCEPTED" as const,
+          reviewedAt: new Date(),
+          reviewedByUserId: initiator.id,
           sha256: "e".repeat(64),
           sizeBytes: 128n,
           visibility: "OWNER_ONLY" as const,
@@ -440,6 +447,71 @@ describe("users/auth database foundation (integration)", () => {
         where: { dealId_role: { dealId: deal.id, role: DealPartyRole.COUNTERPARTY } },
       }),
     ).resolves.toMatchObject({ userId: counterparty.id });
+  });
+
+  it("opens a single final approval only after both parties' documents are accepted", async () => {
+    const template = await database.contractTemplateVersion.findFirstOrThrow({
+      include: { documentRequirements: { where: { required: true } } },
+      where: { status: TemplateVersionStatus.PUBLISHED },
+    });
+    const participants = await Promise.all([1, 2].map((index) => database.user.create({ data: {
+      profile: { create: { firstName: "Тест", lastName: `Участник${index}` } },
+      phones: { create: { e164: `+7999000100${index}`, isPrimary: true, source: PhoneVerificationSource.MAX, verifiedAt: new Date() } },
+    } })));
+    const initiator = participants[0]!;
+    const counterparty = participants[1]!;
+    const deal = await database.deal.create({ data: {
+      initiatorUserId: initiator.id,
+      status: DealStatus.DOCUMENTS_REVIEW,
+      templateVersionId: template.id,
+      title: "Одно итоговое согласование",
+      parties: { create: [
+        { userId: initiator.id, role: DealPartyRole.INITIATOR },
+        { userId: counterparty.id, role: DealPartyRole.COUNTERPARTY },
+      ] },
+    } });
+    const version = await database.dealVersion.create({ data: {
+      createdByUserId: initiator.id,
+      dealId: deal.id,
+      versionNumber: 1,
+      terms: { answers: { price: 50_000 }, creationPath: "AI_ASSISTED", currentStep: "INITIATOR", description: "Тестовая сделка" },
+      contractDraft: { title: "Договор", preamble: "Стороны договорились", sections: [{ heading: "Предмет", clauses: ["Тестовое условие"] }] },
+    } });
+    const files = await Promise.all(participants.flatMap((participant) => template.documentRequirements.map((requirement) => database.dealFile.create({ data: {
+      bucket: "integration", category: "REQUIREMENT", dealId: deal.id,
+      mimeType: "application/pdf", objectKey: `single-approval/${randomUUID()}.pdf`,
+      originalName: "Документ.pdf", ownerUserId: participant.id, requirementId: requirement.id,
+      reviewStatus: "PENDING", sha256: "f".repeat(64), sizeBytes: 128n, visibility: "OWNER_ONLY",
+    } }))));
+    expect(files.length).toBeGreaterThanOrEqual(2);
+    const config = new ConfigService({
+      DEAL_INVITATION_TTL_SECONDS: 3600, PUBLIC_WEB_URL: "https://example.test",
+      S3_BUCKET: "integration", FILE_UPLOAD_MAX_BYTES: 20 * 1024 * 1024,
+    });
+    const prisma = database as unknown as PrismaService;
+    const service = new DealInvitationsService(config, {
+      sendUserNotification: jest.fn(async () => true),
+    } as unknown as MaxBotService, prisma, new DealStateMachineService());
+    const reviewService = new FilesService(prisma, {} as never, config);
+    await expect(service.approve(initiator.id, deal.id, version.id, { expectedDealUpdatedAt: deal.updatedAt.toISOString() }))
+      .rejects.toMatchObject({ response: expect.objectContaining({ code: "DEAL_APPROVAL_NOT_ALLOWED" }) });
+    for (const file of files.slice(0, -1)) {
+      await reviewService.review(initiator.id, file.id, { comment: "Проверено", status: "ACCEPTED" });
+    }
+    expect((await database.deal.findUniqueOrThrow({ where: { id: deal.id } })).status).toBe(DealStatus.DOCUMENTS_REVIEW);
+    await reviewService.review(initiator.id, files.at(-1)!.id, { comment: "Проверено", status: "ACCEPTED" });
+    const ready = await database.deal.findUniqueOrThrow({ where: { id: deal.id } });
+    expect(ready.status).toBe(DealStatus.TERMS_REVIEW);
+    expect(await database.dealApproval.count({ where: { dealId: deal.id } })).toBe(0);
+    const first = await service.approve(initiator.id, deal.id, version.id, { expectedDealUpdatedAt: ready.updatedAt.toISOString() });
+    expect(first).toMatchObject({ totalApproved: 1, dealStatus: DealStatus.TERMS_REVIEW });
+    const second = await service.approve(counterparty.id, deal.id, version.id, { expectedDealUpdatedAt: first.dealUpdatedAt });
+    expect(second).toMatchObject({ totalApproved: 2, dealStatus: DealStatus.READY_TO_SIGN });
+    const frozen = await database.dealVersion.findUniqueOrThrow({ where: { id: version.id } });
+    expect(frozen.frozenAt).toBeInstanceOf(Date);
+    expect(frozen.snapshotHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(await database.dealApproval.count({ where: { dealId: deal.id, status: "APPROVED" } })).toBe(2);
+    expect(await database.auditEvent.count({ where: { entityId: version.id, eventType: "DEAL_VERSION_FROZEN" } })).toBe(1);
   });
 
   it("persists versioned deals, parties and approvals with relational boundaries", async () => {
