@@ -54,7 +54,7 @@ function DealDocumentPicker({ onSelectDeal }: { onSelectDeal: (dealId: string) =
   return (
     <div className="screen-content documents-screen">
       <header className="screen-header"><div><p className="screen-eyebrow">Защищённое хранилище</p><h1>Документы</h1></div></header>
-      <p className="screen-copy">Выберите сделку — сервер покажет только доступные вам файлы.</p>
+      <p className="screen-copy">Выберите сделку, чтобы открыть её документы и материалы.</p>
       {deals.isPending ? <div className="documents-loading"><Skeleton /><Skeleton /></div> : null}
       {deals.error ? <DocumentsError onRetry={() => void deals.refetch()} /> : null}
       {deals.data?.items.length === 0 ? (
@@ -239,7 +239,7 @@ function BackTitle({ onBack, title }: { onBack: () => void; title: string }) {
 }
 
 function PrivacyNote() {
-  return <Card className="security-note"><LockKeyhole size={18} /><span><strong>Приватное хранение</strong><small>Доступ к каждому файлу заново проверяется сервером.</small></span></Card>;
+  return <Card className="security-note"><LockKeyhole size={18} /><span><strong>Приватное хранение</strong><small>Личные документы видны вам и администратору, который их проверяет.</small></span></Card>;
 }
 
 function DocumentsError({ onRetry }: { onRetry: () => void }) {

@@ -57,8 +57,8 @@ export function AdminFileReviewsView({ canReview }: { canReview: boolean }) {
     <div className="admin-file-reviews">
       <div className="admin-summary-grid">
         <Card><span>Материалов</span><strong>{files.data.total}</strong></Card>
-        <Card><span>Ожидают проверки</span><strong>{pending}</strong><small>Только ручное решение</small></Card>
-        <Card><span>Автопроверка личности</span><strong>Нет</strong><small>Биометрия не используется</small></Card>
+        <Card><span>Ожидают проверки</span><strong>{pending}</strong><small>Нужно решение администратора</small></Card>
+        <Card><span>Обработано в списке</span><strong>{files.data.items.length - pending}</strong><small>Принятые и отклонённые материалы</small></Card>
       </div>
       {files.data.items.length === 0 ? (
         <Card className="center-state"><span className="state-icon"><FileCheck2 size={30} /></span><h2>Материалов пока нет</h2><p>Загруженные пользователями файлы появятся здесь.</p></Card>
@@ -91,7 +91,7 @@ export function AdminFileReviewsView({ canReview }: { canReview: boolean }) {
         <div className="admin-editor-backdrop" role="presentation">
           <Card aria-labelledby="file-review-title" aria-modal="true" className="admin-file-review-dialog" role="dialog">
             <header><span><small>Ручная проверка</small><h2 id="file-review-title">{selected.originalName}</h2></span><Button aria-label="Закрыть" onClick={() => setSelected(null)} size="icon" variant="ghost"><X size={18} /></Button></header>
-            <p>Откройте файл, сопоставьте его с требованием и зафиксируйте решение. Система не делает выводов о личности автоматически.</p>
+            <p>Проверьте, что файл читается и соответствует требованию. Примите материал или укажите, что нужно исправить.</p>
             <Button asChild variant="outline"><a href={getAdminFileDownloadUrl(selected.id)}><Download size={15} /> Скачать материал</a></Button>
             <label>Комментарий<Textarea maxLength={1000} onChange={(event) => setComment(event.target.value)} placeholder="Обязателен при отклонении" rows={4} value={comment} /></label>
             <footer>

@@ -27,6 +27,8 @@ describe("buildEvidencePackage", () => {
       path: "contract/final.pdf",
       sha256: createHash("sha256").update(contract).digest("hex"),
     }));
-    expect(await zip.file("README.txt")!.async("string")).toContain("не является гарантией принятия");
+    const readme = await zip.file("README.txt")!.async("string");
+    expect(readme).toContain("manifest.sha256.json");
+    expect(readme).toContain("Личные документы, доступные только их владельцу");
   });
 });

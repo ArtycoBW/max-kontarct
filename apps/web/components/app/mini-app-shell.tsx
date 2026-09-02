@@ -943,7 +943,7 @@ function CreateDealScreen({
         <FlowHeader eyebrow="Черновик" onBack={onBack} title="Открываем сделку" />
         <Card className="form-message" role="status">
           <strong>Загружаем сохранённые данные</strong>
-          <span>Восстанавливаем последний подтверждённый сервером черновик.</span>
+          <span>Открываем сохранённый черновик.</span>
         </Card>
       </div>
     );

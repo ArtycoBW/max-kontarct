@@ -59,7 +59,7 @@ export function SigningFlow({ dealId }: { dealId: string }) {
     },
   });
 
-  if (signing.isPending) return <SigningState title="Готовим подписание" copy="Проверяем замороженную версию и подписи сторон." />;
+  if (signing.isPending) return <SigningState title="Готовим подписание" copy="Загружаем согласованный договор и подписи сторон." />;
   if (signing.isError || !signing.data) {
     return <SigningState title="Подписание недоступно" copy={apiMessage(signing.error)} action={<Button onClick={() => void signing.refetch()}><RefreshCw size={17} /> Повторить</Button>} />;
   }
@@ -165,13 +165,13 @@ function SignedState({ state }: { state: DealSigningStateResponse }) {
   return (
     <section className="signing-flow signing-signed" aria-live="polite">
       <div className="signing-state-icon is-success"><CheckCircle2 size={36} /></div>
-      <div className="signing-title"><p>{dealCompleted ? "Сделка завершена" : completed ? "Подписано обеими сторонами" : "Ваша подпись сохранена"}</p><h2>{dealCompleted ? "Договор и материалы готовы" : documentReady ? "Итоговый документ готов" : completed ? "Готовим итоговый документ" : "Ждём вторую сторону"}</h2><span>{dealCompleted ? "Обе подписи зафиксированы, итоговые файлы сохранены. Эта страница — карточка завершённой сделки." : documentReady ? "PDF сохранён в закрытом хранилище и доступен только участникам сделки." : completed ? "PDF и технический пакет материалов формируются на сервере." : "Сообщим в MAX, когда контрагент подпишет эту же версию."}</span></div>
+      <div className="signing-title"><p>{dealCompleted ? "Сделка завершена" : completed ? "Подписано обеими сторонами" : "Ваша подпись сохранена"}</p><h2>{dealCompleted ? "Договор и материалы готовы" : documentReady ? "Итоговый документ готов" : completed ? "Готовим итоговый документ" : "Ждём вторую сторону"}</h2><span>{dealCompleted ? "Договор подписан обеими сторонами. Скачайте документы сейчас или вернитесь к ним в любое время." : documentReady ? "Подписанный договор сохранён и доступен участникам сделки." : completed ? "Собираем подписанный договор и материалы сделки." : "Сообщим в MAX, когда контрагент подпишет эту же версию."}</span></div>
       <Card className="signing-party-list">
         {state.parties.map((party) => <div key={`${party.role}-${party.displayName}`}><span>{party.signedAt ? <CheckCircle2 size={17} /> : <Clock3 size={17} />}<strong>{party.displayName}{party.isCurrentUser ? " · вы" : ""}</strong></span><small>{party.signedAt ? `Подписано ${formatDateTime(party.signedAt)}` : "Ожидаем подпись"}</small></div>)}
       </Card>
       {state.finalPdf ? <Button asChild className="full-width"><a href={state.finalPdf.downloadUrl}><Download size={17} /> Скачать подписанный PDF</a></Button> : null}
       {state.evidencePackage ? <Button asChild className="full-width" variant="secondary"><a href={state.evidencePackage.downloadUrl}><Download size={17} /> Скачать пакет материалов</a></Button> : null}
-      {state.evidencePackage ? <p className="signing-package-note">Технический пакет помогает проверить целостность материалов, но не гарантирует их принятие конкретным судом или государственным органом.</p> : null}
+      {state.evidencePackage ? <p className="signing-package-note">В архиве — подписанный договор, общие вложения, история сделки и сведения о подписях.</p> : null}
       <p className="signing-integrity"><ShieldCheck size={16} />Подписи связаны с версией {state.versionNumber} и SHA-256 {shortHash(state.documentHash)}.</p>
     </section>
   );
