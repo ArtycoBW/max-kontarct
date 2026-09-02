@@ -121,6 +121,13 @@ test("two participants create, review, approve, sign and verify a deal", async (
     await noOverflow(page);
   }
   await first.screenshot({ path: "test-results/completed-mobile.png", fullPage: true });
+  await first.locator(".mini-app-scroll").evaluate(element => { element.scrollTop = element.scrollHeight; });
+  const bottomGap = await first.getByRole("button", { name: "Документы сделки", exact: true }).evaluate(element => {
+    const scroll = element.closest(".mini-app-scroll")!;
+    return scroll.getBoundingClientRect().bottom - element.getBoundingClientRect().bottom;
+  });
+  expect(bottomGap).toBeGreaterThanOrEqual(20);
+  await first.screenshot({ path: "test-results/completed-mobile-bottom.png", fullPage: true });
   const pdfDownload = first.waitForEvent("download");
   await first.getByRole("link", { name: "Скачать подписанный PDF" }).click();
   const pdf = await pdfDownload;
@@ -149,6 +156,9 @@ test("two participants create, review, approve, sign and verify a deal", async (
   await expect(verification.getByText(/Инициаторов|Участникова/)).toHaveCount(0);
   await noOverflow(verification);
   await verification.screenshot({ path: "test-results/verification-desktop.png", fullPage: true });
+  await verification.setViewportSize({ width: 1440, height: 1000 });
+  await noOverflow(verification);
+  await verification.screenshot({ path: "test-results/verification-wide.png", fullPage: true });
   await publicContext.close();
   await administrator.close();
   await initiator.close();

@@ -87,7 +87,8 @@ export async function renderFinalContractPdf(input: FinalContractPdfInput): Prom
   doc.moveDown(0.5).font("PTSans-Bold").fillColor("#35120d").text("SHA-256 подписанной версии:");
   doc.font("PTSans").fontSize(8).fillColor("#75645f").text(input.signatureHash, { characterSpacing: 0.15 });
 
-  ensureSpace(doc, 190);
+  // QR block is 105 pt plus its top gap; avoid an almost empty extra page.
+  ensureSpace(doc, 135);
   doc.moveDown(1.2);
   const qrTop = doc.y;
   const qrLeft = doc.x;

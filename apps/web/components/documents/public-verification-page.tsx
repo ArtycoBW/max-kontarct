@@ -21,7 +21,7 @@ export function PublicVerificationPage({ verification }: { verification: PublicD
 
         <Card className={`public-verify-result ${valid ? "is-valid" : "is-warning"}`}>
           {valid ? <CheckCircle2 size={23} /> : <TriangleAlert size={23} />}
-          <span><strong>{valid ? "Контрольная сумма совпадает" : "Целостность не подтверждена"}</strong><small>Проверены байты итогового PDF в закрытом хранилище.</small></span>
+          <span><strong>{valid ? "Контрольная сумма совпадает" : "Целостность не подтверждена"}</strong><small>Результат сверки файла с сохранённой контрольной суммой.</small></span>
         </Card>
 
         <section className="public-invite-section">
