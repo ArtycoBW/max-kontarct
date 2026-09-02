@@ -39,6 +39,19 @@ describe("validateEnvironment AI settings", () => {
     );
   });
 
+  it("forbids the fake SMS adapter with production configuration", () => {
+    expect(() => validateEnvironment({
+      NODE_ENV: "production", SMS_PROVIDER: "fake", AI_PROVIDER: "yandex",
+      CORS_ORIGINS: "https://example.test", PUBLIC_WEB_URL: "https://example.test",
+      CONSENT_PERSONAL_DATA_VERSION: "v1", CONSENT_TERMS_VERSION: "v1",
+      CONSENT_STATUS_NOTIFICATIONS_VERSION: "v1", CONSENT_ELECTRONIC_SIGNATURE_VERSION: "v1",
+      DATABASE_URL: "postgresql://example", REDIS_URL: "redis://example",
+      MAX_BOT_TOKEN: "example", MAX_WEBHOOK_SECRET: "example", OTP_HMAC_SECRET: "example",
+      S3_ENDPOINT: "https://s3.example.test", S3_ACCESS_KEY: "example", S3_SECRET_KEY: "example", S3_BUCKET: "example",
+      YANDEX_AI_API_KEY: "example", YANDEX_AI_FOLDER_ID: "example",
+    })).toThrow("SMS_PROVIDER=fake is forbidden in production");
+  });
+
   it("uses a mock address provider by default and validates DaData credentials", () => {
     expect(validateEnvironment({ NODE_ENV: "development" })).toMatchObject({
       DATA_NORMALIZATION_PROVIDER: "mock",

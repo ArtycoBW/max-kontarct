@@ -126,6 +126,16 @@ describe("Health endpoints (e2e)", () => {
     expect(disallowed.headers["access-control-allow-origin"]).toBeUndefined();
   });
 
+  it("blocks cross-site mutations before handlers, including simple form requests", async () => {
+    const response = await request(app.getHttpServer())
+      .post(`/${API_PREFIX}/auth/max`)
+      .set("origin", "https://evil.example")
+      .type("form")
+      .send({ initData: "untrusted" })
+      .expect(403);
+    expect(response.body.code).toBe("ORIGIN_FORBIDDEN");
+  });
+
   it("reports readiness, fails when Redis is down, and recovers", async () => {
     const healthy = await request(app.getHttpServer())
       .get(`/${API_PREFIX}/health/ready`)

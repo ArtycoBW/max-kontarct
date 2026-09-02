@@ -3,6 +3,7 @@ import type { ConfigService } from "@nestjs/config";
 import type { Params } from "nestjs-pino";
 
 import { resolveRequestId } from "../http/request-id";
+import { safeRequestPath } from "./safe-request-path";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -38,7 +39,7 @@ export function createLoggerParams(config: ConfigService): Params {
           return {
             id: readProperty(value, "id"),
             method: readProperty(value, "method"),
-            url: readProperty(value, "url"),
+            url: safeRequestPath(value.url),
           };
         },
       },

@@ -3,6 +3,7 @@ import { ValidationPipe } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import helmet from "helmet";
+import type { NextFunction, Request, Response } from "express";
 
 export const API_PREFIX = "api/v1";
 
@@ -35,6 +36,15 @@ export function configureApplication(app: INestApplication): void {
   );
 
   app.use(helmet());
+  // CORS alone does not prevent credentialed cross-site form uploads/mutations.
+  app.use((request: Request, response: Response, next: NextFunction) => {
+    const origin = request.get("origin");
+    if (origin && !allowedOrigins.has(origin) && ["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) {
+      response.status(403).json({ code: "ORIGIN_FORBIDDEN", message: "Запрос с этого сайта запрещён", details: null });
+      return;
+    }
+    next();
+  });
   app.setGlobalPrefix(API_PREFIX);
   app.useGlobalPipes(
     new ValidationPipe({

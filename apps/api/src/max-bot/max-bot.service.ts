@@ -6,6 +6,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { timingSafeEqual } from "node:crypto";
+import { PrismaService } from "../database/prisma.service";
 
 const MAX_API_TIMEOUT_MS = 10_000;
 
@@ -31,7 +32,7 @@ export class MaxBotService {
   private readonly webhookSecret: string;
   private botIdentityPromise: Promise<MaxBotIdentity> | undefined;
 
-  constructor(config: ConfigService) {
+  constructor(private readonly config: ConfigService, private readonly prisma: PrismaService) {
     this.apiUrl = config.getOrThrow<string>("MAX_API_URL").replace(/\/$/, "");
     this.token = config.getOrThrow<string>("MAX_BOT_TOKEN");
     this.webhookSecret = config.getOrThrow<string>("MAX_WEBHOOK_SECRET");
@@ -70,10 +71,21 @@ export class MaxBotService {
     maxUserId: string,
     text: string,
     payload?: string,
+    purpose: "status" | "signing" = "status",
   ): Promise<boolean> {
     if (!/^\d{1,20}$/.test(maxUserId)) return false;
 
     try {
+      if (purpose === "status") {
+        const consent = await this.prisma.maxAccount.findFirst({
+          select: { id: true },
+          where: {
+            maxUserId,
+            user: { consents: { some: { type: "STATUS_NOTIFICATIONS", granted: true, documentVersion: this.config.getOrThrow<string>("CONSENT_STATUS_NOTIFICATIONS_VERSION") } } },
+          },
+        });
+        if (!consent) return false;
+      }
       const deeplink = payload
         ? await this.createMiniAppDeeplink(payload)
         : undefined;
@@ -113,11 +125,11 @@ export class MaxBotService {
       );
       if (response.ok) return true;
       this.logger.warn(
-        { maxUserId, statusCode: response.status },
+        { statusCode: response.status },
         "MAX rejected a deal notification",
       );
     } catch {
-      this.logger.warn({ maxUserId }, "MAX deal notification was not delivered");
+      this.logger.warn("MAX deal notification was not delivered");
     }
     return false;
   }
@@ -178,10 +190,8 @@ export class MaxBotService {
     }
 
     if (!response.ok) {
-      const responseBody = (await response.text()).slice(0, 1_000);
       this.logger.error(
         {
-          responseBody,
           statusCode: response.status,
         },
         "MAX rejected the welcome message",
@@ -218,10 +228,8 @@ export class MaxBotService {
     }
 
     if (!response.ok) {
-      const responseBody = (await response.text()).slice(0, 1_000);
       this.logger.error(
         {
-          responseBody,
           statusCode: response.status,
         },
         "MAX rejected the bot identity request",

@@ -16,7 +16,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       retryStrategy: (attempt) => Math.min(attempt * 200, 1_000),
     });
     this.client.on("error", (error: Error) => {
-      this.logger.warn(`Redis connection error: ${error.message}`);
+      this.logger.warn(`Redis connection error: ${error.name}`);
     });
   }
 
@@ -24,7 +24,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.ping();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "unknown error";
+      const message = error instanceof Error ? error.name : "unknown error";
       this.logger.warn(`Redis is not ready during startup: ${message}`);
     }
   }

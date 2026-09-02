@@ -4,6 +4,7 @@ import type { Request, Response } from "express";
 import { PinoLogger } from "nestjs-pino";
 
 import { resolveRequestId } from "../http/request-id";
+import { safeRequestPath } from "../logging/safe-request-path";
 import { mapApiError } from "./api-error.mapper";
 
 type RequestWithId = Request & { id?: string };
@@ -24,15 +25,16 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const logContext = {
       code: error.code,
       method: request.method,
-      path: request.originalUrl,
+      path: safeRequestPath(request.originalUrl),
       requestId,
       status: error.status,
     };
 
     if (error.status >= Number(HttpStatus.INTERNAL_SERVER_ERROR)) {
-      this.logger.error({ ...logContext, err: exception }, error.message);
+      // Database/provider errors may embed SQL parameters, documents or tokens.
+      this.logger.error(logContext, "API request failed");
     } else {
-      this.logger.warn(logContext, error.message);
+      this.logger.warn(logContext, "API request rejected");
     }
 
     response.status(error.status).json({

@@ -341,8 +341,8 @@ export class AuthService {
           requestId,
         },
       });
-    } catch (error) {
-      this.logger.error({ err: error, eventType }, "Failed to record auth audit");
+    } catch {
+      this.logger.error({ eventType }, "Failed to record auth audit");
     }
   }
 }

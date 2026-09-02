@@ -64,7 +64,7 @@ export class HealthService {
       await operation();
       return [name, { status: "up" }];
     } catch (error) {
-      const message = error instanceof Error ? error.message : "unknown error";
+      const message = error instanceof Error ? error.name : "unknown error";
       this.logger.warn(`${name} readiness check failed: ${message}`);
       return [name, { status: "down" }];
     }

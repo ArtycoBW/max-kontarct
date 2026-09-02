@@ -17,6 +17,22 @@ const partyId = "40000000-0000-4000-8000-000000000001";
 const documentHash = "a".repeat(64);
 
 describe("SigningService", () => {
+  it("rejects signing an obsolete version before consuming an OTP", async () => {
+    const otp = { verify: jest.fn() };
+    const service = createService(prismaMock(signingContext()), otp);
+    await expect(service.confirm(userId, dealId, { code: "1234", versionId: "obsolete-version" }, { ipAddress: null, userAgent: null })).rejects.toMatchObject({ status: 409 });
+    expect(otp.verify).not.toHaveBeenCalled();
+  });
+
+  it("rejects signing after the deal returns to terms review", async () => {
+    const context = signingContext();
+    context.status = DealStatus.TERMS_REVIEW;
+    const otp = { verify: jest.fn() };
+    const service = createService(prismaMock(context), otp);
+    await expect(service.confirm(userId, dealId, { code: "1234", versionId }, { ipAddress: null, userAgent: null })).rejects.toMatchObject({ response: expect.objectContaining({ code: "DEAL_SIGNING_NOT_READY" }) });
+    expect(otp.verify).not.toHaveBeenCalled();
+  });
+
   it("stores a signature against the exact frozen hash without persisting the OTP", async () => {
     const context = signingContext();
     const createSignature = jest.fn(async ({ data }) => {
@@ -130,7 +146,7 @@ function signingContext() {
         userId: otherUserId,
       },
     ],
-    status: DealStatus.READY_TO_SIGN,
+    status: DealStatus.READY_TO_SIGN as DealStatus,
     versions: [{
       contractNumber: "МК-20260901-ABCDEF12-V1",
       frozenAt: new Date("2026-09-01T10:00:00.000Z"),

@@ -60,17 +60,31 @@ describe("OtpService", () => {
 
   it("invalidates a challenge after the maximum number of wrong attempts", async () => {
     await service.issue(input);
+    const wrongCode = provider.last?.code === "9999" ? "8888" : "9999";
     for (let attempt = 1; attempt < 5; attempt += 1) {
       await expect(service.verify({
-        code: "9999", dealId: input.dealId, userId: input.userId, versionId: input.versionId,
+        code: wrongCode, dealId: input.dealId, userId: input.userId, versionId: input.versionId,
       })).rejects.toMatchObject({ response: expect.objectContaining({ code: "OTP_INVALID" }) });
     }
     await expect(service.verify({
-      code: "9999", dealId: input.dealId, userId: input.userId, versionId: input.versionId,
+      code: wrongCode, dealId: input.dealId, userId: input.userId, versionId: input.versionId,
     })).rejects.toMatchObject({ response: expect.objectContaining({ code: "OTP_ATTEMPTS_EXCEEDED" }) });
     await expect(service.verify({
       code: provider.last?.code ?? "", dealId: input.dealId, userId: input.userId, versionId: input.versionId,
     })).rejects.toMatchObject({ response: expect.objectContaining({ code: "OTP_EXPIRED" }) });
+  });
+
+  it("rejects an expired code even if its Redis entry still exists", async () => {
+    await service.issue(input);
+    const clock = jest.spyOn(Date, "now").mockReturnValue(Date.now() + 301_000);
+    try {
+      await expect(service.verify({ ...input, code: provider.last?.code ?? "" })).rejects.toMatchObject({ response: expect.objectContaining({ code: "OTP_EXPIRED" }) });
+    } finally { clock.mockRestore(); }
+  });
+
+  it("rejects the issued code for another version", async () => {
+    await service.issue(input);
+    await expect(service.verify({ ...input, code: provider.last?.code ?? "", versionId: "changed-version" })).rejects.toMatchObject({ response: expect.objectContaining({ code: "OTP_EXPIRED" }) });
   });
 });
 

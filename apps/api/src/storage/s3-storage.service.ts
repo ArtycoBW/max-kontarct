@@ -43,7 +43,7 @@ export class S3StorageService implements StorageService, OnModuleInit {
     try {
       await this.ensureBucket();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "unknown error";
+      const message = error instanceof Error ? error.name : "unknown error";
       this.logger.warn(`S3 storage is not ready during startup: ${message}`);
     }
   }

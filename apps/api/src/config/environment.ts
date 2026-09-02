@@ -225,6 +225,9 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
   if (!new Set(["disabled", "fake", "max-test", "smsc"]).has(smsProvider)) {
     throw new Error("SMS_PROVIDER must be disabled, fake, max-test or smsc");
   }
+  if (nodeEnv === "production" && smsProvider === "fake") {
+    throw new Error("SMS_PROVIDER=fake is forbidden in production");
+  }
   const smscApiKey = readString(input.SMSC_API_KEY, DEVELOPMENT_DEFAULTS.SMSC_API_KEY);
   const smscLogin = readString(input.SMSC_LOGIN, DEVELOPMENT_DEFAULTS.SMSC_LOGIN);
   const smscPassword = readString(input.SMSC_PASSWORD, DEVELOPMENT_DEFAULTS.SMSC_PASSWORD);

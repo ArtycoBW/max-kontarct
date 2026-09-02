@@ -2,6 +2,7 @@ import { UnauthorizedException } from "@nestjs/common";
 import type { ConfigService } from "@nestjs/config";
 
 import { MaxBotService } from "./max-bot.service";
+import type { PrismaService } from "../database/prisma.service";
 
 describe("MaxBotService", () => {
   const values: Record<string, string> = {
@@ -12,13 +13,30 @@ describe("MaxBotService", () => {
   const config = {
     getOrThrow: jest.fn((key: string) => values[key]),
   } as unknown as ConfigService;
+  const findFirst = jest.fn();
+  const prisma = { maxAccount: { findFirst } } as unknown as PrismaService;
+
+  it("does not send optional status messages without an active consent", async () => {
+    const request = jest.spyOn(global, "fetch");
+    findFirst.mockResolvedValue(null);
+    await expect(new MaxBotService(config, prisma).sendUserNotification("123", "Статус")).resolves.toBe(false);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("delivers an explicitly requested signing code independently of status notifications", async () => {
+    const request = jest.spyOn(global, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    findFirst.mockClear();
+    await expect(new MaxBotService(config, prisma).sendUserNotification("123", "Код", undefined, "signing")).resolves.toBe(true);
+    expect(findFirst).not.toHaveBeenCalled();
+    expect(request).toHaveBeenCalledTimes(1);
+  });
 
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
   it("rejects requests without the configured webhook secret", async () => {
-    const service = new MaxBotService(config);
+    const service = new MaxBotService(config, prisma);
 
     await expect(
       service.handleUpdate("wrong-secret", {
@@ -30,7 +48,7 @@ describe("MaxBotService", () => {
 
   it("acknowledges unrelated updates without calling MAX API", async () => {
     const request = jest.spyOn(global, "fetch");
-    const service = new MaxBotService(config);
+    const service = new MaxBotService(config, prisma);
 
     await service.handleUpdate("test-webhook-secret", {
       chat_id: 42,
@@ -53,7 +71,7 @@ describe("MaxBotService", () => {
         ),
       )
       .mockResolvedValue(new Response("{}", { status: 200 }));
-    const service = new MaxBotService(config);
+    const service = new MaxBotService(config, prisma);
 
     await service.handleUpdate("test-webhook-secret", {
       chat_id: 42,
