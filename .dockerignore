@@ -10,6 +10,11 @@
 **/*.log
 playwright-report
 test-results
+tmp
+output
+.codex
+apps/api/test
+tests
 *.rar
 CODEX_MASTER_SPEC_Max-Contract_MVP.md
 **/AGENTS.md

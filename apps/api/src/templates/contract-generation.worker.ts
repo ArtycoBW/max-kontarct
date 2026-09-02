@@ -44,7 +44,7 @@ export class ContractGenerationWorker implements OnModuleInit, OnModuleDestroy {
       );
     });
     this.worker.on("error", (error) => {
-      this.logger.error(`Contract generation worker error: ${error.message}`);
+      this.logger.error(`Contract generation worker error: ${error.name}`);
     });
   }
 
@@ -53,5 +53,9 @@ export class ContractGenerationWorker implements OnModuleInit, OnModuleDestroy {
     if (this.connection && this.connection.status !== "end") {
       await this.connection.quit().catch(() => this.connection?.disconnect());
     }
+  }
+
+  isHealthy(): boolean {
+    return Boolean(this.worker?.isRunning() && this.connection?.status === "ready");
   }
 }

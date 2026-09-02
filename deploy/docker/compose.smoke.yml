@@ -1,0 +1,22 @@
+# Infrastructure only for deployment smoke checks; no production data or external calls.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: e2e
+      POSTGRES_PASSWORD: e2e_local_only
+      POSTGRES_DB: max_contract_docker_smoke
+    tmpfs: ["/var/lib/postgresql/data"]
+    healthcheck:
+      test: [CMD, pg_isready, -U, e2e, -d, max_contract_docker_smoke]
+      interval: 2s
+      retries: 15
+  redis:
+    image: redis:7-alpine
+    read_only: true
+    command: [redis-server, --save, "", --appendonly, "no"]
+  s3:
+    image: node:22-bookworm-slim
+    user: node
+    read_only: true
+    command: [node, -e, "require('node:http').createServer((q,s)=>{s.writeHead(q.method==='HEAD'?200:405);s.end()}).listen(9000,'0.0.0.0')"]
