@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await, @typescript-eslint/unbound-method */
 import { ConfigService } from "@nestjs/config";
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, NotFoundException } from "@nestjs/common";
 import { DealFileVisibility, DealStatus } from "@prisma/client";
 
 import type { StorageService } from "../storage/storage.service";
@@ -29,7 +29,8 @@ describe("FilesService ACL", () => {
         findFirst: jest.fn(),
         findMany: jest.fn(async () => []),
         findUnique: jest.fn(),
-        update: jest.fn(),
+        updateMany: jest.fn(async () => ({ count: 1 })),
+        findUniqueOrThrow: jest.fn(),
       },
       userTrustCheck: { upsert: jest.fn() },
     };
@@ -99,13 +100,13 @@ describe("FilesService ACL", () => {
   it("requires a meaningful comment when an administrator rejects a file", async () => {
     await expect(service.review(USER_ID, FILE_ID, { comment: " ", status: "REJECTED" }))
       .rejects.toBeInstanceOf(BadRequestException);
-    expect(prisma.dealFile.update).not.toHaveBeenCalled();
+    expect(prisma.dealFile.updateMany).not.toHaveBeenCalled();
   });
 
   it("records a manual decision, audit event and internal trust status", async () => {
     const reviewedAt = new Date("2026-09-01T12:00:00.000Z");
     prisma.dealFile.findUnique.mockResolvedValue({ id: FILE_ID });
-    prisma.dealFile.update.mockResolvedValue({
+    prisma.dealFile.findUniqueOrThrow.mockResolvedValue({
       deal: { title: "Аренда" },
       dealId: DEAL_ID,
       id: FILE_ID,
@@ -135,7 +136,7 @@ describe("FilesService ACL", () => {
     const reviewedAt = new Date("2026-09-01T12:00:00.000Z");
     const requirementId = "40000000-0000-4000-8000-000000000001";
     prisma.dealFile.findUnique.mockResolvedValue({ id: FILE_ID });
-    prisma.dealFile.update.mockResolvedValue({
+    prisma.dealFile.findUniqueOrThrow.mockResolvedValue({
       deal: { title: "Аренда" }, dealId: DEAL_ID, id: FILE_ID,
       mimeType: "application/pdf", originalName: "document.pdf",
       owner: { maxAccount: null, profile: { firstName: "Иван", lastName: "Иванов" } },
@@ -168,6 +169,19 @@ describe("FilesService ACL", () => {
     expect(prisma.dealApproval.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ status: "REVOKED" }),
     }));
+  });
+
+  it.each(["ACCEPTED", "REJECTED"] as const)("rejects a repeated %s decision without changing trust or approvals", async (status) => {
+    prisma.dealFile.findUnique.mockResolvedValue({ id: FILE_ID, dealId: DEAL_ID });
+    prisma.dealFile.updateMany.mockResolvedValue({ count: 0 });
+    await expect(service.review(USER_ID, FILE_ID, { comment: "Повторное решение", status }))
+      .rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.dealFile.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: FILE_ID, reviewStatus: "PENDING" },
+    }));
+    expect(prisma.auditEvent.create).not.toHaveBeenCalled();
+    expect(prisma.userTrustCheck.upsert).not.toHaveBeenCalled();
+    expect(prisma.dealApproval.updateMany).not.toHaveBeenCalled();
   });
 });
 

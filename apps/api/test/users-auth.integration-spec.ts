@@ -79,6 +79,8 @@ describe("users/auth database foundation (integration)", () => {
 
     database = new PrismaClient({
       datasources: { db: { url: databaseUrl(testDatabase) } },
+      // A loopback SSH tunnel can add network latency to multi-query transactions.
+      transactionOptions: { timeout: 30_000, maxWait: 10_000 },
     });
     await database.$connect();
   });
@@ -495,7 +497,26 @@ describe("users/auth database foundation (integration)", () => {
     const reviewService = new FilesService(prisma, {} as never, config);
     await expect(service.approve(initiator.id, deal.id, version.id, { expectedDealUpdatedAt: deal.updatedAt.toISOString() }))
       .rejects.toMatchObject({ response: expect.objectContaining({ code: "DEAL_APPROVAL_NOT_ALLOWED" }) });
-    for (const file of files.slice(0, -1)) {
+    const racedFile = files[0]!;
+    const decisions = await Promise.allSettled([
+      reviewService.review(initiator.id, racedFile.id, { comment: "Проверено", status: "ACCEPTED" }),
+      reviewService.review(initiator.id, racedFile.id, { comment: "Вторая вкладка", status: "ACCEPTED" }),
+    ]);
+    if (decisions.every(({ status }) => status === "rejected")) {
+      throw new AggregateError(decisions.map(result => result.status === "rejected" ? result.reason : null), "Both review transactions failed");
+    }
+    expect(decisions.filter(({ status }) => status === "fulfilled")).toHaveLength(1);
+    expect(decisions.find(({ status }) => status === "rejected")).toMatchObject({
+      reason: { response: expect.objectContaining({ code: "FILE_ALREADY_REVIEWED" }) },
+    });
+    const afterFirstReview = await database.dealFile.findUniqueOrThrow({ where: { id: racedFile.id } });
+    const dealAfterFirstReview = await database.deal.findUniqueOrThrow({ where: { id: deal.id } });
+    await expect(reviewService.review(initiator.id, racedFile.id, { comment: "Изменить решение", status: "REJECTED" }))
+      .rejects.toMatchObject({ response: expect.objectContaining({ code: "FILE_ALREADY_REVIEWED" }) });
+    expect(await database.dealFile.findUniqueOrThrow({ where: { id: racedFile.id } })).toEqual(afterFirstReview);
+    expect(await database.deal.findUniqueOrThrow({ where: { id: deal.id } })).toEqual(dealAfterFirstReview);
+    expect(await database.auditEvent.count({ where: { entityId: racedFile.id, eventType: "DEAL_FILE_REVIEWED" } })).toBe(1);
+    for (const file of files.slice(1, -1)) {
       await reviewService.review(initiator.id, file.id, { comment: "Проверено", status: "ACCEPTED" });
     }
     expect((await database.deal.findUniqueOrThrow({ where: { id: deal.id } })).status).toBe(DealStatus.DOCUMENTS_REVIEW);

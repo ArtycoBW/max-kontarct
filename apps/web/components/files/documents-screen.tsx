@@ -141,7 +141,7 @@ function DealDocuments({ dealId, onBack }: { dealId: string; onBack: () => void 
         </Card>
       ) : null}
       {success ? (
-        <Card className="upload-success-card" role="status"><Check size={19} /><span><strong>Файл загружен</strong><small>{success}</small></span></Card>
+        <Card className="upload-success-card" role="status"><Check size={19} /><span><strong>Файл загружен</strong><small title={success}>{success}</small></span></Card>
       ) : null}
 
       <section className="documents-section">

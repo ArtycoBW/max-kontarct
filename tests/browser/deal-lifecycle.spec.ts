@@ -59,14 +59,26 @@ test("two participants create, review, approve, sign and verify a deal", async (
   await second.getByRole("button", { name: "Сделки", exact: true }).click();
   await second.getByRole("button", { name: /Браузерная проверка аренды/ }).click();
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j0XsAAAAASUVORK5CYII=", "base64");
-  for (const [page, name] of [[first, "Личный-документ-первого.png"], [second, "Личный-документ-второго.png"]] as const) {
+  const longFilename = "Личный-документ-первого-" + "a9b3c0d1".repeat(12) + ".png";
+  for (const [page, name] of [[first, longFilename], [second, "Личный-документ-второго.png"]] as const) {
     await expect(page.getByRole("button", { name: "Согласовать версию 1" })).toHaveCount(0);
     await page.getByRole("button", { name: "Документы сделки" }).click();
     await page.locator(".requirement-upload-card").filter({ hasText: "Обязательно" }).locator('input[type="file"]').setInputFiles({ name, mimeType: "image/png", buffer: png });
     await expect(page.getByText("Файл загружен", { exact: true })).toBeVisible();
+    for (const width of [320, 390, 1440]) {
+      await page.setViewportSize({ width, height: 740 });
+      expect(await page.locator(".upload-success-card").evaluate(card => {
+        const icon = card.querySelector("svg")!.getBoundingClientRect();
+        const text = card.querySelector("small")!.getBoundingClientRect();
+        const bounds = card.getBoundingClientRect();
+        return icon.width >= 18 && text.right <= bounds.right && card.scrollWidth <= card.clientWidth;
+      })).toBe(true);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: `test-results/upload-${page === first ? "first" : "second"}.png`, fullPage: true });
     await noOverflow(page);
   }
-  await expect(second.getByText("Личный-документ-первого.png", { exact: true })).toHaveCount(0);
+  await expect(second.getByText(longFilename, { exact: true })).toHaveCount(0);
   const privateFileUrl = await first.getByRole("link", { name: /^Личный-документ-первого/ }).getAttribute("href");
   const outsider = await browser.newContext({ baseURL: "http://127.0.0.1:4300" });
   expect((await outsider.request.get(privateFileUrl!)).status()).toBe(401);
@@ -85,9 +97,9 @@ test("two participants create, review, approve, sign and verify a deal", async (
   await admin.goto("/admin");
   await admin.getByRole("button", { name: "Проверка файлов" }).click();
   await expect(admin.locator(".admin-file-review-card")).toHaveCount(3);
-  for (const name of ["Личный-документ-первого.png", "Личный-документ-второго.png", "Общий-акт.png"]) {
+  for (const name of [longFilename, "Личный-документ-второго.png", "Общий-акт.png"]) {
     await admin.locator(".admin-file-review-card").filter({ hasText: name }).getByRole("button", { name: "Проверить", exact: true }).click();
-    if (name === "Личный-документ-первого.png") {
+    if (name === longFilename) {
       await admin.getByLabel("Комментарий").fill('<img src=x onerror="window.__xss=true"> ' + "ДлинныйКомментарийБезПробелов".repeat(20));
       await admin.screenshot({ path: "test-results/review-dialog-mobile.png", fullPage: true });
     }
@@ -95,6 +107,12 @@ test("two participants create, review, approve, sign and verify a deal", async (
     await admin.getByRole("dialog").getByRole("button", { name: "Принять", exact: true }).click();
     await expect(admin.getByRole("dialog")).toHaveCount(0);
     await expect(admin.locator(".admin-file-review-card").filter({ hasText: name }).getByText("Принят", { exact: true })).toBeVisible();
+    const card = admin.locator(".admin-file-review-card").filter({ hasText: name });
+    await expect(card.getByRole("button", { name: "Проверить", exact: true })).toHaveCount(0);
+    await card.getByRole("button", { name: "Результат проверки", exact: true }).click();
+    await expect(admin.getByRole("dialog").getByRole("button", { name: /^(Принять|Отклонить)$/ })).toHaveCount(0);
+    await expect(admin.getByRole("dialog").getByLabel("Комментарий")).toHaveAttribute("readonly", "");
+    await admin.getByRole("dialog").getByRole("button", { name: "Закрыть", exact: true }).last().click();
   }
   expect(await admin.evaluate(() => (window as unknown as { __xss?: boolean }).__xss)).toBeUndefined();
   await admin.setViewportSize({ width: 1440, height: 1000 });

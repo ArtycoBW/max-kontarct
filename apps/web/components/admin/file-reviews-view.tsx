@@ -39,7 +39,10 @@ export function AdminFileReviewsView({ canReview }: { canReview: boolean }) {
   const review = useMutation({
     mutationFn: ({ fileId, status }: { fileId: string; status: "ACCEPTED" | "REJECTED" }) =>
       reviewAdminFile(fileId, { comment: comment.trim() || null, status }),
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) => {
+      toast.error(error.message);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.files() });
+    },
     onSuccess: async (_, variables) => {
       toast.success(variables.status === "ACCEPTED" ? "Материал принят" : "Материал отклонён");
       setSelected(null);
@@ -53,6 +56,8 @@ export function AdminFileReviewsView({ canReview }: { canReview: boolean }) {
     return <Card className="admin-inline-error"><CircleAlert size={24} /><span><strong>Не удалось загрузить материалы</strong><small>Проверьте соединение и повторите попытку.</small></span><Button onClick={() => void files.refetch()} variant="outline"><RefreshCw size={15} /> Повторить</Button></Card>;
   }
   const pending = files.data.items.filter(({ reviewStatus }) => reviewStatus === "PENDING").length;
+  const selectedFile = selected ? files.data.items.find(({ id }) => id === selected.id) ?? selected : null;
+  const canDecide = canReview && selectedFile?.reviewStatus === "PENDING";
   return (
     <div className="admin-file-reviews">
       <div className="admin-summary-grid">
@@ -81,7 +86,7 @@ export function AdminFileReviewsView({ canReview }: { canReview: boolean }) {
             </div>
             <footer>
               {canReview ? <Button asChild variant="outline"><a href={getAdminFileDownloadUrl(file.id)}><Download size={15} /> Скачать</a></Button> : null}
-              {canReview ? <Button onClick={() => { setSelected(file); setComment(file.reviewComment ?? ""); }}><ShieldCheck size={15} /> Проверить</Button> : <small>Только администратор может открыть файл и принять решение.</small>}
+              {canReview ? <Button onClick={() => { setSelected(file); setComment(file.reviewComment ?? ""); }} variant={file.reviewStatus === "PENDING" ? "primary" : "outline"}><ShieldCheck size={15} /> {file.reviewStatus === "PENDING" ? "Проверить" : "Результат проверки"}</Button> : <small>Только администратор может открыть файл и принять решение.</small>}
             </footer>
           </Card>
         ))}
@@ -91,12 +96,14 @@ export function AdminFileReviewsView({ canReview }: { canReview: boolean }) {
         <div className="admin-editor-backdrop" role="presentation">
           <Card aria-labelledby="file-review-title" aria-modal="true" className="admin-file-review-dialog" role="dialog">
             <header><span><small>Ручная проверка</small><h2 id="file-review-title">{selected.originalName}</h2></span><Button aria-label="Закрыть" onClick={() => setSelected(null)} size="icon" variant="ghost"><X size={18} /></Button></header>
-            <p>Проверьте, что файл читается и соответствует требованию. Примите материал или укажите, что нужно исправить.</p>
+            <p>{canDecide ? "Проверьте, что файл читается и соответствует требованию. Примите материал или укажите, что нужно исправить." : `Материал ${selectedFile?.reviewStatus === "ACCEPTED" ? "принят" : "отклонён"}. Решение сохранено. Для новой проверки нужен новый файл.`}</p>
             <Button asChild variant="outline"><a href={getAdminFileDownloadUrl(selected.id)}><Download size={15} /> Скачать материал</a></Button>
-            <label>Комментарий<Textarea maxLength={1000} onChange={(event) => setComment(event.target.value)} placeholder="Обязателен при отклонении" rows={4} value={comment} /></label>
+            <label>Комментарий<Textarea readOnly={!canDecide} maxLength={1000} onChange={(event) => setComment(event.target.value)} placeholder={canDecide ? "Обязателен при отклонении" : "Без комментария"} rows={4} value={canDecide ? comment : selectedFile?.reviewComment ?? ""} /></label>
             <footer>
-              <Button disabled={review.isPending || comment.trim().length < 3} onClick={() => review.mutate({ fileId: selected.id, status: "REJECTED" })} variant="outline"><X size={15} /> Отклонить</Button>
-              <Button disabled={review.isPending} onClick={() => review.mutate({ fileId: selected.id, status: "ACCEPTED" })}><Check size={15} /> Принять</Button>
+              {canDecide ? <>
+                <Button disabled={review.isPending || comment.trim().length < 3} onClick={() => review.mutate({ fileId: selected.id, status: "REJECTED" })} variant="outline"><X size={15} /> Отклонить</Button>
+                <Button disabled={review.isPending} onClick={() => review.mutate({ fileId: selected.id, status: "ACCEPTED" })}><Check size={15} /> {review.isPending ? "Сохраняем…" : "Принять"}</Button>
+              </> : <Button onClick={() => setSelected(null)}>Закрыть</Button>}
             </footer>
           </Card>
         </div>

@@ -8,6 +8,7 @@ import type {
 } from "@max-contract/contracts";
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -228,13 +229,22 @@ export class FilesService {
       if (!current) throw fileNotFound();
       // Serialize file decisions with approval/freeze updates of the same deal.
       await transaction.deal.updateMany({ data: { updatedAt: new Date() }, where: { id: current.dealId } });
-      const file = await transaction.dealFile.update({
+      const decision = await transaction.dealFile.updateMany({
         data: {
           reviewComment: comment,
           reviewedAt: new Date(),
           reviewedByUserId: reviewerUserId,
           reviewStatus: input.status,
         },
+        where: { id: fileId, reviewStatus: DealFileReviewStatus.PENDING },
+      });
+      if (decision.count !== 1) {
+        throw new ConflictException({
+          code: "FILE_ALREADY_REVIEWED",
+          message: "Решение по этому файлу уже принято. Для новой проверки загрузите исправленный документ отдельным файлом.",
+        });
+      }
+      const file = await transaction.dealFile.findUniqueOrThrow({
         include: {
           deal: { select: { title: true } },
           owner: { include: { maxAccount: true, profile: true } },
