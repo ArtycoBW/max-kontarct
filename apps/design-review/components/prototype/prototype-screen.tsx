@@ -487,6 +487,8 @@ function SplashScreen({ concept, onNext }: { concept: ConceptSlug; onNext: () =>
 
           <div className="cinematic-splash__media" aria-hidden="true">
             <div className="cinematic-splash__media-plane">
+              {/* The source changes on every animation frame; next/image is not suitable for this imperative canvas-like sequence. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 ref={frameImageRef}
                 className="cinematic-splash__frame"
