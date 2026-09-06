@@ -25,24 +25,26 @@ export class DadataDataNormalizationProvider implements DataNormalizationProvide
   }
 
   async suggestAddresses(query: string): Promise<AddressSuggestion[]> {
-    const response = await this.request<{ suggestions?: DadataSuggestion[] }>(
+    const response = await this.request<unknown>(
       "https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address",
       { count: 8, query },
       false,
     );
-    return (response.suggestions ?? [])
+    if (!isRecord(response) || !Array.isArray(response.suggestions)) throw providerUnavailable();
+    return response.suggestions
+      .filter(isRecord)
       .map(toSuggestion)
       .filter((item): item is AddressSuggestion => item !== null);
   }
 
   async normalizeAddress(address: string): Promise<NormalizedAddress> {
-    const response = await this.request<DadataSuggestion[]>(
+    const response = await this.request<unknown>(
       "https://cleaner.dadata.ru/api/v1/clean/address",
       [address],
       true,
     );
-    const item = response[0];
-    if (!item || typeof item.result !== "string" || !item.result.trim()) {
+    const item: unknown = Array.isArray(response) ? response[0] : null;
+    if (!isRecord(item) || typeof item.result !== "string" || !item.result.trim()) {
       throw new BadGatewayException({
         code: "ADDRESS_NORMALIZATION_EMPTY",
         message: "Не удалось распознать адрес",
@@ -68,17 +70,14 @@ export class DadataDataNormalizationProvider implements DataNormalizationProvide
       return await response.json() as T;
     } catch (error) {
       if (error instanceof BadGatewayException) throw error;
-      throw new BadGatewayException({
-        code: "ADDRESS_PROVIDER_UNAVAILABLE",
-        message: "Сервис проверки адресов временно недоступен",
-      });
+      throw providerUnavailable();
     }
   }
 }
 
 function toSuggestion(item: DadataSuggestion): AddressSuggestion | null {
   if (typeof item.value !== "string" || !item.value.trim()) return null;
-  const data = item.data ?? {};
+  const data = isRecord(item.data) ? item.data : {};
   return {
     city: stringValue(data.city_with_type) ?? stringValue(data.settlement_with_type),
     fiasId: stringValue(data.fias_id),
@@ -86,7 +85,7 @@ function toSuggestion(item: DadataSuggestion): AddressSuggestion | null {
     postalCode: stringValue(data.postal_code),
     region: stringValue(data.region_with_type),
     street: stringValue(data.street_with_type),
-    unrestrictedValue: item.unrestricted_value?.trim() || item.value.trim(),
+    unrestrictedValue: typeof item.unrestricted_value === "string" && item.unrestricted_value.trim() ? item.unrestricted_value.trim() : item.value.trim(),
     value: item.value.trim(),
   };
 }
@@ -109,4 +108,12 @@ function toNormalizedAddress(item: DadataSuggestion): NormalizedAddress {
 function stringValue(value: unknown): string | null {
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function providerUnavailable(): BadGatewayException {
+  return new BadGatewayException({ code: "ADDRESS_PROVIDER_UNAVAILABLE", message: "Сервис проверки адресов временно недоступен" });
 }

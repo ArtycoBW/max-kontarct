@@ -41,8 +41,8 @@ export class SmscSmsProvider implements SmsProvider {
     }
     const body = await readResponse(response);
     if (
-      !response.ok || body.error_code !== undefined ||
-      (typeof body.id !== "string" && typeof body.id !== "number")
+      !response.ok || body.error_code !== undefined || body.error !== undefined ||
+      !((typeof body.id === "string" && body.id.trim().length > 0) || (typeof body.id === "number" && Number.isFinite(body.id) && body.id > 0))
     ) {
       throw deliveryUnavailable();
     }

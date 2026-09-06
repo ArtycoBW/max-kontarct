@@ -24,6 +24,7 @@ npm run build --workspace @max-contract/api
 npm run build --workspace @max-contract/web
 bash deploy/backup/postgres-backup.sh
 npm run prisma:migrate:deploy
+node scripts/check-storage-privacy.cjs
 chown -R maxcontract:maxcontract "$release"
 rollback() {
     ln -sfn "$previous" /opt/max-contract/current.next

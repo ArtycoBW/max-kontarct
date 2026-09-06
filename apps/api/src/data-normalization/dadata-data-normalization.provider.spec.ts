@@ -12,6 +12,31 @@ describe("DadataDataNormalizationProvider", () => {
     jest.restoreAllMocks();
   });
 
+  it.each([null, [], { suggestions: "not-an-array" }])("handles malformed suggestions safely: %j", async body => {
+    jest.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify(body)));
+    await expect(new DadataDataNormalizationProvider(config).suggestAddresses("Москва")).rejects.toMatchObject({ response: { code: "ADDRESS_PROVIDER_UNAVAILABLE" } });
+  });
+
+  it("ignores invalid rows and untrusted nested types", async () => {
+    jest.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({ suggestions: [null, 123, { value: true }, { value: "Москва", unrestricted_value: 123, data: false }] })));
+    await expect(new DadataDataNormalizationProvider(config).suggestAddresses("Москва")).resolves.toEqual([expect.objectContaining({ value: "Москва", unrestrictedValue: "Москва", fiasId: null })]);
+  });
+
+  it.each([null, {}, [], [{ result: "" }]])("does not normalize an unusable cleanup response: %j", async body => {
+    jest.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify(body)));
+    await expect(new DadataDataNormalizationProvider(config).normalizeAddress("Москва")).rejects.toMatchObject({ response: { code: "ADDRESS_NORMALIZATION_EMPTY" } });
+  });
+
+  it.each([403, 429, 503])("maps HTTP %s without leaking the provider body", async status => {
+    jest.spyOn(global, "fetch").mockResolvedValue(new Response("secret token quota", { status }));
+    await expect(new DadataDataNormalizationProvider(config).suggestAddresses("Москва")).rejects.toThrow("Сервис проверки адресов временно недоступен");
+  });
+
+  it("maps transport timeouts to a safe error", async () => {
+    jest.spyOn(global, "fetch").mockRejectedValue(new Error("secret timeout"));
+    await expect(new DadataDataNormalizationProvider(config).normalizeAddress("Москва")).rejects.toThrow("Сервис проверки адресов временно недоступен");
+  });
+
   it("maps only whitelisted address suggestion fields", async () => {
     let capturedUrl = "";
     let capturedInit: RequestInit | undefined;
