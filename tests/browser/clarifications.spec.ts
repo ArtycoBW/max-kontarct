@@ -1,0 +1,53 @@
+import { expect, test } from "@playwright/test";
+import { actor, futureDate, noOverflow, onboarding } from "./helpers";
+
+test("bathroom repair asks for missing terms, retains answers after validation, and reaches ready", async ({ browser }) => {
+  const context = await actor(browser, 71200, "+79997001200");
+  const page = await context.newPage();
+  await page.goto("/");
+  await onboarding(page);
+  await page.getByRole("button", { name: "Создать", exact: true }).click();
+  await page.getByRole("button", { name: /Выполнение работ/ }).click();
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  await page.getByLabel("Название сделки", { exact: true }).fill("QA этап 8: уточнение ремонта");
+  await page.getByRole("textbox", { name: /^Краткое описание/ }).fill("Проверка: ремонт ванной комнаты под ключ");
+  await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
+  await page.getByRole("textbox", { name: "Описание работ", exact: true }).fill("Ремонт ванной комнаты под ключ");
+  await page.getByRole("textbox", { name: "Место выполнения работ", exact: true }).fill("Квартира собственника");
+  await futureDate(page, "Дата начала", 10);
+  await futureDate(page, "Дата окончания", 20);
+  await page.getByRole("textbox", { name: "Стоимость работ, ₽", exact: true }).fill("30000");
+  await page.getByRole("switch", { name: "Материалы включены в стоимость" }).check();
+  const started = page.waitForResponse(response => response.url().endsWith("/work-contract/clarifications") && response.request().method() === "POST");
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  const session = await (await started).json();
+  expect(session.questions.map((question: { id: string }) => question.id)).toEqual(["termsLocation", "termsPayment", "termsAcceptance"]);
+  await expect(page.getByRole("heading", { name: "Уточним детали" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Пропустить вопрос" })).toHaveCount(0);
+  const place = page.getByRole("textbox", { name: "Где именно будут выполняться работы?" });
+  await place.fill("потом");
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  await page.getByRole("textbox", { name: "Когда и в каком порядке производится оплата?" }).fill("Аванс 50% до начала работ, остаток 50% после приёмки");
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  await page.getByRole("textbox", { name: "Как стороны передают и принимают результат?" }).fill("Совместный осмотр и подписание акта в течение 3 дней");
+  await page.getByRole("button", { name: "Завершить", exact: true }).click();
+  await expect(place).toHaveValue("потом");
+  await expect(place).toHaveAttribute("aria-invalid", "true");
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 844 });
+    await noOverflow(page);
+    await page.screenshot({ path: `test-results/clarification-error-${width}.png`, fullPage: true });
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await place.fill("Москва, улица Примерная, дом 10, квартира 2");
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Когда и в каком порядке производится оплата?" })).toHaveValue("Аванс 50% до начала работ, остаток 50% после приёмки");
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Как стороны передают и принимают результат?" })).toHaveValue("Совместный осмотр и подписание акта в течение 3 дней");
+  await page.getByRole("button", { name: "Завершить", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Условия собраны" })).toBeVisible();
+  const persisted = await context.request.get(`/api/v1/templates/work-contract/clarifications/${session.id}`);
+  expect((await persisted.json()).answers).toMatchObject({ termsLocation: "Москва, улица Примерная, дом 10, квартира 2", termsPayment: "Аванс 50% до начала работ, остаток 50% после приёмки" });
+  await page.screenshot({ path: "test-results/clarification-ready.png", fullPage: true });
+  await context.close();
+});

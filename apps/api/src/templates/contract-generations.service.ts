@@ -13,6 +13,10 @@ import { AiGenerationStatus, type Prisma } from "@prisma/client";
 import { ContractGenerationQueue } from "./contract-generation.queue";
 import type { ContractGenerationRecord } from "./contract-generations.repository";
 import { ContractGenerationsRepository } from "./contract-generations.repository";
+import {
+  isCompletenessSession,
+  missingContractTerms,
+} from "./contract-completeness";
 
 @Injectable()
 export class ContractGenerationsService {
@@ -42,6 +46,20 @@ export class ContractGenerationsService {
       return toResponse(generation);
     }
 
+    if (
+      isCompletenessSession(generation.providerMetadata) &&
+      missingContractTerms(
+        templateSlug,
+        generation.inputAnswers as Record<string, unknown>,
+        (generation.clarificationAnswers ?? {}) as Record<string, unknown>,
+      ).length
+    ) {
+      throw new ConflictException({
+        code: "CONTRACT_GENERATION_CLARIFICATION_REQUIRED",
+        message:
+          "Условия заполнены не полностью. Вернитесь к параметрам и ответьте на уточняющие вопросы",
+      });
+    }
     const queued = await this.generations.markQueued(generation.id);
     try {
       await this.queue.enqueue(generation.id);
@@ -90,7 +108,9 @@ export class ContractGenerationsService {
   }
 }
 
-function toResponse(record: ContractGenerationRecord): ContractGenerationResponse {
+function toResponse(
+  record: ContractGenerationRecord,
+): ContractGenerationResponse {
   const status = toContractStatus(record.status);
   return {
     createdAt: record.createdAt.toISOString(),
@@ -108,7 +128,9 @@ function toResponse(record: ContractGenerationRecord): ContractGenerationRespons
   };
 }
 
-function toContractStatus(status: AiGenerationStatus): ContractGenerationStatus {
+function toContractStatus(
+  status: AiGenerationStatus,
+): ContractGenerationStatus {
   if (
     status === AiGenerationStatus.QUEUED ||
     status === AiGenerationStatus.GENERATING ||

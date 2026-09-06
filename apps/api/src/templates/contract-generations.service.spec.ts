@@ -80,6 +80,19 @@ describe("ContractGenerationsService", () => {
       status: "FAILED",
     });
   });
+
+  it("does not enqueue a ready flag when required terms are missing", async () => {
+    findOwned.mockResolvedValue(record(AiGenerationStatus.READY_TO_GENERATE, { providerMetadata: { completenessVersion: "1.0.0" } }));
+    await expect(service.start("work-contract", generationId, userId)).rejects.toMatchObject({ response: { code: "CONTRACT_GENERATION_CLARIFICATION_REQUIRED" } });
+    expect(markQueued).not.toHaveBeenCalled();
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it("does not re-evaluate or overwrite an already completed historic contract", async () => {
+    findOwned.mockResolvedValue(record(AiGenerationStatus.COMPLETED, { providerMetadata: { completenessVersion: "1.0.0" } }));
+    await expect(service.start("work-contract", generationId, userId)).resolves.toMatchObject({ status: "COMPLETED" });
+    expect(markQueued).not.toHaveBeenCalled();
+  });
 });
 
 function record(

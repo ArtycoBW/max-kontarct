@@ -24,7 +24,7 @@ test("two participants create, review, approve, sign and verify a deal", async (
   await first.getByRole("button", { name: "Сохранить и продолжить" }).click();
   await noOverflow(first);
   await expect(first.getByRole("heading", { name: "Параметры сделки" })).toBeVisible();
-  await first.getByRole("textbox", { name: "Предмет аренды", exact: true }).fill("Комната с мебелью, Москва, улица Примерная, дом 10, квартира 2");
+  await first.getByRole("textbox", { name: "Предмет аренды", exact: true }).fill("Комната с мебелью, Москва, улица Примерная, дом 10, квартира 2. Оплата ежедневно утром. Передача и возврат по акту. Возврат залога в течение 3 дней после окончания аренды, удержания за подтверждённый ущерб.");
   await futureDate(first, "Дата начала аренды", 10);
   await futureDate(first, "Дата окончания аренды", 20);
   await first.getByRole("textbox", { name: "Размер платежа, ₽", exact: true }).fill("2000");

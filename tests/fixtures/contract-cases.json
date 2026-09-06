@@ -1,0 +1,32 @@
+[
+  {
+    "slug": "work-contract", "title": "Выполнение работ",
+    "input": {"workDescription":"Ремонт ванной комнаты под ключ", "workLocation":"Квартира собственника", "startDate":"2070-01-10", "endDate":"2070-01-20", "price":30000, "materialsIncluded":true},
+    "answers": {"termsLocation":"Москва, улица Примерная, дом 10, квартира 2", "termsPayment":"Аванс 50% до начала работ, остаток 50% после приёмки", "termsAcceptance":"Совместный осмотр и подписание акта в течение 3 дней после завершения"},
+    "completeField":"workDescription"
+  },
+  {
+    "slug":"paid-services", "title":"Оказание услуг",
+    "input":{"serviceDescription":"Консультация по настройке компьютера, один сеанс 2 часа", "serviceLocation":"", "completionDate":"2070-01-20", "paymentAmount":2000, "paymentProcedure":"Предоплата и окончательный расчёт"},
+    "answers":{"termsLocation":"Онлайн, по видеосвязи", "termsPayment":"Предоплата 30%, остаток 70% после оказания услуги", "termsAcceptance":"Результат подтверждается письменно по электронной почте в течение 2 дней"},
+    "completeField":"serviceDescription"
+  },
+  {
+    "slug":"property-rental", "title":"Аренда имущества",
+    "input":{"propertyDescription":"Комната с мебелью, площадь 20 кв. м", "startDate":"2070-01-10", "endDate":"2070-01-20", "paymentAmount":2000, "paymentFrequency":"Посуточно", "depositAmount":5000, "utilitiesIncluded":false},
+    "answers":{"termsProperty":"Москва, улица Примерная, дом 10, квартира 2", "termsPayment":"Оплата ежедневно утром за следующие сутки", "termsAcceptance":"Передача и возврат имущества по акту после совместного осмотра", "termsUtilities":"Коммунальные расходы оплачивает арендатор по счетам", "termsDeposit":"Возврат в течение 3 дней после окончания аренды, удержания только за подтверждённый ущерб"},
+    "completeField":"propertyDescription"
+  },
+  {
+    "slug":"movable-property-sale", "title":"Купля-продажа движимого имущества",
+    "input":{"propertyDescription":"Ноутбук, модель Test 15, исправный, зарядное устройство в комплекте", "propertyIdentifier":"TEST-SERIAL-001", "price":25000, "transferDate":"2070-01-20", "transferLocation":"У продавца", "paymentMethod":"Банковский перевод"},
+    "answers":{"termsLocation":"Москва, улица Примерная, дом 10", "termsPayment":"Полная оплата при передаче имущества после проверки", "termsAcceptance":"Совместный осмотр и подписание акта передачи"},
+    "completeField":"propertyDescription"
+  },
+  {
+    "slug":"personal-loan", "title":"Заём между физическими лицами",
+    "input":{"loanAmount":50000, "returnDate":"2070-02-20", "interestType":"С процентами", "interestRate":5, "earlyRepaymentAllowed":false, "purpose":"Личные нужды"},
+    "answers":{"termsLoanTransfer":"Банковский перевод в день подписания договора", "termsLoanRepayment":"Одним платежом в указанную дату возврата", "termsInterest":"Проценты уплачиваются вместе с возвратом займа"},
+    "completeField":"purpose"
+  }
+]

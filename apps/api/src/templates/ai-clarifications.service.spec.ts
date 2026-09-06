@@ -12,6 +12,7 @@ import type { AiClarificationRecord } from "./ai-clarifications.repository";
 import { AiClarificationsRepository } from "./ai-clarifications.repository";
 import { AiClarificationsService } from "./ai-clarifications.service";
 import { TemplatesService } from "./templates.service";
+import { missingContractTerms } from "./contract-completeness";
 
 const userId = "00000000-0000-4000-8000-000000000001";
 const sessionId = "10000000-0000-4000-8000-000000000001";
@@ -63,7 +64,7 @@ describe("AiClarificationsService", () => {
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
         promptId: "contract-clarification",
-        promptVersion: "1.1.0",
+        promptVersion: "1.2.0",
         status: AiGenerationStatus.NEED_MORE_INFO,
         templateVersionId: versionId,
         userId,
@@ -245,9 +246,9 @@ describe("AiClarificationsService", () => {
 
     expect(create.mock.calls[0]?.[0]).toMatchObject({
       metadata: {
-        questionHistory: [{ id: "property_address" }],
+        questionHistory: [{ id: "termsProperty" }, { id: "termsPayment" }, { id: "termsAcceptance" }],
       },
-      questions: [{ id: "property_address" }],
+      questions: [{ id: "termsProperty" }, { id: "termsPayment" }, { id: "termsAcceptance" }],
     });
   });
 
@@ -280,6 +281,47 @@ describe("AiClarificationsService", () => {
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       status: AiGenerationStatus.READY_TO_GENERATE,
     }));
+  });
+
+  it("overrides an empty READY response for the reported bathroom repair", async () => {
+    const input = { workDescription: "Ремонт ванной под ключ", workLocation: "Квартира собственника", price: 30000, materialsIncluded: true };
+    validateAnswers.mockResolvedValue({ answers: input, snapshot: { templateTitle: "Выполнение работ", templateVersionId: versionId } });
+    generateStructured.mockResolvedValue(aiResult({ status: "READY_TO_GENERATE", questions: [] }));
+    create.mockResolvedValue(record());
+    await service.start("work-contract", userId, { answers: input, templateVersionId: versionId });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      status: "NEED_MORE_INFO", questions: [expect.objectContaining({ id: "termsLocation" }), expect.objectContaining({ id: "termsPayment" }), expect.objectContaining({ id: "termsAcceptance" })],
+    }));
+    expect((create.mock.calls[0]?.[0] as { metadata: unknown }).metadata).toMatchObject({ completenessVersion: "1.0.0" });
+  });
+
+  it("keeps a complete free-form description ready even when AI repeats address/payment questions", async () => {
+    const input = { workDescription: "Москва, улица Примерная, дом 10. Оплата после приёмки. Подписание акта после осмотра", workLocation: "", materialsIncluded: true };
+    validateAnswers.mockResolvedValue({ answers: input, snapshot: { templateTitle: "Работы", templateVersionId: versionId } });
+    generateStructured.mockResolvedValue(aiResult({ status: "NEED_MORE_INFO", questions: [shortTextQuestion("address", "Полный адрес"), shortTextQuestion("paymentTerms", "Порядок оплаты")] }));
+    create.mockResolvedValue(record({ status: "READY_TO_GENERATE", questions: [] }));
+    await service.start("work-contract", userId, { answers: input, templateVersionId: versionId });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ status: "READY_TO_GENERATE", questions: [] }));
+  });
+
+  it("rejects a vague mandatory answer and leaves the saved session unchanged", async () => {
+    const input = { materialsIncluded: true };
+    findOwned.mockResolvedValue(record({ inputAnswers: input, providerMetadata: { completenessVersion: "1.0.0" }, questions: missingContractTerms("work-contract", input).map(question => ({ ...question, options: question.options.map(option => ({ ...option })) })) }));
+    await expect(service.answer("work-contract", sessionId, userId, { answers: { termsLocation: "потом", termsPayment: "После приёмки", termsAcceptance: "По акту" } })).rejects.toMatchObject({ response: { details: { errors: [expect.objectContaining({ path: "termsLocation" })] } } });
+    expect(update).not.toHaveBeenCalled();
+    expect(generateStructured).not.toHaveBeenCalled();
+  });
+
+  it("preserves mandatory answers and ignores their repeated AI variants", async () => {
+    const input = { materialsIncluded: true };
+    const questions = missingContractTerms("work-contract", input).map(question => ({ ...question, options: question.options.map(option => ({ ...option })) }));
+    findOwned.mockResolvedValue(record({ inputAnswers: input, providerMetadata: { completenessVersion: "1.0.0", questionHistory: questions }, questions }));
+    generateStructured.mockResolvedValue(aiResult({ status: "NEED_MORE_INFO", questions: [shortTextQuestion("otherAddress", "Укажите адрес"), shortTextQuestion("paymentTerms", "Порядок оплаты")] }));
+    update.mockResolvedValue(record({ status: "READY_TO_GENERATE", questions: [] }));
+    const answers = { termsLocation: "Онлайн", termsPayment: "После приёмки", termsAcceptance: "Приёмка по акту" };
+    await service.answer("work-contract", sessionId, userId, { answers });
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ answers, status: "READY_TO_GENERATE", questions: [], expectedUpdatedAt: createdAt }));
+    expect((update.mock.calls[0]?.[0] as { metadata: unknown }).metadata).toMatchObject({ completenessVersion: "1.0.0" });
   });
 });
 

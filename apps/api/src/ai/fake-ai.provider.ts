@@ -53,6 +53,9 @@ export class FakeAiProvider implements AiProvider {
 }
 
 function generateClarification(userData: AiJsonObject): AiJsonObject {
+  if (typeof userData.templateSlug === "string" && userData.templateSlug !== "property-rental") {
+    return { questions: [], status: "READY_TO_GENERATE" };
+  }
   const clarificationAnswers = isJsonObject(userData.clarificationAnswers)
     ? userData.clarificationAnswers
     : {};

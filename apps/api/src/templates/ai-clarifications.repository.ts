@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { ConflictException, Injectable } from "@nestjs/common";
 import { AiGenerationStatus, Prisma } from "@prisma/client";
 
 import { PrismaService } from "../database/prisma.service";
@@ -74,26 +74,44 @@ export class AiClarificationsRepository {
     });
   }
 
-  update(input: {
+  async update(input: {
     answers: Prisma.InputJsonObject;
     id: string;
+    expectedUpdatedAt: Date;
     metadata: Prisma.InputJsonObject;
     questions: Prisma.InputJsonArray;
     status: AiGenerationStatus;
   }): Promise<AiClarificationRecord> {
-    return this.prisma.aiGeneration.update({
-      data: {
-        clarificationAnswers: input.answers,
-        completedAt:
-          input.status === AiGenerationStatus.READY_TO_GENERATE
-            ? new Date()
-            : null,
-        providerMetadata: input.metadata,
-        questions: input.questions,
-        status: input.status,
-      },
-      select: clarificationSelect,
-      where: { id: input.id },
-    });
+    try {
+      return await this.prisma.aiGeneration.update({
+        data: {
+          clarificationAnswers: input.answers,
+          completedAt:
+            input.status === AiGenerationStatus.READY_TO_GENERATE
+              ? new Date()
+              : null,
+          providerMetadata: input.metadata,
+          questions: input.questions,
+          status: input.status,
+        },
+        select: clarificationSelect,
+        where: {
+          id: input.id,
+          status: AiGenerationStatus.NEED_MORE_INFO,
+          updatedAt: input.expectedUpdatedAt,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2025"
+      ) {
+        throw new ConflictException({
+          code: "AI_CLARIFICATION_CHANGED",
+          message: "Ответы уже сохранены в другой вкладке. Обновите страницу",
+        });
+      }
+      throw error;
+    }
   }
 }

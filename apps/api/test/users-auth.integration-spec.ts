@@ -25,6 +25,7 @@ import { DealsRepository } from "../src/deals/deals.repository";
 import { DealsService } from "../src/deals/deals.service";
 import { TemplatesRepository } from "../src/templates/templates.repository";
 import { TemplateSchemaValidator } from "../src/templates/template-schema.validator";
+import { AiClarificationsRepository } from "../src/templates/ai-clarifications.repository";
 
 const DEFAULT_DATABASE_URL =
   "postgresql://max_contract:max_contract_dev@localhost:5434/max_contract";
@@ -1236,6 +1237,19 @@ describe("users/auth database foundation (integration)", () => {
       status: AiGenerationStatus.COMPLETED,
       structuredDraft: expect.objectContaining({ title: "Договор аренды" }),
     });
+  });
+
+  it("saves clarification answers once when two tabs submit the same revision", async () => {
+    const user = await database.user.create({ data: {} });
+    const version = await database.contractTemplateVersion.findFirstOrThrow({ where: { template: { slug: "work-contract" }, status: "PUBLISHED" } });
+    const repository = new AiClarificationsRepository(database as unknown as PrismaService);
+    const session = await repository.create({ userId: user.id, templateVersionId: version.id, inputAnswers: {}, promptId: "contract-clarification", promptVersion: "1.2.0", metadata: {}, questions: [], status: AiGenerationStatus.NEED_MORE_INFO });
+    const input = { id: session.id, expectedUpdatedAt: session.updatedAt, answers: { termsLocation: "Онлайн" }, questions: [], metadata: {}, status: AiGenerationStatus.READY_TO_GENERATE };
+    const results = await Promise.allSettled([repository.update(input), repository.update(input)]);
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(result => result.status === "rejected")).toEqual([expect.objectContaining({ reason: expect.objectContaining({ response: expect.objectContaining({ code: "AI_CLARIFICATION_CHANGED" }) }) })]);
+    expect(await repository.findOwned(session.id, "work-contract", user.id)).toMatchObject({ status: "READY_TO_GENERATE", clarificationAnswers: input.answers });
+    expect(await repository.findOwned(session.id, "work-contract", randomUUID())).toBeNull();
   });
 
   it("keeps document requirements isolated between unrelated templates", async () => {

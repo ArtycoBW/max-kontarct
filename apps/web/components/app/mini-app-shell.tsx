@@ -898,6 +898,7 @@ function CreateDealScreen({
   const changeClarificationAnswer = (key: string, value: unknown) => {
     setClarificationAnswers((current) => ({ ...current, [key]: value }));
     setClarificationError("");
+    clarificationAnswer.reset();
   };
 
   const submitClarificationQuestion = async (skip = false) => {
@@ -932,8 +933,14 @@ function CreateDealScreen({
         sessionId: activeClarificationSession.id,
       });
       openClarificationSession(session);
-    } catch {
-      // Ошибка запроса отображается в карточке под вопросом.
+    } catch (error) {
+      const errors = extractTemplateFieldErrors(error);
+      const invalidIndex = activeClarificationSession.questions.findIndex(item => errors[item.id]);
+      const invalidQuestion = activeClarificationSession.questions[invalidIndex];
+      if (invalidQuestion) {
+        setQuestionIndex(invalidIndex);
+        setClarificationError(errors[invalidQuestion.id] ?? "Уточните ответ");
+      }
     }
   };
 
@@ -1197,7 +1204,7 @@ function CreateDealScreen({
           question={question}
           questionIndex={questionIndex}
           requestError={
-            clarificationAnswer.isError
+            clarificationAnswer.isError && !clarificationError
               ? clarificationAnswer.error.message
               : undefined
           }
@@ -1738,6 +1745,7 @@ function AiQuestionControl({
     return (
       <DatePicker
         aria-invalid={Boolean(errorId)}
+        aria-label={question.label}
         allowFuture
         fromYear={currentYear - 100}
         id={question.id}
@@ -1752,6 +1760,7 @@ function AiQuestionControl({
     return (
       <Input
         aria-describedby={errorId}
+        aria-label={question.label}
         aria-invalid={Boolean(errorId)}
         data-number-input="true"
         id={question.id}
@@ -1769,6 +1778,7 @@ function AiQuestionControl({
   return (
     <Textarea
       aria-describedby={errorId}
+      aria-label={question.label}
       aria-invalid={Boolean(errorId)}
       id={question.id}
       maxLength={1_000}
