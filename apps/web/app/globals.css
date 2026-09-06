@@ -615,12 +615,8 @@ textarea:focus-visible {
   padding: max(24px, env(safe-area-inset-top)) 22px 28px;
 }
 
-.screen-content::after {
-  display: block;
-  width: 100%;
-  min-height: 20px;
-  flex: 0 0 20px;
-  content: "";
+.screen-motion > .screen-content {
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
 }
 
 .environment-badge {
