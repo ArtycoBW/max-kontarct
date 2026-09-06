@@ -41,7 +41,7 @@ export BACKUP_S3_BUCKET="${BACKUP_S3_BUCKET:-${S3_BUCKET:-${MINIO_BUCKET:-}}}"
 export BACKUP_S3_REGION="${BACKUP_S3_REGION:-${S3_REGION:-${MINIO_REGION:-ru-central1}}}"
 export BACKUP_S3_FORCE_PATH_STYLE="${BACKUP_S3_FORCE_PATH_STYLE:-${S3_FORCE_PATH_STYLE:-true}}"
 export BACKUP_S3_PREFIX="${BACKUP_S3_PREFIX:-private/backups/postgres}"
-"$(dirname "$0")/upload-backup-s3.cjs" "$directory/$name" "$directory/$name.sha256"
+node "$(dirname "$0")/upload-backup-s3.cjs" "$directory/$name" "$directory/$name.sha256"
 
 # Retention applies exclusively to this script's named dump/checksum files.
 find "$directory" -maxdepth 1 -type f \( -name 'max-contract-????????T??????Z.dump' -o -name 'max-contract-????????T??????Z.dump.sha256' \) -mtime "+$BACKUP_RETENTION_DAYS" -print -delete
