@@ -9,6 +9,7 @@ source "$config"
 : "${BACKUP_POSTGRES_CONTAINER:?Set BACKUP_POSTGRES_CONTAINER}"
 : "${BACKUP_DATABASE_USER:?Set BACKUP_DATABASE_USER}"
 : "${BACKUP_DATABASE_NAME:?Set BACKUP_DATABASE_NAME}"
+: "${BACKUP_APP_ENV_FILE:=/etc/max-contract/max-contract.env}"
 if ! [[ "$BACKUP_RETENTION_DAYS" =~ ^[1-9][0-9]*$ ]] || (( BACKUP_RETENTION_DAYS < 2 || BACKUP_RETENTION_DAYS > 3650 )); then
     echo 'Retention must be between 2 and 3650 days' >&2; exit 1
 fi
@@ -26,6 +27,22 @@ docker exec "$BACKUP_POSTGRES_CONTAINER" pg_dump --username "$BACKUP_DATABASE_US
 docker exec -i "$BACKUP_POSTGRES_CONTAINER" pg_restore --list < "$partial" > /dev/null
 mv -- "$partial" "$directory/$name"
 (cd "$directory" && sha256sum -- "$name" > "$name.sha256")
+
+# A verified local dump is not sufficient if the host itself is lost. Reuse the
+# private application S3 credentials unless a dedicated backup credential is set.
+[[ -f "$BACKUP_APP_ENV_FILE" ]] || { echo 'Application environment for external backup is missing' >&2; exit 1; }
+set -a
+source "$BACKUP_APP_ENV_FILE"
+set +a
+export BACKUP_S3_ENDPOINT="${BACKUP_S3_ENDPOINT:-${S3_ENDPOINT:-${MINIO_ENDPOINT:-}}}"
+export BACKUP_S3_ACCESS_KEY="${BACKUP_S3_ACCESS_KEY:-${S3_ACCESS_KEY:-${MINIO_ACCESS_KEY:-}}}"
+export BACKUP_S3_SECRET_KEY="${BACKUP_S3_SECRET_KEY:-${S3_SECRET_KEY:-${MINIO_SECRET_KEY:-}}}"
+export BACKUP_S3_BUCKET="${BACKUP_S3_BUCKET:-${S3_BUCKET:-${MINIO_BUCKET:-}}}"
+export BACKUP_S3_REGION="${BACKUP_S3_REGION:-${S3_REGION:-${MINIO_REGION:-ru-central1}}}"
+export BACKUP_S3_FORCE_PATH_STYLE="${BACKUP_S3_FORCE_PATH_STYLE:-${S3_FORCE_PATH_STYLE:-true}}"
+export BACKUP_S3_PREFIX="${BACKUP_S3_PREFIX:-private/backups/postgres}"
+"$(dirname "$0")/upload-backup-s3.cjs" "$directory/$name" "$directory/$name.sha256"
+
 # Retention applies exclusively to this script's named dump/checksum files.
 find "$directory" -maxdepth 1 -type f \( -name 'max-contract-????????T??????Z.dump' -o -name 'max-contract-????????T??????Z.dump.sha256' \) -mtime "+$BACKUP_RETENTION_DAYS" -print -delete
 echo "Backup verified: $name"
