@@ -114,6 +114,7 @@ function record(
     status,
     structuredDraft: null,
     templateVersion: {
+      questionnaireSchema: {},
       documentRequirements: [],
       template: { slug: "property-rental", title: "Аренда имущества" },
       versionNumber: 1,

@@ -7,7 +7,7 @@
   },
   {
     "slug":"paid-services", "title":"Оказание услуг",
-    "input":{"serviceDescription":"Консультация по настройке компьютера, один сеанс 2 часа", "serviceLocation":"", "completionDate":"2070-01-20", "paymentAmount":2000, "paymentProcedure":"Предоплата и окончательный расчёт"},
+    "input":{"serviceDescription":"Консультация по настройке компьютера, один сеанс 2 часа", "completionDate":"2070-01-20", "paymentAmount":2000, "paymentProcedure":"Предоплата и окончательный расчёт"},
     "answers":{"termsLocation":"Онлайн, по видеосвязи", "termsPayment":"Предоплата 30%, остаток 70% после оказания услуги", "termsAcceptance":"Результат подтверждается письменно по электронной почте в течение 2 дней"},
     "completeField":"serviceDescription"
   },

@@ -12,9 +12,14 @@ import {
   missingContractTerms,
 } from "./contract-completeness";
 import type { AiClarificationQuestion } from "@max-contract/contracts";
+import {
+  confirmedContractTerms,
+  withConfirmedContractTerms,
+} from "./contract-confirmed-terms";
+import { normalizeContractDraft } from "./contract-draft-presentation";
 
 const PROMPT_ID = "contract-draft";
-const PROMPT_VERSION = "1.1.0";
+const PROMPT_VERSION = "1.2.0";
 
 @Injectable()
 export class ContractGenerationProcessor {
@@ -43,6 +48,14 @@ export class ContractGenerationProcessor {
         ).length
       )
         throw new Error("CONTRACT_TERMS_INCOMPLETE");
+      const confirmedTerms = isCompletenessSession(generation.providerMetadata)
+        ? confirmedContractTerms(
+            generation.templateVersion.questionnaireSchema,
+            generation.inputAnswers as Record<string, unknown>,
+            (generation.clarificationAnswers ?? {}) as Record<string, unknown>,
+            clarificationQuestionHistory(generation.providerMetadata),
+          )
+        : [];
       const result = await this.ai.generateStructured({
         maxTokens: 4_000,
         output: {
@@ -57,9 +70,11 @@ export class ContractGenerationProcessor {
             "Используй только переданные условия сделки и ответы пользователя.",
             "Не придумывай реквизиты сторон, даты, суммы, адреса или иные факты.",
             "clarificationQuestions содержит формулировки вопросов и подписи вариантов: используй их для точного понимания clarificationAnswers.",
+            "confirmedTerms — точные условия с единицами измерения из анкеты и уточнений. Они будут сохранены отдельным разделом без изменений. Не противоречь им, не меняй годовую ставку на разовую и не добавляй требования о бумажных экземплярах: стороны оформляют электронный документ.",
             "Не заменяй конкретные сроки оплаты, приёмки и передачи общими словами «по согласованию». Не добавляй штрафы, проценты, сроки или обязанности, которых стороны не указали.",
             "Сформулируй конкретные взаимные обязательства, порядок оплаты, исполнения, приёмки, ответственности и расторжения, когда они применимы к выбранному типу сделки.",
             "Не добавляй комментарии о работе модели и не включай персональные данные, которых нет во входных данных.",
+            "В строках используй обычный текст без Markdown, технических меток, typeSectionTitle и пустых пунктов. Не создавай раздел «Подтверждённые условия»: confirmedTerms добавит сервер.",
             "В warnings перечисли только юридически значимые сведения, которые сторонам нужно проверить перед подписанием; если таких сведений нет, верни пустой массив.",
           ].join(" "),
           version: PROMPT_VERSION,
@@ -67,6 +82,7 @@ export class ContractGenerationProcessor {
         safetyIdentifier: generation.userId,
         userData: toAiObject({
           clarificationAnswers: generation.clarificationAnswers ?? {},
+          confirmedTerms,
           clarificationQuestions: clarificationQuestionHistory(
             generation.providerMetadata,
           ),
@@ -84,13 +100,17 @@ export class ContractGenerationProcessor {
           templateVersion: generation.templateVersion.versionNumber,
         }),
       });
-      const draft = parseContractDraft(result.data);
+      const draft = withConfirmedContractTerms(
+        normalizeContractDraft(parseContractDraft(result.data)),
+        confirmedTerms,
+      );
       await this.generations.markCompleted({
         draft: toPrismaObject(draft),
         id: generation.id,
         metadata: toPrismaObject({
           clarification: generation.providerMetadata,
           generation: result.metadata,
+          ...(confirmedTerms.length ? { confirmedTermsVersion: "1.0.0" } : {}),
         }),
       });
     } catch (error) {

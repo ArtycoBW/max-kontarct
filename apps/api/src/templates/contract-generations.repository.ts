@@ -24,6 +24,7 @@ const generationSelect = {
         select: { description: true, key: true, required: true, title: true },
       },
       template: { select: { slug: true, title: true } },
+      questionnaireSchema: true,
       versionNumber: true,
     },
   },
