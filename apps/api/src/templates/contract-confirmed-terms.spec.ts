@@ -4,6 +4,10 @@ import {
 } from "./contract-confirmed-terms";
 
 describe("confirmed contract terms", () => {
+  it("uses questionnaire order rather than PostgreSQL jsonb key ordering", () => {
+    const schema = { "x-fieldOrder": ["description", "startDate", "endDate", "missing"], properties: { endDate: { title: "Окончание", format: "date" }, description: { title: "Предмет" }, startDate: { title: "Начало", format: "date" } } };
+    expect(confirmedContractTerms(schema, { endDate: "2070-01-20", startDate: "2070-01-10", description: "Ремонт" }, {}, [])).toEqual(["Предмет: Ремонт.", "Начало: 10.01.2070.", "Окончание: 20.01.2070."]);
+  });
   const schema = {
     properties: {
       price: { title: "Цена, ₽" },

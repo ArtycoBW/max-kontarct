@@ -30,6 +30,8 @@ export function confirmedContractTerms(
   history: AiClarificationQuestion[],
 ): string[] {
   const properties = object(object(schema).properties);
+  const rawOrder = object(schema)["x-fieldOrder"];
+  const fieldOrder = Array.isArray(rawOrder) ? rawOrder.filter((key): key is string => typeof key === "string") : [];
   const replacements: Record<string, string> = {
     workLocation: "termsLocation",
     serviceLocation: "termsLocation",
@@ -38,7 +40,8 @@ export function confirmedContractTerms(
     paymentMethod: "termsPaymentMethod",
   };
   const terms: string[] = [];
-  for (const [key, value] of Object.entries(input)) {
+  for (const key of new Set([...fieldOrder, ...Object.keys(input)])) {
+    const value = input[key];
     if (value === undefined || value === null || value === "") continue;
     if (replacements[key] && answers[replacements[key]]) continue;
     if (key === "interestRate" && input.interestType === "Беспроцентный")
@@ -48,7 +51,9 @@ export function confirmedContractTerms(
       throw new Error("CONTRACT_FIELD_LABEL_MISSING");
     terms.push(`${field.title}: ${display(value, field.format === "date")}.`);
   }
-  for (const [key, value] of Object.entries(answers)) {
+  for (const key of new Set([...history.map(question => question.id), ...Object.keys(answers)])) {
+    if (!(key in answers)) continue;
+    const value = answers[key];
     const question = history.find((item) => item.id === key);
     if (!question) throw new Error("CONTRACT_ANSWER_LABEL_MISSING");
     const label = question.options.find(

@@ -1,6 +1,11 @@
 import { normalizeContractDraft } from "./contract-draft-presentation";
 
 describe("contract draft presentation", () => {
+  it("does not discard a sole clause just because it matches its heading", () => {
+    const section = { heading: "Краткое условие", clauses: ["Краткое условие"] };
+    const draft = { title: "Договор", preamble: "", warnings: [], sections: [section, section, section] };
+    expect(normalizeContractDraft(draft).sections).toEqual(draft.sections);
+  });
   it("removes model markup and an empty technical placeholder without changing conditions", () => {
     const clause = "Проценты — 5% годовых. Возврат 20.02.2070.";
     const draft = {

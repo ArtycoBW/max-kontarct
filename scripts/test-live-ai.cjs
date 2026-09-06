@@ -28,6 +28,7 @@ const cases = JSON.parse(fs.readFileSync(process.env.LIVE_QA_FIXTURES || path.jo
   .filter(item => !process.env.LIVE_QA_CASE || item.slug === process.env.LIVE_QA_CASE);
 const results = [];
 async function run() {
+  assert(cases.length > 0, "No matching live QA cases");
   for (const item of cases) {
     const template = await templates.getPublishedBySlug(item.slug);
     const records = new Map();

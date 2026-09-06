@@ -19,10 +19,10 @@ export function normalizeContractDraft(
       const heading = unnumber(plain(section.heading));
       return {
         heading,
-        clauses: section.clauses.map(value => plain(value).split("\n")
-          .map(line => unnumber(line.trim()))
-          .filter(line => line && line.replace(/[.:]$/u, "") !== heading.replace(/[.:]$/u, ""))
-          .join("\n")).filter(Boolean),
+        clauses: section.clauses.map(value => {
+          const lines = plain(value).split("\n").map(line => unnumber(line.trim())).filter(Boolean);
+          return lines.filter(line => lines.length === 1 || line.replace(/[.:]$/u, "") !== heading.replace(/[.:]$/u, "")).join("\n");
+        }).filter(Boolean),
       };
     })
     .filter((section) => section.heading && section.clauses.length);
