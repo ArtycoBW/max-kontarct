@@ -1,5 +1,7 @@
 import type {
   AiClarificationSessionResponse,
+  DealIntakeRequest,
+  DealIntakeResponse,
   AnswerAiClarificationRequest,
   ContractGenerationResponse,
   ContractTemplateDetailsResponse,
@@ -10,6 +12,13 @@ import type {
 } from "@max-contract/contracts";
 
 import { apiRequest } from "./client";
+
+export function suggestDeal(request: DealIntakeRequest): Promise<DealIntakeResponse> {
+  return apiRequest<DealIntakeResponse>("deal-intake", {
+    body: JSON.stringify(request), method: "POST",
+    headers: { "Content-Type": "application/json" }, timeoutMs: 60_000,
+  });
+}
 
 export function getTemplates(): Promise<ContractTemplateListResponse> {
   return apiRequest<ContractTemplateListResponse>("templates");

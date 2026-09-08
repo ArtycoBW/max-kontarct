@@ -17,9 +17,10 @@ import {
   withConfirmedContractTerms,
 } from "./contract-confirmed-terms";
 import { normalizeContractDraft } from "./contract-draft-presentation";
+import { INDIVIDUAL_TEMPLATE_SLUG, INDIVIDUAL_WARNING } from "./deal-intake.service";
 
 const PROMPT_ID = "contract-draft";
-const PROMPT_VERSION = "1.2.0";
+const PROMPT_VERSION = "1.3.0";
 
 @Injectable()
 export class ContractGenerationProcessor {
@@ -69,6 +70,9 @@ export class ContractGenerationProcessor {
             "Подготовь структурированный проект договора на русском языке.",
             "Используй только переданные условия сделки и ответы пользователя.",
             "Не придумывай реквизиты сторон, даты, суммы, адреса или иные факты.",
+            "sourceDescription — контекст задачи, не отдельная подтверждённая редакция условий. При противоречии приоритет имеют confirmedTerms, inputAnswers и clarificationAnswers. Не переноси из исходного описания отменённые пользователем суммы и даты.",
+            "Автор описания («я») — инициатор, второй участник — контрагент. Если роли указаны явно, включи в договор их соответствие: например, «Инициатор — исполнитель, контрагент — заказчик». Не назначай инициатору роль заказчика автоматически. Если роли не заданы, используй только обозначения Инициатор и Контрагент.",
+            "Для individual-agreement составь индивидуальный проект по предмету и обязанностям сторон, а не договор произвольного типового вида. Инициатор и контрагент — технические роли: не меняй их обязанности местами. Не заявляй о юридической проверке проекта.",
             "clarificationQuestions содержит формулировки вопросов и подписи вариантов: используй их для точного понимания clarificationAnswers.",
             "confirmedTerms — точные условия с единицами измерения из анкеты и уточнений. Они будут сохранены отдельным разделом без изменений. Не противоречь им, не меняй годовую ставку на разовую и не добавляй требования о бумажных экземплярах: стороны оформляют электронный документ.",
             "Не заменяй конкретные сроки оплаты, приёмки и передачи общими словами «по согласованию». Не добавляй штрафы, проценты, сроки или обязанности, которых стороны не указали.",
@@ -96,6 +100,8 @@ export class ContractGenerationProcessor {
               }),
             ),
           inputAnswers: generation.inputAnswers,
+          sourceDescription: sourceDescription(generation.providerMetadata),
+          templateSlug: generation.templateVersion.template.slug,
           templateTitle: generation.templateVersion.template.title,
           templateVersion: generation.templateVersion.versionNumber,
         }),
@@ -104,6 +110,9 @@ export class ContractGenerationProcessor {
         normalizeContractDraft(parseContractDraft(result.data)),
         confirmedTerms,
       );
+      if (generation.templateVersion.template.slug === INDIVIDUAL_TEMPLATE_SLUG) {
+        draft.warnings = [...new Set([INDIVIDUAL_WARNING, ...draft.warnings])];
+      }
       await this.generations.markCompleted({
         draft: toPrismaObject(draft),
         id: generation.id,
@@ -124,6 +133,11 @@ export class ContractGenerationProcessor {
       throw error;
     }
   }
+}
+
+function sourceDescription(metadata: Prisma.JsonValue): string {
+  return metadata && typeof metadata === "object" && !Array.isArray(metadata) && typeof metadata.sourceDescription === "string"
+    ? metadata.sourceDescription : "";
 }
 
 function clarificationQuestionHistory(

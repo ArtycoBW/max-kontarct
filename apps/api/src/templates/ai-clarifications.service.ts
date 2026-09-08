@@ -29,7 +29,7 @@ import {
 } from "./contract-completeness";
 
 const PROMPT_ID = "contract-clarification";
-const PROMPT_VERSION = "1.2.0";
+const PROMPT_VERSION = "1.3.0";
 const MAX_TOTAL_QUESTIONS = 5;
 
 type ClarificationAiOutput = {
@@ -58,6 +58,7 @@ export class AiClarificationsService {
       {
         clarificationAnswers: {},
         inputAnswers: validated.answers,
+        description: request.description?.trim() ?? "",
         previousQuestions: [],
         templateTitle: validated.snapshot.templateTitle,
         templateSlug,
@@ -83,7 +84,7 @@ export class AiClarificationsService {
     const record = await this.clarifications.create({
       inputAnswers: toPrismaObject(validated.answers),
       metadata: withQuestionHistory(
-        { ...output.metadata, completenessVersion: COMPLETENESS_VERSION },
+        { ...output.metadata, completenessVersion: COMPLETENESS_VERSION, sourceDescription: request.description?.trim() ?? "" },
         data.questions,
       ),
       promptId: PROMPT_ID,
@@ -204,6 +205,7 @@ export class AiClarificationsService {
           clarificationAnswers: cumulativeAnswers,
           inputAnswers,
           previousQuestions: questionHistory,
+          description: sourceDescription(session.providerMetadata),
           templateTitle: session.templateVersion.template.title,
           templateSlug,
           requiredQuestions: missing,
@@ -232,6 +234,7 @@ export class AiClarificationsService {
       metadata = withQuestionHistory(
         {
           ...output.metadata,
+          sourceDescription: sourceDescription(session.providerMetadata),
           ...(completenessEnabled
             ? { completenessVersion: COMPLETENESS_VERSION }
             : {}),
@@ -258,6 +261,7 @@ export class AiClarificationsService {
       templateTitle: string;
       templateSlug: string;
       requiredQuestions: AiClarificationQuestion[];
+      description: string;
     },
     userId: string,
     maxQuestions: number,
@@ -280,6 +284,7 @@ export class AiClarificationsService {
             "Проверяй содержание значений, а не наличие ключа. Пустая строка, «потом», «по согласованию» и «квартира собственника» не задают конкретного условия.",
             "requiredQuestions уже проверены сервером: не создавай их дубликаты. Не задавай вопросы по другим типам сделок.",
             "Условия могут содержаться в свободном описании: используй их и не переспрашивай полный адрес, оплату или приёмку, если они конкретно описаны.",
+            "description — исходный контекст. При расхождении с ним inputAnswers и clarificationAnswers имеют приоритет: пользователь проверил и мог изменить поля. Не переноси устаревшие даты, суммы или условия из description.",
             "Используй только типы single_choice, boolean, short_text, number или date.",
             "Для single_choice верни минимум два варианта, для остальных типов options должен быть пустым.",
             "Не спрашивай ФИО, телефон, email, контакты, паспортные данные инициатора или контрагента: они берутся только из подтверждённых профилей.",
@@ -303,6 +308,11 @@ export class AiClarificationsService {
       throw error;
     }
   }
+}
+
+function sourceDescription(metadata: Prisma.JsonValue): string {
+  return metadata && typeof metadata === "object" && !Array.isArray(metadata) && typeof metadata.sourceDescription === "string"
+    ? metadata.sourceDescription : "";
 }
 
 function prioritizeRequiredQuestions(

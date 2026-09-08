@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+.deal-intake-panel { display: grid; gap: 14px; padding: 18px; margin: 18px 0 24px; }
+.deal-intake-panel h2 { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; }
+.deal-intake-panel p, .deal-intake-panel dd { font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
+.deal-intake-result { display: grid; gap: 12px; border-top: 1px solid var(--app-border, #eadbd5); padding-top: 16px; }
+.deal-intake-result dl { display: grid; gap: 10px; }
+.deal-intake-result dt { font-size: 11px; opacity: .7; }
+.deal-intake-result dd { margin: 2px 0 0; white-space: pre-wrap; }
+.deal-intake-warning { padding: 10px; border-radius: 12px; background: #fff0eb; }
+.deal-catalog-heading { font-size: 16px; margin: 20px 0 12px; }
+
 :root {
   color-scheme: light;
   --app-canvas: #f4f1ed;

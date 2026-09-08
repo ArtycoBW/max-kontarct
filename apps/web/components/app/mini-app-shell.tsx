@@ -3,6 +3,7 @@
 import type {
   AiClarificationQuestion,
   AiClarificationSessionResponse,
+  DealIntakeResponse,
   ContractGenerationResponse,
   ContractTemplateListItem,
   DealStatus,
@@ -47,6 +48,7 @@ import { Card } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { DealIntakePanel } from "@/components/templates/deal-intake-panel";
 import { useAuth } from "@/components/providers/auth-provider";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { ProfileScreen } from "@/components/profile/profile-screen";
@@ -473,12 +475,14 @@ function CreateDealScreen({
   const [description, setDescription] = useState("");
   const [descriptionError, setDescriptionError] = useState("");
   const [query, setQuery] = useState("");
+  const [intakeDescription, setIntakeDescription] = useState("");
   const [saveState, setSaveState] = useState<DraftSaveState>("idle");
   const [selectedSlug, setSelectedSlug] = useState("");
   const [step, setStep] = useState<CreateDealStep>("type");
   const [title, setTitle] = useState("");
   const hydratedDraftId = useRef("");
   const lastSavedFingerprint = useRef("");
+  const autosaveTimeout = useRef<number | null>(null);
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
   const updatedAt = useRef("");
   const templates = useQuery({
@@ -558,6 +562,7 @@ function CreateDealScreen({
       startAiClarification(effectiveSelectedSlug, {
         answers: payload.answers,
         templateVersionId: payload.versionId,
+        description,
       }),
   });
   const clarificationAnswer = useMutation({
@@ -639,6 +644,11 @@ function CreateDealScreen({
       title: string;
     }> = {},
   ): Promise<void> => {
+    // An explicit step transition supersedes a pending autosave of the old step.
+    if (autosaveTimeout.current !== null) {
+      window.clearTimeout(autosaveTimeout.current);
+      autosaveTimeout.current = null;
+    }
     if (!activeDraftId || !updatedAt.current) return Promise.resolve();
     const snapshot = {
       answers: overrides.answers ?? answers,
@@ -704,15 +714,21 @@ function CreateDealScreen({
       !activeDraftId ||
       hydratedDraftId.current !== activeDraftId ||
       step === "type" ||
+      saveState === "saving" || saveState === "error" ||
       localFingerprint === lastSavedFingerprint.current
     ) {
       return;
     }
     const timeout = window.setTimeout(() => {
+      autosaveTimeout.current = null;
       void enqueueDraftSave().catch(() => undefined);
     }, 700);
-    return () => window.clearTimeout(timeout);
-  }, [activeDraftId, enqueueDraftSave, localFingerprint, step]);
+    autosaveTimeout.current = timeout;
+    return () => {
+      window.clearTimeout(timeout);
+      if (autosaveTimeout.current === timeout) autosaveTimeout.current = null;
+    };
+  }, [activeDraftId, enqueueDraftSave, localFingerprint, saveState, step]);
 
   useEffect(() => {
     if (
@@ -744,17 +760,18 @@ function CreateDealScreen({
     setQuestionIndex(0);
   };
 
-  const beginDraft = async () => {
-    if (!selectedTemplate) return;
+  const beginDraft = async (proposal?: DealIntakeResponse) => {
+    const chosenTemplate = proposal?.template ?? selectedTemplate;
+    if (!chosenTemplate || draftCreation.isPending) return;
     try {
       const created = await draftCreation.mutateAsync({
         creationPath: "AI_ASSISTED",
-        description: "",
-        templateVersionId: selectedTemplate.currentVersion.id,
-        title: getTemplateDisplayTitle(selectedTemplate.title),
+        description: proposal?.description ?? "",
+        templateVersionId: chosenTemplate.currentVersion.id,
+        title: proposal?.title ?? getTemplateDisplayTitle(chosenTemplate.title),
       });
       setActiveDraftId(created.id);
-      setAnswers(created.draft.answers);
+      setAnswers(proposal?.answers ?? created.draft.answers);
       setClarificationSessionId(null);
       setDescription(created.draft.description);
       setSelectedSlug(created.template.slug);
@@ -976,15 +993,23 @@ function CreateDealScreen({
           title="Выберите тип сделки"
         />
         <p className="screen-copy">
-          Подберём структуру договора и уточняющие вопросы.
+          Опишите задачу для ИИ или выберите готовый тип договора ниже.
         </p>
+
+        <DealIntakePanel
+          key={intakeDescription}
+          initialDescription={intakeDescription}
+          isCreating={draftCreation.isPending}
+          onAccept={proposal => void beginDraft(proposal)}
+        />
+        <h2 className="deal-catalog-heading">Или выберите из каталога</h2>
 
         <div className="deal-type-search">
           <Search size={17} aria-hidden="true" />
           <Input
             aria-label="Поиск типа сделки"
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Найти тип сделки"
+            placeholder="Поиск по названиям типов договоров"
             value={query}
           />
         </div>
@@ -1042,8 +1067,11 @@ function CreateDealScreen({
         templates.data.items.length > 0 &&
         visibleTemplates.length === 0 ? (
           <Card className="form-message">
-            <strong>Ничего не найдено</strong>
-            <span>Измените запрос, чтобы увидеть доступные типы сделок.</span>
+            <strong>В каталоге нет совпадений</strong>
+            <span>Опишите задачу для ИИ — он предложит подходящий договор или индивидуальный проект.</span>
+            <Button type="button" variant="secondary" onClick={() => setIntakeDescription(query.slice(0, 500))}>
+              Использовать этот текст для ИИ
+            </Button>
           </Card>
         ) : null}
 

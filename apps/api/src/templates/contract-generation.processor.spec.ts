@@ -107,6 +107,22 @@ describe("ContractGenerationProcessor", () => {
     );
   });
 
+  it("generates an individual contract with source context, confirmed terms and a review warning", async () => {
+    const generation = record();
+    generation.templateVersion.template = { slug: "individual-agreement", title: "Индивидуальный договор" };
+    generation.templateVersion.questionnaireSchema = { properties: { subject: { title: "Предмет" } } };
+    generation.inputAnswers = { subject: "Обмен фотоаппарата на велосипед" };
+    generation.clarificationAnswers = {};
+    generation.providerMetadata = { completenessVersion: "1.0.0", sourceDescription: "Хочу обменяться вещами" };
+    findForProcessing.mockResolvedValue(generation);
+    generateStructured.mockResolvedValue({ data: draft(), metadata: metadata() });
+    await processor.process(job());
+    expect(generateStructured.mock.calls[0]?.[0].userData.sourceDescription).toBe("Хочу обменяться вещами");
+    const saved = markCompleted.mock.calls[0]?.[0] as unknown as { draft: { warnings: string[]; sections: Array<{ clauses: string[] }> } };
+    expect(saved.draft.warnings.join(" ")).toContain("Индивидуальный проект");
+    expect(saved.draft.sections[0]?.clauses).toContain("Предмет: Обмен фотоаппарата на велосипед.");
+  });
+
   it.each(cases)(
     "forwards every confirmed condition and its question for $slug",
     async (item) => {

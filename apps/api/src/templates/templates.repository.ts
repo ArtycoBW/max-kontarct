@@ -69,6 +69,7 @@ export class TemplatesRepository {
       orderBy: [{ isDemo: "asc" }, { title: "asc" }],
       select: templateListSelect,
       where: {
+        slug: { not: "individual-agreement" },
         versions: { some: { status: TemplateVersionStatus.PUBLISHED } },
       },
     });

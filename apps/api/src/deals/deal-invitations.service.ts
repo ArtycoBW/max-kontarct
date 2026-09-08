@@ -919,6 +919,7 @@ function parseDealDraft(value: Prisma.JsonValue): DealDraftData {
 }
 
 const SAFE_TERM_KEYS: Readonly<Record<string, readonly string[]>> = {
+  "individual-agreement": ["completionDate", "paymentAmount"],
   "movable-property-sale": ["price", "transferDate", "paymentMethod"],
   "paid-services": ["completionDate", "paymentAmount", "paymentProcedure"],
   "personal-loan": [
@@ -940,6 +941,7 @@ const SAFE_TERM_KEYS: Readonly<Record<string, readonly string[]>> = {
 };
 
 const SAFE_SUBJECTS: Readonly<Record<string, string>> = {
+  "individual-agreement": "Индивидуальные условия двух сторон",
   "movable-property-sale": "Движимое имущество",
   "paid-services": "Оказание согласованной услуги",
   "personal-loan": "Передача денежных средств",

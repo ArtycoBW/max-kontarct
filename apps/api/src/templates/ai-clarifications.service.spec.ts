@@ -64,7 +64,7 @@ describe("AiClarificationsService", () => {
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
         promptId: "contract-clarification",
-        promptVersion: "1.2.0",
+        promptVersion: "1.3.0",
         status: AiGenerationStatus.NEED_MORE_INFO,
         templateVersionId: versionId,
         userId,
@@ -72,10 +72,21 @@ describe("AiClarificationsService", () => {
     );
   });
 
+  it("keeps the initial description as context alongside reviewed answers", async () => {
+    generateStructured.mockResolvedValue(aiResult(needMoreInfo()));
+    create.mockResolvedValue(record());
+    const description = "Первоначально обсуждали 100000 рублей, условия уточняются в анкете";
+    await service.start("property-rental", userId, { answers: { paymentAmount: 120_000 }, templateVersionId: versionId, description });
+    expect(generateStructured.mock.calls[0]?.[0].userData.description).toBe(description);
+    const saved = create.mock.calls[0]?.[0] as { metadata: { sourceDescription: string } };
+    expect(saved.metadata.sourceDescription).toBe(description);
+  });
+
   it("keeps answers from earlier rounds and marks the session ready", async () => {
     findOwned.mockResolvedValue(
       record({
         clarificationAnswers: { depositRequired: true },
+        providerMetadata: { sourceDescription: "Исходный контекст сделки" },
       }),
     );
     generateStructured.mockResolvedValue(
@@ -103,6 +114,7 @@ describe("AiClarificationsService", () => {
     });
 
     expect(generateStructured.mock.calls[0]?.[0].userData).toMatchObject({
+      description: "Исходный контекст сделки",
       clarificationAnswers: {
         depositRequired: true,
         utilitiesPayer: "tenant",
@@ -114,6 +126,8 @@ describe("AiClarificationsService", () => {
         status: AiGenerationStatus.READY_TO_GENERATE,
       }),
     );
+    const saved = update.mock.calls[0]?.[0] as { metadata: { sourceDescription: string } };
+    expect(saved.metadata.sourceDescription).toBe("Исходный контекст сделки");
   });
 
   it("rejects an answer that does not match the generated question", async () => {

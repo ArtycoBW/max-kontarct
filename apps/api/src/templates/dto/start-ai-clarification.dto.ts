@@ -1,6 +1,6 @@
 import type { StartAiClarificationRequest } from "@max-contract/contracts";
-import { ApiProperty } from "@nestjs/swagger";
-import { IsObject, IsUUID } from "class-validator";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { IsObject, IsUUID, IsOptional, IsString, MaxLength } from "class-validator";
 
 export class StartAiClarificationDto
   implements StartAiClarificationRequest
@@ -16,4 +16,10 @@ export class StartAiClarificationDto
   @ApiProperty({ format: "uuid" })
   @IsUUID()
   templateVersionId!: string;
+
+  @ApiPropertyOptional({ maxLength: 500 })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  description?: string;
 }

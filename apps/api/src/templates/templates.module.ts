@@ -10,9 +10,11 @@ import { TemplatesController } from "./templates.controller";
 import { TemplatesRepository } from "./templates.repository";
 import { TemplateSchemaValidator } from "./template-schema.validator";
 import { TemplatesService } from "./templates.service";
+import { DealIntakeController } from "./deal-intake.controller";
+import { DealIntakeService } from "./deal-intake.service";
 
 @Module({
-  controllers: [TemplatesController],
+  controllers: [TemplatesController, DealIntakeController],
   imports: [AuthModule],
   providers: [
     AiClarificationsRepository,
@@ -23,6 +25,7 @@ import { TemplatesService } from "./templates.service";
     TemplatesRepository,
     TemplateSchemaValidator,
     TemplatesService,
+    DealIntakeService,
   ],
 })
 export class TemplatesModule {}

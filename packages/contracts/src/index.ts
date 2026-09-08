@@ -693,6 +693,21 @@ export interface AiClarificationQuestion {
 export interface StartAiClarificationRequest {
   answers: Record<string, unknown>;
   templateVersionId: string;
+  description?: string;
+}
+
+export interface DealIntakeRequest {
+  description: string;
+}
+
+export interface DealIntakeResponse {
+  mode: "TEMPLATE" | "INDIVIDUAL";
+  template: ContractTemplateDetailsResponse;
+  title: string;
+  description: string;
+  reason: string;
+  answers: Record<string, unknown>;
+  warnings: string[];
 }
 
 export interface AnswerAiClarificationRequest {

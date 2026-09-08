@@ -25,7 +25,9 @@ export class FakeAiProvider implements AiProvider {
     this.outputValidator.assertSchema(request.output.name, request.output.schema);
     const redacted = this.piiRedactor.redact(request.userData, request.piiPaths);
     const generated =
-      request.prompt.id === "contract-clarification"
+      request.prompt.id === "deal-intake"
+        ? generateIntake(redacted.data)
+        : request.prompt.id === "contract-clarification"
         ? generateClarification(redacted.data)
         : generateFromSchema(request.output.schema);
 
@@ -50,6 +52,32 @@ export class FakeAiProvider implements AiProvider {
       },
     });
   }
+}
+
+// Deterministic development fixture; production uses YandexAiProvider.
+function generateIntake(data: AiJsonObject): AiJsonObject {
+  const description = typeof data.description === "string" ? data.description : "";
+  const slug = /презентац|консультац|услуг/i.test(description) ? "paid-services"
+    : /ремонт|работ/i.test(description) ? "work-contract"
+      : /аренд/i.test(description) ? "property-rental"
+        : /за[её]м|одолж/i.test(description) ? "personal-loan"
+          : /прода|купить/i.test(description) ? "movable-property-sale" : "individual-agreement";
+  const candidates = Array.isArray(data.candidates) ? data.candidates : [];
+  const candidate = candidates.find(item => isJsonObject(item) && item.slug === slug);
+  const actualSlug = isJsonObject(candidate) ? slug : "individual-agreement";
+  const fields: AiJsonValue[] = [];
+  const key = ({ "paid-services": "serviceDescription", "work-contract": "workDescription", "property-rental": "propertyDescription", "individual-agreement": "subject" } as Record<string, string>)[actualSlug];
+  if (key) {
+    const subject = description.split(/\s+(?:за\s+\d|стоимость\s+\d|до\s+\d{4}-)/i)[0] ?? description;
+    fields.push({ key, value: subject, evidence: subject });
+  }
+  if (actualSlug === "paid-services") {
+    const amount = description.match(/(\d[\d ]*)\s*(руб|₽)/i);
+    if (amount) fields.push({ key: "paymentAmount", value: (amount[1] ?? "").replaceAll(" ", ""), evidence: amount[0] });
+    const date = description.match(/\d{4}-\d{2}-\d{2}/);
+    if (date) fields.push({ key: "completionDate", value: date[0], evidence: date[0] });
+  }
+  return { templateSlug: actualSlug, title: "Проект по описанию", reason: "Предложение тестового провайдера. Проверьте условия перед продолжением.", warnings: [], fields };
 }
 
 function generateClarification(userData: AiJsonObject): AiJsonObject {
