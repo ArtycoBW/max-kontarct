@@ -41,7 +41,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import type { FormEvent } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -475,7 +475,9 @@ function CreateDealScreen({
   const [description, setDescription] = useState("");
   const [descriptionError, setDescriptionError] = useState("");
   const [query, setQuery] = useState("");
-  const [intakeDescription, setIntakeDescription] = useState("");
+  const [creationMode, setCreationMode] = useState<"ai" | "catalog">("ai");
+  const [intakeDescription, setIntakeDescription] = useState({ text: "", revision: 0 });
+  const creationTabsId = useId();
   const [saveState, setSaveState] = useState<DraftSaveState>("idle");
   const [selectedSlug, setSelectedSlug] = useState("");
   const [step, setStep] = useState<CreateDealStep>("type");
@@ -993,16 +995,61 @@ function CreateDealScreen({
           title="Выберите тип сделки"
         />
         <p className="screen-copy">
-          Опишите задачу для ИИ или выберите готовый тип договора ниже.
+          Опишите задачу своими словами или выберите готовый шаблон.
         </p>
 
+        <div
+          className="deal-creation-tabs"
+          role="tablist"
+          aria-label="Способ создания договора"
+          onKeyDown={event => {
+            if (draftCreation.isPending || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+            event.preventDefault();
+            const next = event.key === "Home" ? "ai" : event.key === "End" ? "catalog" : creationMode === "ai" ? "catalog" : "ai";
+            setCreationMode(next);
+            event.currentTarget.querySelector<HTMLButtonElement>(`[data-mode="${next}"]`)?.focus();
+          }}
+        >
+          {([{ mode: "ai", label: "С помощью ИИ" }, { mode: "catalog", label: "Готовые шаблоны" }] as const).map(({ mode, label }) => (
+            <button
+              key={mode}
+              id={`${creationTabsId}-${mode}-tab`}
+              role="tab"
+              type="button"
+              data-mode={mode}
+              aria-selected={creationMode === mode}
+              aria-controls={`${creationTabsId}-${mode}-panel`}
+              tabIndex={creationMode === mode ? 0 : -1}
+              disabled={draftCreation.isPending}
+              onClick={() => setCreationMode(mode)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div
+          className="deal-creation-panel"
+          id={`${creationTabsId}-ai-panel`}
+          role="tabpanel"
+          aria-labelledby={`${creationTabsId}-ai-tab`}
+          hidden={creationMode !== "ai"}
+        >
         <DealIntakePanel
-          key={intakeDescription}
-          initialDescription={intakeDescription}
+          key={intakeDescription.revision}
+          initialDescription={intakeDescription.text}
           isCreating={draftCreation.isPending}
           onAccept={proposal => void beginDraft(proposal)}
         />
-        <h2 className="deal-catalog-heading">Или выберите из каталога</h2>
+        </div>
+
+        <div
+          className="deal-creation-panel"
+          id={`${creationTabsId}-catalog-panel`}
+          role="tabpanel"
+          aria-labelledby={`${creationTabsId}-catalog-tab`}
+          hidden={creationMode !== "catalog"}
+        >
 
         <div className="deal-type-search">
           <Search size={17} aria-hidden="true" />
@@ -1069,16 +1116,16 @@ function CreateDealScreen({
           <Card className="form-message">
             <strong>В каталоге нет совпадений</strong>
             <span>Опишите задачу для ИИ — он предложит подходящий договор или индивидуальный проект.</span>
-            <Button type="button" variant="secondary" onClick={() => setIntakeDescription(query.slice(0, 500))}>
+            <Button type="button" variant="secondary" onClick={() => {
+              setIntakeDescription(previous => ({ text: query.slice(0, 500), revision: previous.revision + 1 }));
+              setCreationMode("ai");
+            }}>
               Использовать этот текст для ИИ
             </Button>
           </Card>
         ) : null}
 
         <div className="create-flow-action">
-          {draftCreation.isError ? (
-            <RequestErrorCard message={draftCreation.error.message} />
-          ) : null}
           <Button
             className="full-width"
             disabled={
@@ -1093,6 +1140,10 @@ function CreateDealScreen({
             {draftCreation.isPending ? "Создаём черновик" : "Продолжить"}
           </Button>
         </div>
+        </div>
+        {draftCreation.isError ? (
+          <RequestErrorCard message={draftCreation.error.message} />
+        ) : null}
       </div>
     );
   }

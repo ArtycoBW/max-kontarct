@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-.deal-intake-panel { display: grid; gap: 14px; padding: 18px; margin: 18px 0 24px; }
+.deal-intake-panel { display: grid; gap: 14px; padding: 18px; }
 .deal-intake-panel h2 { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; }
 .deal-intake-panel p, .deal-intake-panel dd { font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
 .deal-intake-result { display: grid; gap: 12px; border-top: 1px solid var(--app-border, #eadbd5); padding-top: 16px; }
@@ -8,7 +8,13 @@
 .deal-intake-result dt { font-size: 11px; opacity: .7; }
 .deal-intake-result dd { margin: 2px 0 0; white-space: pre-wrap; }
 .deal-intake-warning { padding: 10px; border-radius: 12px; background: #fff0eb; }
-.deal-catalog-heading { font-size: 16px; margin: 20px 0 12px; }
+.deal-creation-tabs { display: grid; flex-shrink: 0; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px; padding: 4px; margin-bottom: 16px; border: 1px solid var(--border); border-radius: 15px; background: var(--app-canvas); }
+.deal-creation-tabs [role="tab"] { min-height: 44px; padding: 10px 6px; border: 1px solid transparent; border-radius: 11px; background: transparent; color: var(--ink); font-size: 12px; font-weight: 600; line-height: 1.3; cursor: pointer; }
+.deal-creation-tabs [role="tab"][aria-selected="true"] { border-color: #ffd5cb; background: #fff; color: #ff3b22; box-shadow: 0 2px 5px rgb(65 20 5 / 5%); }
+.deal-creation-tabs [role="tab"]:focus-visible { outline: 2px solid #ff3b22; outline-offset: 2px; }
+.deal-creation-tabs [role="tab"]:disabled { cursor: wait; opacity: .65; }
+.deal-creation-panel:not([hidden]) { display: grid; gap: 16px; }
+.deal-creation-panel[hidden] { display: none; }
 
 :root {
   color-scheme: light;

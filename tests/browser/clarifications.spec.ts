@@ -7,6 +7,7 @@ test("bathroom repair asks for missing terms, retains answers after validation, 
   await page.goto("/");
   await onboarding(page);
   await page.getByRole("button", { name: "Создать", exact: true }).click();
+  await page.getByRole("tab", { name: "Готовые шаблоны" }).click();
   await page.getByRole("button", { name: /Выполнение работ/ }).click();
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
   await page.getByLabel("Название сделки", { exact: true }).fill("QA этап 8: уточнение ремонта");

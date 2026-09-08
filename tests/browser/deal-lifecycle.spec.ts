@@ -17,6 +17,7 @@ test("two participants create, review, approve, sign and verify a deal", async (
   await first.getByRole("button", { name: "Сохранить профиль" }).click();
   await expect(first.getByText("Изменения сохранены", { exact: true })).toBeVisible();
   await first.getByRole("button", { name: "Создать", exact: true }).click();
+  await first.getByRole("tab", { name: "Готовые шаблоны" }).click();
   await first.getByRole("button", { name: /Аренда имущества/ }).click();
   await first.getByRole("button", { name: "Продолжить", exact: true }).click();
   await first.getByLabel("Название сделки", { exact: true }).fill("Браузерная проверка аренды");
