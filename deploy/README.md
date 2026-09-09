@@ -18,6 +18,7 @@ Before switching the `current` symlink, a release must pass:
 
 ```bash
 npm ci
+npm audit --omit=dev --audit-level=high
 npm run test
 npm run build
 npm run prisma:migrate:deploy

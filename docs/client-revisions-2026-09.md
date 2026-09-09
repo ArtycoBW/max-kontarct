@@ -26,3 +26,11 @@
 5. После изменения условий требуется повторное согласование; подпись доступна только для зафиксированной версии.
 
 Внешние SMS/DaData и юридическая готовность этим пакетом не подтверждаются.
+
+## Безопасность зависимостей
+
+При подготовке релиза 10.09.2026 выявлены опубликованные advisories для Next.js и Multer. Выкладка остановлена до переключения действующего релиза. Next.js и eslint-config-next закреплены на 16.3.4 в обоих web-workspace, Multer — на 2.3.0 через root override. Перед переключением релиза добавлен обязательный `npm audit --omit=dev --audit-level=high`.
+
+Источники: [Next.js / AVIF](https://github.com/advisories/GHSA-2xp9-vwfh-vxw4), [Next.js / Windows](https://github.com/advisories/GHSA-p293-qw3h-jr36), [Multer](https://github.com/advisories/GHSA-wc9g-mqfw-jrwm). Отсутствие известных зависимостных advisories не означает полной проверки безопасности приложения.
+
+После обновления: `npm audit --omit=dev --audit-level=high` — 0 известных уязвимостей. `lint`, `typecheck`, 289 API unit-тестов, 48 web unit-тестов и 62 API e2e-теста прошли. Проверки в браузере используют отдельную временную PostgreSQL, искусственные данные и заменители внешних провайдеров; это не проверка реальных SMSC/DaData и не проверка на устройстве внутри MAX.

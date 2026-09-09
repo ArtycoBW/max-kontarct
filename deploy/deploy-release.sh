@@ -15,6 +15,7 @@ set -a
 source /etc/max-contract/max-contract.env
 set +a
 npm ci --include=dev
+npm audit --omit=dev --audit-level=high
 npm run lint
 npm run typecheck
 npm run test
