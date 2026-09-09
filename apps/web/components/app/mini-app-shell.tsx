@@ -39,7 +39,7 @@ import {
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import type { FormEvent } from "react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
@@ -51,10 +51,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { DealIntakePanel } from "@/components/templates/deal-intake-panel";
 import { useAuth } from "@/components/providers/auth-provider";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
+import { LegalDocuments } from "@/components/onboarding/legal-documents";
 import { ProfileScreen } from "@/components/profile/profile-screen";
 import { DealWorkspaceScreen } from "@/components/deals/deal-workspace-screen";
 import { DocumentsScreen } from "@/components/files/documents-screen";
 import { InvitationEntryScreen } from "@/components/invitations/invitation-entry-screen";
+import { EarlyInvitationPanel } from "@/components/invitations/early-invitation-panel";
 import {
   parseQuestionnaireSchema,
   TemplateQuestionnaire,
@@ -1201,6 +1203,7 @@ function CreateDealScreen({
               <small>Каждый пункт договора можно будет проверить до согласования.</small>
             </span>
           </Card>
+          <EarlyInvitationPanel dealId={activeDraftId} beforeCreate={() => enqueueDraftSave()} disabled={!title.trim() || description.trim().length < 10} />
           {saveState === "error" ? (
             <RequestErrorCard
               message={draftSave.error?.message ?? "Не удалось сохранить черновик"}
@@ -2140,6 +2143,15 @@ function StartScreen({
   onStart: () => void;
   showEnvironmentBadge: boolean;
 }) {
+  const [chapterIndex, setChapterIndex] = useState(0);
+  const reducedMotion = useReducedMotion();
+  const chapters = [
+    { title: "Опишите свою сделку", text: "Расскажите, о чём хотите договориться. ИИ предложит подходящий шаблон или индивидуальный проект." },
+    { title: "Пригласите вторую сторону", text: "Отправьте приглашение сразу после описания. Пока вы готовите условия, второй участник может заполнить свой профиль." },
+    { title: "Проверьте условия вместе", text: "Проверьте суммы, даты и данные. Обе стороны согласуют одну итоговую редакцию. Дополнительные материалы можно обсудить отдельно." },
+    { title: "Подпишите и сохраните", text: "Подтвердите согласованный договор одноразовым кодом и скачайте итоговые файлы. На тестовом стенде код приходит в MAX." },
+  ];
+  const currentChapter = chapters[chapterIndex]!;
   const rootRef = useRef<HTMLDivElement>(null);
   const frameImageRef = useRef<HTMLImageElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
@@ -2147,6 +2159,7 @@ function StartScreen({
   const progressChapterRef = useRef<HTMLSpanElement>(null);
 
   const updateParallax = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (reducedMotion) return;
     const root = rootRef.current;
     if (!root) return;
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -2188,6 +2201,7 @@ function StartScreen({
           ? targetProgress
           : displayedProgress + distance * 0.085;
       const percent = Math.round(displayedProgress * 100);
+      setChapterIndex(Math.min(3, Math.floor(displayedProgress * 4)));
       const chapter =
         displayedProgress < 0.34
           ? "УСЛОВИЯ"
@@ -2242,7 +2256,7 @@ function StartScreen({
 
     scroller.scrollTop = 0;
     measure();
-    preloadStartScreenFrames();
+    if (!mediaQuery.matches) preloadStartScreenFrames();
     renderFrame();
     resizeObserver.observe(scroller);
     scroller.addEventListener("scroll", updateTarget, { passive: true });
@@ -2280,7 +2294,7 @@ function StartScreen({
                     КОНТРАКТ
                   </span>
                 </span>
-                <span className="start-screen-sequence">01 / 04</span>
+                <span className="start-screen-sequence">0{chapterIndex + 1} / 04</span>
               </header>
 
               <div className="start-screen-media" aria-hidden="true">
@@ -2309,32 +2323,18 @@ function StartScreen({
                 <span className="start-screen-kicker">
                   Частные сделки без лишней сложности
                 </span>
-                <h1>
-                  {["Условия, которые", "ведут к сделке."].map(
-                    (line, lineIndex) => (
-                      <motion.span
-                        animate={{ opacity: 1, y: 0 }}
-                        initial={{ opacity: 0, y: 18 }}
-                        key={line}
-                        transition={{
-                          delay: 0.12 + lineIndex * 0.08,
-                          duration: 0.7,
-                          ease: [0.22, 1, 0.36, 1],
-                        }}
-                      >
-                        {line}
-                      </motion.span>
-                    ),
-                  )}
-                </h1>
-                <motion.p
-                  animate={{ opacity: 1 }}
-                  initial={{ opacity: 0 }}
-                  transition={{ delay: 0.34, duration: 0.6 }}
-                >
-                  Подготовим договор, соберём документы и проведём обе стороны
-                  до подписи.
-                </motion.p>
+                <motion.div key={chapterIndex} initial={reducedMotion ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} aria-live="polite">
+                  <h1>{currentChapter.title}</h1>
+                  <p>{currentChapter.text}</p>
+                </motion.div>
+                <nav className="start-screen-chapters" aria-label="Возможности сервиса">
+                  {chapters.map((item, index) => <button key={item.title} type="button" aria-label={item.title} aria-current={index === chapterIndex ? "step" : undefined} onClick={() => {
+                    const root = rootRef.current;
+                    const scroller = root?.parentElement;
+                    if (root && scroller) scroller.scrollTo({ top: (root.offsetHeight - scroller.clientHeight) * (index / 3), behavior: reducedMotion ? "instant" : "smooth" });
+                  }}>{index + 1}</button>)}
+                </nav>
+                <LegalDocuments />
               </section>
 
               <div className="start-screen-scroll-cue" aria-hidden="true">

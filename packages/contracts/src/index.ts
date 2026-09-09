@@ -385,7 +385,7 @@ export interface NormalizedAddress {
   postalCode: string | null;
   qualityCode: string | null;
   region: string | null;
-  source: "DADATA" | "MOCK";
+  source: "DADATA" | "MOCK" | "MANUAL";
   street: string | null;
   value: string;
 }

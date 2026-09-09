@@ -19,6 +19,7 @@ describe("DealInvitationsService", () => {
   const dealFindFirst = jest.fn();
   const invitationFindUnique = jest.fn();
   const transaction = {
+    $executeRaw: jest.fn(),
     auditEvent: { create: jest.fn() },
     deal: { updateMany: jest.fn() },
     dealFile: { findMany: jest.fn() },
@@ -70,6 +71,7 @@ describe("DealInvitationsService", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    transaction.$executeRaw.mockResolvedValue(1);
     dealFindFirst.mockResolvedValue(workspaceRecord());
     transaction.deal.updateMany.mockResolvedValue({ count: 1 });
     transaction.dealFile.findMany.mockResolvedValue([]);
@@ -111,6 +113,33 @@ describe("DealInvitationsService", () => {
         data: expect.objectContaining({ status: DealStatus.INVITATION_READY }),
       }),
     );
+  });
+
+  it("creates an invitation during draft preparation without advancing or changing its revision", async () => {
+    const record = workspaceRecord({ status: DealStatus.DRAFT });
+    dealFindFirst.mockResolvedValue(record);
+    await service.create(initiatorId, dealId, { expectedUpdatedAt: record.updatedAt.toISOString(), expectedVersionId: versionId });
+    expect(transaction.deal.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { status: DealStatus.DRAFT, updatedAt: record.updatedAt } }));
+  });
+
+  it("does not disclose a protected offer for a wrong token", async () => {
+    invitationFindUnique.mockResolvedValue(joinInvitation("correct-token-value-1234567890ab"));
+    await expect(service.protectedPreview({ publicCode: "AbCdEfGhIjKl", token: "wrong-token-value-1234567890123" })).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it("joins an early draft without overwriting its last editor timestamp", async () => {
+    const token = "correct-token-value-1234567890ab";
+    const invitation = joinInvitation(token);
+    invitationFindUnique.mockResolvedValue({ ...invitation, deal: { ...invitation.deal, status: DealStatus.DRAFT } });
+    prisma.user.findUnique.mockResolvedValue({ consents: [
+      { documentVersion: "personal-v1", granted: true, type: ConsentType.PERSONAL_DATA },
+      { documentVersion: "terms-v1", granted: true, type: ConsentType.TERMS_OF_USE },
+    ], phones: [{ id: "phone" }] });
+    transaction.dealInvitation.updateMany.mockResolvedValue({ count: 1 });
+    dealFindFirst.mockResolvedValue(workspaceRecord({ status: DealStatus.DRAFT, parties: [initiatorParty(), counterpartyParty()] }));
+    await service.join(counterpartyId, { publicCode: "AbCdEfGhIjKl", token });
+    expect(transaction.$executeRaw).toHaveBeenCalled();
+    expect(transaction.deal.updateMany).not.toHaveBeenCalled();
   });
 
   it("returns only whitelisted non-PII terms in the public preview", async () => {

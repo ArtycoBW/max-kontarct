@@ -62,7 +62,7 @@ export function DealWorkspaceScreen({
       if (!workspace.data) throw new Error("Сделка ещё загружается");
       let source: { status: DealStatus; updatedAt: string; versionId: string } =
         workspace.data;
-      if (source.status === "DRAFT") {
+      if (source.status === "DRAFT" && workspace.data.draft.currentStep === "INITIATOR" && workspace.data.contractDraft) {
         source = await startDealAgreement(dealId, {
           expectedUpdatedAt: source.updatedAt,
           expectedVersionId: source.versionId,
@@ -105,6 +105,13 @@ export function DealWorkspaceScreen({
       toast.success("Согласование сохранено");
       await refreshWorkspace(queryClient, dealId);
     },
+  });
+  const startAgreement = useMutation({
+    mutationFn: () => {
+      if (!workspace.data) throw new Error("Сделка ещё загружается");
+      return startDealAgreement(dealId, { expectedUpdatedAt: workspace.data.updatedAt, expectedVersionId: workspace.data.versionId });
+    },
+    onSuccess: () => refreshWorkspace(queryClient, dealId),
   });
 
   if (workspace.isPending) {
@@ -179,6 +186,7 @@ export function DealWorkspaceScreen({
 
       {!signingVisible ? <section className="deal-workspace-section">
         <h2>Стороны и приглашение</h2>
+        {deal.status === "DRAFT" ? <Card className="form-message"><strong>Условия ещё готовятся</strong><p>{deal.draft.description}</p><span>Вы можете заполнить свой профиль сейчас. После подготовки договора обе стороны согласуют одну итоговую версию.</span><Button variant="secondary" onClick={onOpenProfile}>Мои данные для договора</Button></Card> : null}
         {visibleParty ? (
           <Card className="deal-party-card">
             <UserRound size={21} />
@@ -210,7 +218,7 @@ export function DealWorkspaceScreen({
           </Button>
         ) : null}
 
-        {currentInvitation?.state === "ACTIVE" ? (
+        {currentInvitation?.state === "ACTIVE" && deal.currentUserRole === "INITIATOR" ? (
           <Button
             className="full-width"
             disabled={revokeInvitation.isPending}
@@ -273,9 +281,11 @@ export function DealWorkspaceScreen({
 
       {documentsPending ? <Card className="form-message"><strong>{deal.status === "DOCUMENTS_REVIEW" ? "Документы на проверке" : "Сначала подготовьте документы"}</strong><span>Когда обязательные документы обеих сторон будут приняты, откроется финальное согласование этой версии договора.</span></Card> : null}
 
-      {deal.status === "DRAFT" ? (
+      {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" ? (
         <Button className="full-width" onClick={onEdit} variant="secondary">Редактировать черновик</Button>
       ) : null}
+      {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" && deal.contractDraft && deal.counterparty ? <Button className="full-width" disabled={startAgreement.isPending} onClick={() => startAgreement.mutate()}>Передать итоговые условия на согласование</Button> : null}
+      {startAgreement.error ? <p role="alert">{startAgreement.error.message}</p> : null}
 
       {deal.counterparty ? (
         <Button className="full-width" onClick={onOpenDocuments} variant="secondary">

@@ -38,6 +38,7 @@ import { getProfile, updateProfile } from "@/lib/api/profile";
 import { getAddressSuggestions, normalizeAddress } from "@/lib/api/data-normalization";
 import { queryKeys } from "@/lib/api/query-keys";
 import { getTrustStatus } from "@/lib/api/trust";
+import { LegalDocuments } from "@/components/onboarding/legal-documents";
 
 const PERSON_NAME = /^[\p{L}][\p{L}\p{M}' -]*$/u;
 const profileSchema = z.object({
@@ -204,8 +205,7 @@ export function ProfileScreen({
       {trust.data ? (
         <Card className="profile-trust-card">
           <header>
-            <span><ShieldCheck size={18} /> Уровни доверия</span>
-            <strong>{trust.data.confirmed} из {trust.data.total}</strong>
+            <span><ShieldCheck size={18} /> Что подтверждено</span>
           </header>
           <div>
             {trust.data.checks.map((check) => (
@@ -218,7 +218,7 @@ export function ProfileScreen({
               </span>
             ))}
           </div>
-          <p><ShieldQuestion size={14} /> Каждый пункт подтверждается независимо.</p>
+          <p><ShieldQuestion size={14} /> Это сведения о выполненных проверках, а не гарантия личности или надёжности участника.</p>
         </Card>
       ) : null}
 
@@ -307,6 +307,9 @@ export function ProfileScreen({
             )}
           />
         </ProfileField>
+        {data.address?.source === "MANUAL" ? (
+          <p className="field-hint" role="status">Адрес сохранён вручную. Автоматическая проверка недоступна — проверьте написание самостоятельно.</p>
+        ) : null}
 
         <Card className="verified-contact-card">
           <LockKeyhole size={18} />
@@ -334,6 +337,7 @@ export function ProfileScreen({
           <Save size={16} /> {mutation.isPending ? "Сохраняем…" : "Сохранить профиль"}
         </Button>
       </form>
+      <LegalDocuments />
     </div>
   );
 }
@@ -473,7 +477,7 @@ function trustCheckLabel(type: TrustCheckType): string {
     INTERNAL_REVIEW: "Внутренняя проверка",
     MAX_ACCOUNT: "Аккаунт MAX",
     PHONE: "Номер телефона",
-    REQUIRED_FILES: "Обязательные документы",
+    REQUIRED_FILES: "Документы по сделкам",
     REQUISITES_FORMAT: "Формат реквизитов",
   }[type];
 }

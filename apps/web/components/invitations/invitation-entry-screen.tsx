@@ -7,7 +7,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { getPublicInvitation } from "@/lib/api/invitations";
+import { getProtectedInvitation } from "@/lib/api/invitations";
 
 export function InvitationEntryScreen({
   onContinue,
@@ -18,8 +18,9 @@ export function InvitationEntryScreen({
 }) {
   const [acknowledged, setAcknowledged] = useState(false);
   const invitation = useQuery({
-    queryFn: () => getPublicInvitation(payload.publicCode),
-    queryKey: ["public-invitation", payload.publicCode],
+    queryFn: () => getProtectedInvitation({ publicCode: payload.publicCode, token: payload.token }),
+    queryKey: ["protected-invitation", payload.publicCode],
+    gcTime: 0,
     retry: false,
   });
 
@@ -42,6 +43,7 @@ export function InvitationEntryScreen({
             <p className="screen-eyebrow">Защищённое приглашение</p>
             <h1>{invitation.data.templateTitle}</h1>
             <p className="screen-copy">Инициатор {invitation.data.initiatorMaskedName} предлагает ознакомиться с условиями версии {invitation.data.versionNumber}.</p>
+            <Card className="form-message"><strong>Предложение</strong><p>{invitation.data.offerDescription}</p><small>Условия ещё могут уточняться. До подписания обе стороны проверят и согласуют итоговую редакцию.</small></Card>
 
             <Card className="invitation-entry-terms">
               <div className="invitation-entry-card-title"><FileCheck2 size={18} /><strong>Основные условия</strong></div>

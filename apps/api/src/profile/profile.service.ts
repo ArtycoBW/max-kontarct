@@ -50,7 +50,7 @@ export class ProfileService {
             postalCode: user.profile.addressPostalCode,
             qualityCode: user.profile.addressQualityCode,
             region: user.profile.addressRegion,
-            source: user.profile.addressSource === "DADATA" ? "DADATA" : "MOCK",
+            source: user.profile.addressSource === "DADATA" ? "DADATA" : user.profile.addressSource === "MANUAL" ? "MANUAL" : "MOCK",
             street: user.profile.addressStreet,
             value: user.profile.addressValue,
           }

@@ -4262,6 +4262,23 @@ button.service-status {
   gap: 12px;
 }
 
+.consent-document-action { grid-column: 2 / -1; }
+.early-invitation-panel { display: grid; gap: 12px; padding: 18px; font-size: 13px; line-height: 1.5; }
+.legal-document-link { color: var(--accent); font-size: 12px; text-align: left; text-decoration: underline; text-underline-offset: 3px; padding: 8px 0; cursor: pointer; }
+.legal-document-dialog { width: min(640px, calc(100vw - 24px)); max-height: 85dvh; margin: auto; border: 1px solid var(--border); border-radius: 20px; padding: 20px; background: var(--surface, #fff); color: var(--ink-deep); }
+.legal-document-dialog::backdrop { background: #21171380; }
+.legal-document-dialog > header { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+.legal-document-dialog h2 { font-size: 20px; }
+.legal-document-body { font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.legal-document-body article { margin-top: 24px; }
+.legal-document-body h3 { font-size: 18px; }
+.legal-document-body p { margin: 12px 0; }
+.start-screen-chapters { display: flex; gap: 10px; margin-top: 12px; }
+.start-screen-chapters button { border: 1px solid #bcaea5; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; }
+.start-screen-chapters button[aria-current] { background: var(--accent); border-color: var(--accent); color: white; }
+@media (max-height: 650px) { .start-screen-card { bottom: 112px; padding: 12px; left: 18px; right: 18px; } .start-screen-card h1 { font-size: 26px; } .start-screen-card p { margin-top: 10px; font-size: 12px; } }
+@media (max-height: 550px) { .start-screen-card { max-height: calc(var(--start-screen-viewport-height) - 200px); overflow-y: auto; } }
+
 .consent-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

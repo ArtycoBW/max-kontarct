@@ -21,6 +21,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { LegalDocuments } from "./legal-documents";
 import {
   recordConsents,
   verifyDevelopmentPhone,
@@ -224,10 +225,14 @@ function ConsentScreen({
                   id={switchId}
                   onCheckedChange={(checked) => onChange(type, checked)}
                 />
+                <div className="consent-document-action"><LegalDocuments type={type} label={`Читать: ${label}`} /></div>
               </Card>
             );
           })}
         </div>
+
+        <LegalDocuments type="ELECTRONIC_SIGNATURE" label="Соглашение о простой электронной подписи" />
+        <p className="field-hint">Соглашение о ПЭП принимается отдельно перед подписанием. На стенде опубликованы проекты документов.</p>
 
         {error ? (
           <p className="onboarding-inline-error" role="alert">

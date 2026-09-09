@@ -8,6 +8,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Param,
@@ -41,6 +42,14 @@ import { DealParamsDto } from "./dto/deal-params.dto";
 @ApiTags("public invitations")
 export class PublicDealInvitationsController {
   constructor(private readonly invitations: DealInvitationsService) {}
+
+  @Post("preview")
+  @HttpCode(HttpStatus.OK)
+  @Header("Cache-Control", "no-store")
+  @Throttle({ default: { limit: 8, ttl: 60_000 } })
+  protectedPreview(@Body() body: JoinDealInvitationDto) {
+    return this.invitations.protectedPreview(body);
+  }
 
   @Get(":publicCode")
   @Throttle({ default: { limit: 30, ttl: 60_000 } })

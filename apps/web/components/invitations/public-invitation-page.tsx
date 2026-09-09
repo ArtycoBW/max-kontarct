@@ -1,6 +1,8 @@
 "use client";
 
 import type { PublicDealInvitationResponse } from "@max-contract/contracts";
+import { useQuery } from "@tanstack/react-query";
+import { getProtectedInvitation } from "@/lib/api/invitations";
 import {
   ArrowRight,
   Check,
@@ -40,6 +42,13 @@ export function PublicInvitationPage({
     [invitation.botUsername, invitation.publicCode, token],
   );
   const active = invitation.state === "ACTIVE";
+  const protectedOffer = useQuery({
+    enabled: active && Boolean(token),
+    queryKey: ["protected-invitation", invitation.publicCode],
+    queryFn: () => getProtectedInvitation({ publicCode: invitation.publicCode, token }),
+    retry: false,
+    gcTime: 0,
+  });
 
   return (
     <main className="public-invite-page">
@@ -58,13 +67,15 @@ export function PublicInvitationPage({
         <Card className="public-invite-trust-card">
           <ShieldCheck size={20} />
           <span>
-            <strong>Приглашение от {invitation.initiatorMaskedName}</strong>
-            <small>Личные данные скрыты до безопасного присоединения.</small>
+            <strong>Приглашение от {protectedOffer.data?.initiatorMaskedName ?? invitation.initiatorMaskedName}</strong>
+            <small>Описание доступно только по полной защищённой ссылке. Не пересылайте её посторонним.</small>
           </span>
         </Card>
 
         {active ? (
           <>
+            {protectedOffer.data ? <Card className="form-message"><strong>Предложение</strong><p>{protectedOffer.data.offerDescription}</p><small>Условия могут уточняться. Нажатие «Я ознакомился» не означает подписание.</small></Card> : null}
+            {protectedOffer.error ? <Card className="form-message is-error" role="alert"><p>Не удалось открыть предложение по этой ссылке.</p><Button onClick={() => void protectedOffer.refetch()}>Повторить</Button></Card> : null}
             <section className="public-invite-section">
               <div className="public-invite-section-title">
                 <FileCheck2 size={18} />

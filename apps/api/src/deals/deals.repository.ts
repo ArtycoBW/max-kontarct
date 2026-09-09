@@ -219,6 +219,15 @@ export class DealsRepository {
       });
       if (updated.count !== 1) return null;
 
+      // The guarded update above holds the deal row lock. An early join either
+      // finishes before it (visible here), or retries against the new status.
+      const joined = await transaction.dealParty.count({ where: { dealId: input.dealId, role: DealPartyRole.COUNTERPARTY } });
+      const activeInvitation = await transaction.dealInvitation.count({ where: { dealId: input.dealId, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } } });
+      if (joined || activeInvitation) {
+        const required = await transaction.templateDocumentRequirement.count({ where: { templateVersion: { deals: { some: { id: input.dealId } } }, required: true } });
+        await transaction.deal.update({ where: { id: input.dealId }, data: { status: joined ? (required ? DealStatus.DOCUMENTS_PENDING : DealStatus.TERMS_REVIEW) : DealStatus.INVITATION_READY } });
+      }
+
       await transaction.auditEvent.create({
         data: {
           actorUserId: input.userId,

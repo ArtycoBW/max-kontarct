@@ -139,7 +139,11 @@ export class DealInvitationsService {
   ): Promise<DealInvitationResponse> {
     const record = await this.findWorkspace(dealId, userId);
     assertInitiator(record, userId);
+    if (record.parties.some(party => party.role === DealPartyRole.COUNTERPARTY)) {
+      throw new ConflictException({ code: "DEAL_COUNTERPARTY_ALREADY_JOINED", message: "Вторая сторона уже присоединилась" });
+    }
     if (
+      record.status !== DealStatus.DRAFT &&
       record.status !== DealStatus.COLLECTING_DATA &&
       record.status !== DealStatus.INVITATION_READY &&
       record.status !== DealStatus.INVITED
@@ -151,6 +155,9 @@ export class DealInvitationsService {
     }
     const version = requireWorkspaceVersion(record);
     if (version.id !== input.expectedVersionId) throw versionConflict();
+    if (parseDealDraft(version.terms).description.trim().length < 10) {
+      throw new ConflictException({ code: "DEAL_INVITATION_DESCRIPTION_REQUIRED", message: "Сначала сохраните краткое описание предложения" });
+    }
 
     const rawToken = randomBytes(24).toString("base64url");
     const publicCode = randomBytes(9).toString("base64url");
@@ -202,13 +209,14 @@ export class DealInvitationsService {
               )
             : record.status;
       const updated = await transaction.deal.updateMany({
-        data: { status: nextStatus, updatedAt: now },
+        data: { status: nextStatus, updatedAt: record.status === DealStatus.DRAFT ? record.updatedAt : now },
         where: {
           id: dealId,
           initiatorUserId: userId,
           status: record.status,
           updatedAt: new Date(input.expectedUpdatedAt),
           versions: { some: { id: input.expectedVersionId } },
+          parties: { none: { role: DealPartyRole.COUNTERPARTY } },
         },
       });
       if (updated.count !== 1) throw versionConflict();
@@ -253,7 +261,7 @@ export class DealInvitationsService {
     return {
       ...toInvitationResponse(invitation),
       maxDeeplink,
-      shareText: `Вас приглашают согласовать условия сделки «${record.templateVersion.template.title}» в Макс-Контракт.`,
+      shareText: `${displayName(record.parties.find(party => party.role === DealPartyRole.INITIATOR)!.user)} приглашает обсудить сделку «${record.templateVersion.template.title}» в Макс-Контракт. Описание доступно по защищённой ссылке. Это приглашение, не подписание.`,
       shareUrl,
     };
   }
@@ -403,6 +411,27 @@ export class DealInvitationsService {
     };
   }
 
+  async protectedPreview(input: JoinDealInvitationRequest) {
+    const invitation = await this.prisma.dealInvitation.findUnique({
+      where: { publicCode: input.publicCode },
+      select: {
+        acceptedAt: true, expiresAt: true, revokedAt: true, tokenHash: true,
+        createdBy: { select: { profile: { select: { firstName: true, lastName: true } }, maxAccount: { select: { firstName: true, lastName: true } } } },
+        deal: { select: { versions: { orderBy: { versionNumber: "desc" }, take: 1, select: { terms: true } } } },
+      },
+    });
+    if (!invitation || !matchesToken(input.token, invitation.tokenHash)) throw invitationNotFound();
+    assertInvitationUsable(invitation);
+    const version = invitation.deal.versions[0];
+    if (!version) throw invitationNotFound();
+    const person = invitation.createdBy.profile ?? invitation.createdBy.maxAccount;
+    return {
+      ...await this.publicPreview(input.publicCode),
+      initiatorMaskedName: [person?.firstName, person?.lastName].filter(Boolean).join(" ") || "Участник сделки",
+      offerDescription: parseDealDraft(version.terms).description,
+    };
+  }
+
   async join(
     userId: string,
     input: JoinDealInvitationRequest,
@@ -417,6 +446,7 @@ export class DealInvitationsService {
             id: true,
             initiatorUserId: true,
             status: true,
+            updatedAt: true,
             templateVersion: {
               select: { documentRequirements: { where: { required: true }, select: { id: true } } },
             },
@@ -490,6 +520,8 @@ export class DealInvitationsService {
         },
       });
       if (
+        invitation.deal.status !== DealStatus.DRAFT &&
+        invitation.deal.status !== DealStatus.COLLECTING_DATA &&
         invitation.deal.status !== DealStatus.INVITATION_READY &&
         invitation.deal.status !== DealStatus.INVITED
       ) {
@@ -505,13 +537,17 @@ export class DealInvitationsService {
         DealStatus.INVITED,
         DealStatus.COUNTERPARTY_JOINED,
       );
-      const nextStatus = this.stateMachine.transition(
+      const nextStatus = invitation.deal.status === DealStatus.DRAFT ? DealStatus.DRAFT : this.stateMachine.transition(
         DealStatus.COUNTERPARTY_JOINED,
         invitation.deal.templateVersion.documentRequirements.length
           ? DealStatus.DOCUMENTS_PENDING
           : DealStatus.TERMS_REVIEW,
       );
-      const updated = await transaction.deal.updateMany({
+      // Lock the draft without rewinding updatedAt if its author saved while
+      // the invitation was being checked. Prisma @updatedAt must not run here.
+      const updated = nextStatus === DealStatus.DRAFT ? {
+        count: await transaction.$executeRaw`UPDATE deals SET status = status WHERE id = ${invitation.deal.id}::uuid AND status = 'DRAFT'`,
+      } : await transaction.deal.updateMany({
         data: { status: nextStatus, updatedAt: now },
         where: {
           id: invitation.deal.id,

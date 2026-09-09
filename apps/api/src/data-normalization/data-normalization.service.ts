@@ -2,7 +2,7 @@ import type {
   AddressSuggestionListResponse,
   NormalizedAddress,
 } from "@max-contract/contracts";
-import { Inject, Injectable } from "@nestjs/common";
+import { BadGatewayException, Inject, Injectable } from "@nestjs/common";
 
 import {
   DATA_NORMALIZATION_PROVIDER,
@@ -20,7 +20,18 @@ export class DataNormalizationService {
     return { items: await this.provider.suggestAddresses(query.trim()) };
   }
 
-  normalizeAddress(address: string): Promise<NormalizedAddress> {
-    return this.provider.normalizeAddress(address.trim());
+  async normalizeAddress(address: string): Promise<NormalizedAddress> {
+    try {
+      return await this.provider.normalizeAddress(address.trim());
+    } catch (error) {
+      // An unavailable provider is not proof that a user-entered address is invalid.
+      // Keep the source explicit: this value has NOT been verified by DaData.
+      if (!(error instanceof BadGatewayException)) throw error;
+      return {
+        value: address.trim(), source: "MANUAL", qualityCode: null,
+        city: null, fiasId: null, house: null, kladrId: null,
+        postalCode: null, region: null, street: null,
+      };
+    }
   }
 }

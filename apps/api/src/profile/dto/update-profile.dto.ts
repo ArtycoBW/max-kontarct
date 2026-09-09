@@ -23,7 +23,7 @@ class NormalizedAddressDto {
   @IsOptional() @IsString() @MaxLength(16) postalCode!: string | null;
   @IsOptional() @IsString() @MaxLength(16) qualityCode!: string | null;
   @IsOptional() @IsString() @MaxLength(160) region!: string | null;
-  @IsIn(["DADATA", "MOCK"]) source!: "DADATA" | "MOCK";
+  @IsIn(["DADATA", "MOCK", "MANUAL"]) source!: "DADATA" | "MOCK" | "MANUAL";
   @IsOptional() @IsString() @MaxLength(160) street!: string | null;
   @IsString() @MinLength(5) @MaxLength(500) value!: string;
 }

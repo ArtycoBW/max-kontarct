@@ -18,6 +18,12 @@ export function getPublicInvitation(
   );
 }
 
+export function getProtectedInvitation(body: JoinDealInvitationRequest): Promise<PublicDealInvitationResponse & { offerDescription: string }> {
+  return apiRequest("public/invitations/preview", {
+    method: "POST", body: JSON.stringify(body), headers: { "Content-Type": "application/json" },
+  });
+}
+
 export function getDealWorkspace(dealId: string): Promise<DealWorkspaceResponse> {
   return apiRequest<DealWorkspaceResponse>(
     `deals/${encodeURIComponent(dealId)}/workspace`,
