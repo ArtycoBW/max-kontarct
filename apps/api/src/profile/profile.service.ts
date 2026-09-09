@@ -2,8 +2,10 @@ import type {
   UpdateUserProfileRequest,
   UserProfileResponse,
   VerifiedPhone,
+  PassportDetails,
 } from "@max-contract/contracts";
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 
 import { PrismaService } from "../database/prisma.service";
 
@@ -41,6 +43,7 @@ export class ProfileService {
       : null;
 
     return {
+      passport: (user.profile?.passportDetails as unknown as PassportDetails | null) ?? null,
       address: user.profile?.addressValue
         ? {
             city: user.profile.addressCity,
@@ -95,6 +98,7 @@ export class ProfileService {
               "birthDate",
               "email",
               "address",
+              ...(input.passport !== undefined ? ["passport"] : []),
             ],
           },
           requestId,
@@ -107,6 +111,9 @@ export class ProfileService {
 }
 
 function normalizeProfile(input: UpdateUserProfileRequest) {
+  if (input.passport?.issuedAt && (input.passport.issuedAt < "1900-01-01" || new Date(`${input.passport.issuedAt}T00:00:00Z`) > new Date() || (input.birthDate && input.passport.issuedAt < input.birthDate))) {
+    throw new BadRequestException({ code: "PROFILE_PASSPORT_DATE_INVALID", message: "Проверьте дату выдачи паспорта" });
+  }
   const birthDate = input.birthDate
     ? new Date(`${input.birthDate}T00:00:00.000Z`)
     : null;
@@ -125,6 +132,12 @@ function normalizeProfile(input: UpdateUserProfileRequest) {
   }
 
   return {
+    ...(input.passport === undefined ? {} : { passportDetails: input.passport ? {
+      series: input.passport.series ?? null, number: input.passport.number ?? null,
+      issuedAt: input.passport.issuedAt ?? null, issuer: input.passport.issuer?.trim() || null,
+      divisionCode: input.passport.divisionCode ?? null, birthPlace: input.passport.birthPlace?.trim() || null,
+      gender: input.passport.gender ?? null,
+    } : Prisma.DbNull }),
     addressCity: input.address?.city ?? null,
     addressFiasId: input.address?.fiasId ?? null,
     addressHouse: input.address?.house ?? null,

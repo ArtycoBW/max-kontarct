@@ -113,6 +113,7 @@ describe("profile and admin RBAC (e2e)", () => {
     userProfile: {
       upsert: jest.fn(async ({ create, update }: Record<string, any>) => {
         storedProfile = {
+          ...storedProfile,
           ...(storedProfile ? update : create),
           updatedAt: now,
         };
@@ -206,6 +207,29 @@ describe("profile and admin RBAC (e2e)", () => {
         middleName: null,
       })
       .expect(400);
+  });
+
+  it("stores only confirmed passport fields, preserves them for older clients, and does not audit values", async () => {
+    const passport = { series: "0000", number: "000000", issuedAt: "2010-03-02", issuer: "Тестовый отдел", divisionCode: "000-000", birthPlace: "Город Пример", gender: "М" };
+    const profile = { firstName: "Иван", lastName: "Примеров", birthDate: "1990-02-01" };
+    const saved = await request(app.getHttpServer()).patch(`/${API_PREFIX}/profile`).send({ ...profile, passport }).expect(200);
+    expect(saved.body.passport).toEqual(passport);
+    expect(prisma.userProfile.upsert).toHaveBeenLastCalledWith(expect.objectContaining({ where: { userId: USER_ID } }));
+    expect(JSON.stringify(auditCreates.map(event => event.metadata))).not.toMatch(/000000|Тестовый отдел|Город Пример/);
+    const olderClient = await request(app.getHttpServer()).patch(`/${API_PREFIX}/profile`).send(profile).expect(200);
+    expect(olderClient.body.passport).toEqual(passport);
+    const users = await request(app.getHttpServer()).get(`/${API_PREFIX}/admin/users`).set("x-test-role", UserRole.ADMIN).expect(200);
+    expect(JSON.stringify(users.body)).not.toMatch(/passport|Тестовый отдел|"number"/);
+  });
+
+  it.each([
+    { series: "123" }, { number: "abcdef" }, { divisionCode: "111111" },
+    { issuedAt: "2039-01-01" }, { issuedAt: "1990-02-31" }, { issuedAt: "1980-01-01" },
+    { gender: "other" }, { image: "raw-photo-must-not-be-stored" },
+  ])("rejects invalid passport payload %j", async passport => {
+    await request(app.getHttpServer()).patch(`/${API_PREFIX}/profile`)
+      .send({ firstName: "Иван", lastName: "Примеров", birthDate: "1990-02-01", passport }).expect(400);
+    expect(prisma.userProfile.upsert).not.toHaveBeenCalled();
   });
 
   it("blocks the USER role from admin endpoints", async () => {

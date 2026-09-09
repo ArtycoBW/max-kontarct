@@ -5,6 +5,7 @@ import type {
   TrustCheckType,
   UpdateUserProfileRequest,
   VerifiedPhone,
+  PassportDetails,
 } from "@max-contract/contracts";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -20,7 +21,6 @@ import {
   RefreshCw,
   Save,
   ShieldCheck,
-  ShieldQuestion,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -39,9 +39,20 @@ import { getAddressSuggestions, normalizeAddress } from "@/lib/api/data-normaliz
 import { queryKeys } from "@/lib/api/query-keys";
 import { getTrustStatus } from "@/lib/api/trust";
 import { LegalDocuments } from "@/components/onboarding/legal-documents";
+import { PassportScanner } from "./passport-scanner";
+import { passportFieldLabels } from "@/lib/ocr/passport-parser";
 
 const PERSON_NAME = /^[\p{L}][\p{L}\p{M}' -]*$/u;
 const profileSchema = z.object({
+  passport: z.object({
+    series: z.string().refine(value => !value || /^\d{4}$/.test(value), "Серия — 4 цифры"),
+    number: z.string().refine(value => !value || /^\d{6}$/.test(value), "Номер — 6 цифр"),
+    divisionCode: z.string().refine(value => !value || /^\d{3}-\d{3}$/.test(value), "Формат: 000-000"),
+    issuedAt: z.string().refine(value => !value || (value >= "1900-01-01" && value <= today() && /^\d{4}-\d{2}-\d{2}$/.test(value)), "Проверьте дату выдачи"),
+    issuer: z.string().trim().max(500, "Не более 500 символов"),
+    birthPlace: z.string().trim().max(250, "Не более 250 символов"),
+    gender: z.enum(["", "М", "Ж"], { error: "Укажите М или Ж" }),
+  }),
   address: z.string().trim().max(500, "Не более 500 символов").refine(
     (value) => !value || value.length >= 5,
     "Укажите адрес подробнее",
@@ -68,8 +79,11 @@ const profileSchema = z.object({
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
+const passportKeys = ["series", "number", "issuedAt", "issuer", "divisionCode", "birthPlace", "gender"] as const;
+const emptyPassportDetails = { series: "", number: "", issuedAt: "", issuer: "", divisionCode: "", birthPlace: "", gender: "" as const };
 
 const emptyProfile: ProfileFormValues = {
+  passport: emptyPassportDetails,
   address: "",
   birthDate: "",
   email: "",
@@ -86,6 +100,7 @@ export function ProfileScreen({
   const auth = useAuth();
   const queryClient = useQueryClient();
   const [saved, setSaved] = useState(false);
+  const [scanned, setScanned] = useState(false);
   const profile = useQuery({
     queryFn: getProfile,
     queryKey: queryKeys.profile.current(),
@@ -105,6 +120,12 @@ export function ProfileScreen({
     mutationFn: async (values: ProfileFormValues) => {
       const address = values.address ? await normalizeAddress(values.address) : null;
       return updateProfile({
+        passport: Object.values(values.passport).some(Boolean) ? {
+          series: values.passport.series || null, number: values.passport.number || null,
+          issuedAt: values.passport.issuedAt || null, issuer: values.passport.issuer || null,
+          divisionCode: values.passport.divisionCode || null, birthPlace: values.passport.birthPlace || null,
+          gender: values.passport.gender || null,
+        } : null,
         address,
         birthDate: values.birthDate || null,
         email: values.email || null,
@@ -117,6 +138,7 @@ export function ProfileScreen({
       queryClient.setQueryData(queryKeys.profile.current(), nextProfile);
       form.reset(toFormValues(nextProfile));
       setSaved(true);
+      setScanned(false);
       void queryClient.invalidateQueries({ queryKey: queryKeys.trust.current() });
     },
   });
@@ -218,7 +240,6 @@ export function ProfileScreen({
               </span>
             ))}
           </div>
-          <p><ShieldQuestion size={14} /> Это сведения о выполненных проверках, а не гарантия личности или надёжности участника.</p>
         </Card>
       ) : null}
 
@@ -234,6 +255,17 @@ export function ProfileScreen({
           </div>
           <ShieldCheck size={20} />
         </div>
+
+        <PassportScanner onApply={result => {
+          for (const key of ["firstName", "lastName", "middleName", "birthDate", "address"] as const) {
+            if (result[key]) form.setValue(key, result[key], { shouldDirty: true, shouldValidate: true });
+          }
+          for (const key of passportKeys) {
+            if (result[key]) form.setValue(`passport.${key}`, result[key], { shouldDirty: true, shouldValidate: true });
+          }
+          setScanned(true); setSaved(false);
+        }} />
+        {scanned ? <p className="validation-success" role="status">Данные перенесены в форму. Проверьте их и нажмите «Сохранить профиль».</p> : null}
 
         <ProfileField error={form.formState.errors.lastName?.message} inputId="profile-last-name" label="Фамилия">
           <Input
@@ -310,6 +342,14 @@ export function ProfileScreen({
         {data.address?.source === "MANUAL" ? (
           <p className="field-hint" role="status">Адрес сохранён вручную. Автоматическая проверка недоступна — проверьте написание самостоятельно.</p>
         ) : null}
+
+        <details className="passport-profile-fields" open={scanned || undefined}>
+          <summary>Паспортные данные</summary>
+          <div>{passportKeys.map(key => <ProfileField key={key} inputId={`passport-${key}`} label={passportFieldLabels[key]} error={form.formState.errors.passport?.[key]?.message}>
+            <Input {...form.register(`passport.${key}`)} id={`passport-${key}`} type={key === "issuedAt" ? "date" : "text"}
+              autoComplete="off" maxLength={key === "issuer" ? 500 : 250} />
+          </ProfileField>)}</div>
+        </details>
 
         <Card className="verified-contact-card">
           <LockKeyhole size={18} />
@@ -448,6 +488,7 @@ function today(): string {
 }
 
 function toFormValues(profile: {
+  passport?: PassportDetails | null;
   address: { value: string } | null;
   birthDate: string | null;
   email: string | null;
@@ -456,6 +497,12 @@ function toFormValues(profile: {
   middleName: string | null;
 }): ProfileFormValues {
   return {
+    passport: {
+      series: profile.passport?.series ?? "", number: profile.passport?.number ?? "",
+      issuedAt: profile.passport?.issuedAt ?? "", issuer: profile.passport?.issuer ?? "",
+      divisionCode: profile.passport?.divisionCode ?? "", birthPlace: profile.passport?.birthPlace ?? "",
+      gender: profile.passport?.gender ?? "",
+    },
     address: profile.address?.value ?? "",
     birthDate: profile.birthDate ?? "",
     email: profile.email ?? "",

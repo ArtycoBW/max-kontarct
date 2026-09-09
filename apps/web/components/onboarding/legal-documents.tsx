@@ -1,15 +1,16 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useId, useRef } from "react";
+import { useState } from "react";
 import { apiRequest } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 
 type LegalDocument = { type: string; title: string; version: string; status: "DRAFT"; paragraphs: string[] };
 
 export function LegalDocuments({ type, label = "Документы и согласия" }: { type?: string; label?: string }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState(type ?? "PERSONAL_DATA");
   const documents = useQuery({
     queryKey: ["legal-documents"],
     queryFn: () => apiRequest<{ items: LegalDocument[] }>("public/legal-documents"),
@@ -17,18 +18,22 @@ export function LegalDocuments({ type, label = "Документы и согла
     retry: false,
   });
   return <>
-    <button className="legal-document-link" type="button" onClick={() => dialog.current?.showModal()}>{label}</button>
-    <dialog className="legal-document-dialog" ref={dialog} aria-labelledby={titleId}>
-      <header><h2 id={titleId}>{label}</h2><Button variant="ghost" onClick={() => dialog.current?.close()} aria-label="Закрыть документ">Закрыть</Button></header>
+    <button className="legal-document-link" type="button" onClick={() => setOpen(true)}>{label}</button>
+    <Modal open={open} onClose={() => setOpen(false)} title={type ? "Документ" : "Документы и согласия"}
+      footer={<Button className="full-width" type="button" onClick={() => setOpen(false)}>Понятно</Button>}>
       <div className="legal-document-body">
-        <p className="form-message is-warning">Проекты для тестирования. Утверждённые юридические тексты ещё не опубликованы. Не используйте стенд для реальных сделок до их согласования.</p>
+        {!type && documents.data ? <label className="legal-document-picker">Выберите документ
+          <select className="input" value={selected} onChange={event => setSelected(event.target.value)}>
+            {documents.data.items.map(item => <option key={item.type} value={item.type}>{item.title}</option>)}
+          </select>
+        </label> : null}
         {documents.isPending ? <p role="status">Загружаем документы…</p> : null}
         {documents.error ? <div role="alert"><p>Не удалось загрузить документы.</p><Button onClick={() => void documents.refetch()}>Повторить</Button></div> : null}
-        {documents.data?.items.filter(item => !type || item.type === type).map(item => <article key={item.type}>
-          <h3>{item.title}</h3><small>Проект · версия {item.version}</small>
+        {documents.data?.items.filter(item => item.type === (type ?? selected)).map(item => <article key={item.type}>
+          <h3>{item.title}</h3>
           {item.paragraphs.map(paragraph => <p key={paragraph}>{paragraph}</p>)}
         </article>)}
       </div>
-    </dialog>
+    </Modal>
   </>;
 }

@@ -7,6 +7,7 @@ import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { VoiceInput } from "@/components/ui/voice-input";
 import { suggestDeal } from "@/lib/api/templates";
 
 export function DealIntakePanel({ initialDescription = "", isCreating, onAccept }: {
@@ -43,6 +44,7 @@ export function DealIntakePanel({ initialDescription = "", isCreating, onAccept 
         />
         <small className="field-meta">{description.length}/500 · Не указывайте паспорт, телефон и другие личные реквизиты.</small>
       </label>
+      <VoiceInput value={description} disabled={busy} onChange={value => { setDescription(value); setValidationError(""); intake.reset(); }} />
       {validationError ? <p className="field-error" role="alert">{validationError}</p> : null}
       {intake.isError ? <p className="field-error" role="alert">{intake.error.message}</p> : null}
       <Button className="full-width" disabled={busy} onClick={() => {

@@ -43,7 +43,7 @@ export function InvitationEntryScreen({
             <p className="screen-eyebrow">Защищённое приглашение</p>
             <h1>{invitation.data.templateTitle}</h1>
             <p className="screen-copy">Инициатор {invitation.data.initiatorMaskedName} предлагает ознакомиться с условиями версии {invitation.data.versionNumber}.</p>
-            <Card className="form-message"><strong>Предложение</strong><p>{invitation.data.offerDescription}</p><small>Условия ещё могут уточняться. До подписания обе стороны проверят и согласуют итоговую редакцию.</small></Card>
+            <Card className="invitation-offer"><strong>Предложение</strong><p>{invitation.data.offerDescription}</p><small>Условия ещё могут уточняться. До подписания обе стороны проверят и согласуют итоговую редакцию.</small></Card>
 
             <Card className="invitation-entry-terms">
               <div className="invitation-entry-card-title"><FileCheck2 size={18} /><strong>Основные условия</strong></div>

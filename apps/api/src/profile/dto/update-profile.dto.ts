@@ -15,6 +15,16 @@ import {
 
 const PERSON_NAME = /^[\p{L}][\p{L}\p{M}' -]*$/u;
 
+class PassportDetailsDto {
+  @IsOptional() @IsString() @Matches(/^\d{4}$/) series!: string | null;
+  @IsOptional() @IsString() @Matches(/^\d{6}$/) number!: string | null;
+  @IsOptional() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/) @IsISO8601({ strict: true }) issuedAt!: string | null;
+  @IsOptional() @IsString() @MaxLength(500) issuer!: string | null;
+  @IsOptional() @IsString() @Matches(/^\d{3}-\d{3}$/) divisionCode!: string | null;
+  @IsOptional() @IsString() @MaxLength(250) birthPlace!: string | null;
+  @IsOptional() @IsIn(["М", "Ж"]) gender!: "М" | "Ж" | null;
+}
+
 class NormalizedAddressDto {
   @IsOptional() @IsString() @MaxLength(160) city!: string | null;
   @IsOptional() @IsString() @MaxLength(64) fiasId!: string | null;
@@ -29,6 +39,9 @@ class NormalizedAddressDto {
 }
 
 export class UpdateProfileDto implements UpdateUserProfileRequest {
+  @IsOptional() @ValidateNested() @Type(() => PassportDetailsDto)
+  passport?: PassportDetailsDto | null;
+
   @ApiProperty({ nullable: true, type: NormalizedAddressDto })
   @IsOptional()
   @ValidateNested()

@@ -237,6 +237,7 @@ model UserProfile {
   middleName String?   @map("middle_name") @db.VarChar(100)
   email      String?   @db.VarChar(254)
   birthDate  DateTime? @map("birth_date") @db.Date
+  passportDetails Json? @map("passport_details")
   addressValue        String?   @map("address_value") @db.VarChar(500)
   addressSource       String?   @map("address_source") @db.VarChar(16)
   addressFiasId       String?   @map("address_fias_id") @db.VarChar(64)

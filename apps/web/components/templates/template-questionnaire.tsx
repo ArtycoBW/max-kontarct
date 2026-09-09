@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { VoiceInput } from "@/components/ui/voice-input";
 import type {
   QuestionnaireDefinition,
   QuestionnaireField,
@@ -158,10 +159,11 @@ function QuestionnaireFieldControl({
           value={stringValue}
         />
         {field.maxLength ? (
-          <span className="field-meta">
+          <span className="field-meta field-meta-flow">
             {stringValue.length}/{field.maxLength}
           </span>
         ) : null}
+        <VoiceInput value={stringValue} maxLength={field.maxLength ?? 1000} onChange={text => onChange(field.key, text)} />
         <FieldDescription text={field.description} />
         <FieldError id={errorId} message={error} />
       </div>

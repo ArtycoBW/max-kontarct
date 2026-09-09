@@ -386,6 +386,9 @@ textarea:focus-visible {
   user-select: none;
   will-change: transform;
 }
+.start-screen-canvas { position: absolute; inset: 0; opacity: 0; }
+.start-screen-copy { display: grid; }
+.start-screen-copy-layer { grid-area: 1 / 1; pointer-events: none; }
 
 .start-screen-shade,
 .start-screen-glass,
@@ -1685,10 +1688,14 @@ button.service-status {
 
 .field-meta {
   position: absolute;
+  left: 14px;
   right: 11px;
   bottom: 10px;
   color: var(--muted-light);
   font-size: 9px;
+  line-height: 1.5;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .form-field:has(.field-error) .field-meta {
@@ -3564,6 +3571,7 @@ button.service-status {
 
 .deal-description-textarea {
   min-height: 146px;
+  padding-bottom: 48px;
 }
 
 .field-meta {
@@ -4265,14 +4273,49 @@ button.service-status {
 .consent-document-action { grid-column: 2 / -1; }
 .early-invitation-panel { display: grid; gap: 12px; padding: 18px; font-size: 13px; line-height: 1.5; }
 .legal-document-link { color: var(--accent); font-size: 12px; text-align: left; text-decoration: underline; text-underline-offset: 3px; padding: 8px 0; cursor: pointer; }
-.legal-document-dialog { width: min(640px, calc(100vw - 24px)); max-height: 85dvh; margin: auto; border: 1px solid var(--border); border-radius: 20px; padding: 20px; background: var(--surface, #fff); color: var(--ink-deep); }
-.legal-document-dialog::backdrop { background: #21171380; }
-.legal-document-dialog > header { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
-.legal-document-dialog h2 { font-size: 20px; }
+.app-modal { width: min(600px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); margin: auto; padding: 0; border: 1px solid var(--border); border-radius: 24px; overflow: hidden; color: var(--ink-deep); background: #fff; box-shadow: 0 24px 80px #21171333; }
+.app-modal::backdrop { background: #21171366; backdrop-filter: blur(4px); }
+.app-modal-panel { display: flex; flex-direction: column; max-height: calc(100dvh - 34px); }
+.app-modal-header { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; border-bottom: 1px solid var(--border); }
+.app-modal-header h2 { margin: 0; font-size: 20px; line-height: 1.25; letter-spacing: -.03em; }
+.app-modal-close { display: grid; flex: none; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--surface-muted, #f6f2ef); cursor: pointer; }
+.app-modal-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 24px; scrollbar-gutter: stable; }
+.app-modal-footer { flex: none; padding: 16px 24px; border-top: 1px solid var(--border); }
+.legal-document-picker { display: grid; gap: 8px; font-size: 12px; color: var(--muted); }
+.legal-document-picker select { width: 100%; min-width: 0; font-size: 13px; text-overflow: ellipsis; padding-right: 24px; }
 .legal-document-body { font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
 .legal-document-body article { margin-top: 24px; }
 .legal-document-body h3 { font-size: 18px; }
 .legal-document-body p { margin: 12px 0; }
+.invitation-offer { display: grid; gap: 12px; margin: 18px 0 26px; padding: 20px; line-height: 1.6; overflow-wrap: anywhere; }
+.invitation-offer p { margin: 0; white-space: pre-wrap; }
+.invitation-offer small { color: var(--muted); font-size: 12px; }
+.voice-input { display: grid; justify-items: start; gap: 6px; min-width: 0; }
+.voice-input > .button { min-height: 36px; padding: 6px 10px; font-size: 12px; }
+.voice-input p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
+.dictation-field { display: grid; gap: 10px; }
+.field-meta.field-meta-flow { position: static; padding: 0 4px; }
+.app-modal-body > p { font-size: 14px; line-height: 1.6; margin: 0 0 14px; }
+.passport-photo-list, .passport-review-fields { display: grid; gap: 16px; }
+.passport-photo { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 16px; }
+.passport-photo strong { display: block; font-size: 14px; }
+.passport-photo small { display: block; margin-top: 5px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.passport-photo-upload { position: relative; display: flex; gap: 10px; align-items: center; padding: 12px; border-radius: 12px; background: var(--accent-tint); color: var(--accent); font-size: 13px; cursor: pointer; }
+.passport-photo-upload input { position: absolute; inset: 0; opacity: 0; width: 100%; cursor: pointer; }
+.passport-photo-upload:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
+.passport-photo-preview { height: 150px; display: grid; place-items: center; overflow: hidden; border-radius: 12px; background: #f5f2ef; }
+.passport-photo-preview img { max-width: 140px; max-height: 140px; object-fit: contain; }
+.passport-photo-actions { display: flex; gap: 8px; justify-content: space-between; }
+.passport-review-fields .input { width: 100%; min-width: 0; }
+.ocr-confirm { display: flex; gap: 12px; align-items: flex-start; margin: 24px 0 12px; font-size: 14px; line-height: 1.5; }
+.ocr-confirm input { width: 20px; height: 20px; flex: none; accent-color: var(--accent); }
+.ocr-progress { display: grid; gap: 8px; margin-top: 16px; font-size: 13px; }
+.ocr-progress progress { width: 100%; accent-color: var(--accent); }
+.ocr-warning { padding: 12px; border-radius: 12px; background: #fff5df; font-size: 13px; line-height: 1.5; }
+.passport-profile-fields { display: grid; gap: 16px; padding-top: 20px; border-top: 1px solid var(--border); }
+.passport-profile-fields summary { cursor: pointer; padding: 4px 0 12px; font-size: 16px; }
+.passport-profile-fields[open] > div { display: grid; gap: 16px; padding-top: 8px; }
+@media (max-width: 380px) { .app-modal-header, .app-modal-body, .app-modal-footer { padding: 16px; } .app-modal-header h2 { font-size: 18px; } .invitation-offer { padding: 16px; } }
 .start-screen-chapters { display: flex; gap: 10px; margin-top: 12px; }
 .start-screen-chapters button { border: 1px solid #bcaea5; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; }
 .start-screen-chapters button[aria-current] { background: var(--accent); border-color: var(--accent); color: white; }

@@ -48,6 +48,7 @@ import { Card } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { VoiceInput } from "@/components/ui/voice-input";
 import { DealIntakePanel } from "@/components/templates/deal-intake-panel";
 import { useAuth } from "@/components/providers/auth-provider";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
@@ -83,6 +84,7 @@ import {
 } from "@/lib/api/templates";
 import { normalizeQuestionnaireAnswers } from "@/lib/validation/questionnaire-answers";
 import { cn } from "@/lib/utils";
+import { createStartFrameSequence } from "@/lib/ui/start-frame-sequence";
 import { getMaxStartPayload, type MaxStartPayload } from "@/lib/max/bridge";
 
 type AppTab = "home" | "deals" | "create" | "deal" | "documents" | "profile";
@@ -104,28 +106,6 @@ const navigation: Array<{
 const START_SCREEN_FRAME_COUNT = 154;
 const startScreenFramePath = (index: number) =>
   `/images/start-screen/frame-${String(index + 1).padStart(3, "0")}.webp`;
-const startScreenFrameCache: HTMLImageElement[] = [];
-let startScreenPreloadStarted = false;
-
-function preloadStartScreenFrames(): void {
-  if (typeof window === "undefined" || startScreenPreloadStarted) return;
-  startScreenPreloadStarted = true;
-
-  const preloadBatch = (start: number) => {
-    const end = Math.min(START_SCREEN_FRAME_COUNT, start + 15);
-    for (let index = start; index < end; index += 1) {
-      const image = new window.Image();
-      image.decoding = "async";
-      image.src = startScreenFramePath(index);
-      startScreenFrameCache.push(image);
-    }
-    if (end < START_SCREEN_FRAME_COUNT) {
-      window.setTimeout(() => preloadBatch(end), 60);
-    }
-  };
-
-  preloadBatch(0);
-}
 
 function ScreenHeader({
   action,
@@ -1191,6 +1171,7 @@ function CreateDealScreen({
             />
             <small className="field-meta">{description.length}/500</small>
           </label>
+          <VoiceInput value={description} onChange={value => { setDescription(value); setDescriptionError(""); }} />
           {descriptionError ? (
             <span className="field-error" role="alert">
               <CircleAlert size={13} /> {descriptionError}
@@ -1858,7 +1839,7 @@ function AiQuestionControl({
   }
 
   return (
-    <Textarea
+    <div className="dictation-field"><Textarea
       aria-describedby={errorId}
       aria-label={question.label}
       aria-invalid={Boolean(errorId)}
@@ -1868,6 +1849,7 @@ function AiQuestionControl({
       placeholder="Введите ответ"
       value={typeof answer === "string" ? answer : ""}
     />
+    <VoiceInput value={typeof answer === "string" ? answer : ""} maxLength={1000} onChange={onAnswer} /></div>
   );
 }
 
@@ -2151,15 +2133,14 @@ function StartScreen({
     { title: "Проверьте условия вместе", text: "Проверьте суммы, даты и данные. Обе стороны согласуют одну итоговую редакцию. Дополнительные материалы можно обсудить отдельно." },
     { title: "Подпишите и сохраните", text: "Подтвердите согласованный договор одноразовым кодом и скачайте итоговые файлы. На тестовом стенде код приходит в MAX." },
   ];
-  const currentChapter = chapters[chapterIndex]!;
   const rootRef = useRef<HTMLDivElement>(null);
-  const frameImageRef = useRef<HTMLImageElement>(null);
+  const frameCanvasRef = useRef<HTMLCanvasElement>(null);
   const progressRef = useRef<HTMLDivElement>(null);
   const progressValueRef = useRef<HTMLElement>(null);
   const progressChapterRef = useRef<HTMLSpanElement>(null);
 
   const updateParallax = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (reducedMotion) return;
+    if (reducedMotion || event.pointerType !== "mouse") return;
     const root = rootRef.current;
     if (!root) return;
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -2175,15 +2156,16 @@ function StartScreen({
 
   useEffect(() => {
     const root = rootRef.current;
-    const frameImage = frameImageRef.current;
+    const frameCanvas = frameCanvasRef.current;
     const scroller = root?.parentElement;
-    if (!root || !frameImage || !scroller) return;
+    if (!root || !frameCanvas || !scroller) return;
 
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     let animationFrame = 0;
     let targetProgress = 0;
     let displayedProgress = 0;
-    let displayedFrame = -1;
+    let previousTime = 0;
+    const sequence = createStartFrameSequence(frameCanvas, START_SCREEN_FRAME_COUNT, requestRender);
 
     const measure = () => {
       const viewportHeight = scroller.clientHeight;
@@ -2193,13 +2175,15 @@ function StartScreen({
         `${viewportHeight}px`,
       );
     };
-    const renderFrame = () => {
+    const renderFrame = (time = 0) => {
       animationFrame = 0;
+      const elapsed = previousTime ? Math.min(40, time - previousTime) : 16;
+      previousTime = time;
       const distance = targetProgress - displayedProgress;
       displayedProgress =
-        Math.abs(distance) < 0.0006
+        mediaQuery.matches || Math.abs(distance) < 0.0006
           ? targetProgress
-          : displayedProgress + distance * 0.085;
+          : displayedProgress + Math.sign(distance) * Math.min(Math.abs(distance) * (1 - Math.exp(-elapsed / 220)), elapsed / 1800);
       const percent = Math.round(displayedProgress * 100);
       setChapterIndex(Math.min(3, Math.floor(displayedProgress * 4)));
       const chapter =
@@ -2209,12 +2193,6 @@ function StartScreen({
             ? "СОГЛАСОВАНИЕ"
             : "ПОДПИСЬ";
       const hintOpacity = Math.max(0, 1 - displayedProgress * 9);
-      const nextFrame = mediaQuery.matches
-        ? 0
-        : Math.min(
-            START_SCREEN_FRAME_COUNT - 1,
-            Math.round(displayedProgress * (START_SCREEN_FRAME_COUNT - 1)),
-          );
 
       root.style.setProperty(
         "--start-screen-progress",
@@ -2231,10 +2209,7 @@ function StartScreen({
       if (progressChapterRef.current) {
         progressChapterRef.current.textContent = chapter;
       }
-      if (nextFrame !== displayedFrame) {
-        displayedFrame = nextFrame;
-        frameImage.src = startScreenFramePath(nextFrame);
-      }
+      if (!mediaQuery.matches) sequence.render(displayedProgress);
       if (Math.abs(targetProgress - displayedProgress) >= 0.0006) {
         requestRender();
       }
@@ -2256,7 +2231,6 @@ function StartScreen({
 
     scroller.scrollTop = 0;
     measure();
-    if (!mediaQuery.matches) preloadStartScreenFrames();
     renderFrame();
     resizeObserver.observe(scroller);
     scroller.addEventListener("scroll", updateTarget, { passive: true });
@@ -2264,6 +2238,7 @@ function StartScreen({
 
     return () => {
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      sequence.dispose();
       resizeObserver.disconnect();
       scroller.removeEventListener("scroll", updateTarget);
       mediaQuery.removeEventListener("change", updateTarget);
@@ -2299,7 +2274,7 @@ function StartScreen({
 
               <div className="start-screen-media" aria-hidden="true">
                 <div className="start-screen-media-plane">
-                  {/* The frame sequence is intentionally controlled imperatively for scroll scrubbing. */}
+                  {/* Static fallback stays beneath the canvas until its first fully decoded frame. */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     alt=""
@@ -2307,12 +2282,11 @@ function StartScreen({
                     decoding="sync"
                     draggable={false}
                     fetchPriority="high"
-                    ref={frameImageRef}
                     src={startScreenFramePath(0)}
                   />
+                  <canvas ref={frameCanvasRef} className="start-screen-frame start-screen-canvas" />
                 </div>
                 <span className="start-screen-shade" />
-                <span className="start-screen-glass" />
                 <span className="start-screen-rule" />
                 <span className="start-screen-media-note">
                   Ясность · Контроль · Подпись
@@ -2323,10 +2297,13 @@ function StartScreen({
                 <span className="start-screen-kicker">
                   Частные сделки без лишней сложности
                 </span>
-                <motion.div key={chapterIndex} initial={reducedMotion ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} aria-live="polite">
-                  <h1>{currentChapter.title}</h1>
-                  <p>{currentChapter.text}</p>
-                </motion.div>
+                <div className="start-screen-copy" aria-live="polite">
+                  {chapters.map((item, index) => <motion.div key={item.title} className="start-screen-copy-layer"
+                    aria-hidden={index !== chapterIndex} initial={false} animate={{ opacity: index === chapterIndex ? 1 : 0 }}
+                    transition={{ duration: reducedMotion ? 0 : 0.55, ease: [0.4, 0, 0.2, 1] }}>
+                    <h1>{item.title}</h1><p>{item.text}</p>
+                  </motion.div>)}
+                </div>
                 <nav className="start-screen-chapters" aria-label="Возможности сервиса">
                   {chapters.map((item, index) => <button key={item.title} type="button" aria-label={item.title} aria-current={index === chapterIndex ? "step" : undefined} onClick={() => {
                     const root = rootRef.current;

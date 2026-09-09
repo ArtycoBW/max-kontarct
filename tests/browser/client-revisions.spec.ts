@@ -10,14 +10,15 @@ test("start chapters reveal content and legal documents open without accepting t
   await expect(page.getByRole("heading", { name: "Подпишите и сохраните" })).toBeVisible();
   await page.screenshot({ path: "test-results/start-chapters.png", fullPage: true });
   await page.getByRole("button", { name: "Документы и согласия", exact: true }).click();
-  await expect(page.getByRole("dialog")).toContainText("Проекты для тестирования");
-  await expect(page.getByRole("dialog").getByRole("article")).toHaveCount(4);
+  await expect(page.getByRole("dialog")).not.toContainText("Проект · версия");
+  await expect(page.getByRole("dialog").getByRole("article")).toHaveCount(1);
+  await expect(page.getByRole("dialog").locator("option")).toHaveCount(4);
   await page.screenshot({ path: "test-results/legal-documents.png", fullPage: true });
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
   await page.getByRole("button", { name: "Читать: Обработка персональных данных", exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText("Обработка персональных данных");
-  await page.getByRole("dialog").getByRole("button", { name: "Закрыть документ" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Понятно" }).click();
   await expect(page.getByRole("switch", { name: "Обработка персональных данных" })).not.toBeChecked();
   for (const width of [320, 390, 1440]) {
     await page.setViewportSize({ width, height: 740 }); await noOverflow(page);
@@ -49,6 +50,18 @@ test("early invite protects the offer and allows parallel profile entry without 
   expect(await publicPreview.text()).not.toContain(description);
   expect((await second.request.post("/api/v1/public/invitations/preview", { data: { publicCode: invitation.publicCode, token: "x".repeat(32) } })).status()).toBe(404);
   expect((await first.request.get(`/api/v1/deals/${dealId}/workspace`)).ok()).toBe(true);
+  const publicPage = await secondContext.newPage();
+  await publicPage.goto(invitation.shareUrl);
+  await expect(publicPage.locator(".invitation-offer")).toContainText(description);
+  for (const width of [390, 1440]) {
+    await publicPage.setViewportSize({ width, height: 900 });
+    await noOverflow(publicPage);
+    const trustCard = (await publicPage.locator(".public-invite-trust-card").boundingBox())!;
+    const offerCard = (await publicPage.locator(".invitation-offer").boundingBox())!;
+    expect(offerCard.y - trustCard.y - trustCard.height).toBeGreaterThanOrEqual(16);
+    await publicPage.screenshot({ path: `test-results/invitation-spacing-${width}.png`, fullPage: true });
+  }
+  await publicPage.close();
   await second.goto(`/?WebAppStartParam=${encodeURIComponent(`invite_${invitation.publicCode}_${token}`)}`);
   await expect(second.getByText(description, { exact: true })).toBeVisible();
   await second.getByRole("button", { name: "Я ознакомился", exact: true }).click();

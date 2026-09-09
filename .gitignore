@@ -8,6 +8,7 @@ build/
 out/
 coverage/
 *.tsbuildinfo
+apps/web/public/ocr/
 next-env.d.ts
 
 # Local environment files

@@ -74,7 +74,7 @@ export function PublicInvitationPage({
 
         {active ? (
           <>
-            {protectedOffer.data ? <Card className="form-message"><strong>Предложение</strong><p>{protectedOffer.data.offerDescription}</p><small>Условия могут уточняться. Нажатие «Я ознакомился» не означает подписание.</small></Card> : null}
+            {protectedOffer.data ? <Card className="invitation-offer"><strong>Предложение</strong><p>{protectedOffer.data.offerDescription}</p><small>Условия могут уточняться. Нажатие «Я ознакомился» не означает подписание.</small></Card> : null}
             {protectedOffer.error ? <Card className="form-message is-error" role="alert"><p>Не удалось открыть предложение по этой ссылке.</p><Button onClick={() => void protectedOffer.refetch()}>Повторить</Button></Card> : null}
             <section className="public-invite-section">
               <div className="public-invite-section-title">

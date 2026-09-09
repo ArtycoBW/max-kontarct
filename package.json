@@ -24,7 +24,7 @@
     "test:integration": "npm run test:integration --workspaces --if-present",
     "test:browser": "node scripts/run-browser-tests.cjs",
     "build": "npm run build --workspaces --if-present",
-    "postinstall": "npm run prisma:generate && npm run build --workspace @max-contract/contracts",
+    "postinstall": "npm run prisma:generate && npm run build --workspace @max-contract/contracts && node scripts/prepare-ocr-assets.cjs",
     "prisma:generate": "npm run prisma:generate --workspace @max-contract/api",
     "prisma:migrate:deploy": "npm run prisma:migrate:deploy --workspace @max-contract/api",
     "prisma:seed": "npm run prisma:seed --workspace @max-contract/api",

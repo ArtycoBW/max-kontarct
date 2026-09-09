@@ -337,7 +337,18 @@ export interface MaxContactRequest {
   phone: string;
 }
 
+export interface PassportDetails {
+  series: string | null;
+  number: string | null;
+  issuedAt: string | null;
+  issuer: string | null;
+  divisionCode: string | null;
+  birthPlace: string | null;
+  gender: "М" | "Ж" | null;
+}
+
 export interface UserProfileResponse {
+  passport?: PassportDetails | null;
   address: NormalizedAddress | null;
   birthDate: string | null;
   email: string | null;
@@ -350,6 +361,7 @@ export interface UserProfileResponse {
 }
 
 export interface UpdateUserProfileRequest {
+  passport?: PassportDetails | null;
   address: NormalizedAddress | null;
   birthDate: string | null;
   email: string | null;
