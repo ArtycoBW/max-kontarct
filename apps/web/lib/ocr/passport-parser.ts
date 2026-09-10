@@ -63,12 +63,12 @@ export function parsePassportPages(pages: Partial<Record<PassportPage, string>>)
     if ((text.match(/ЗАРЕГИСТРИРОВАН/gi) ?? []).length > 1 || /СНЯТ[А]? С (?:РЕГИСТРАЦИОННОГО )?УЧ[ЕЁ]ТА|ВЫПИСАН|УБЫЛ/i.test(text)) {
       warnings.push("Есть несколько отметок или снятие с учёта. Проверьте актуальный адрес и внесите его вручную.");
     } else {
-      const start = lines.findIndex(line => /(?:РЕСПУБЛИКА|ОБЛ(?:АСТЬ)?\.?|КРАЙ|ГОР(?:ОД)?\.?|Г\.|СЕЛО|ПОС[ЕЁ]ЛОК|УЛ(?:ИЦА)?\.)\s*[А-ЯЁ]/i.test(line) && !/ОТДЕЛ|УПРАВЛЕНИ|ГУ МВД|УФМС/i.test(line));
+      const start = lines.findIndex(line => /(?:РЕСП(?:УБЛИКА)?\.?|ОБЛ(?:АСТЬ)?\.?|КРАЙ|ГОР(?:ОД)?\.?|Г\.|СЕЛО|ПОС[ЕЁ]ЛОК|УЛ(?:ИЦА)?\.)\s*[А-ЯЁ]/i.test(line) && !/ОТДЕЛ|УПРАВЛЕНИ|ГУ МВД|УФМС/i.test(line));
       if (start >= 0) {
         const addressLines = [];
         for (const line of lines.slice(start)) {
           if (/НАИМЕНОВАНИЕ ОРГАНА|ОТДЕЛ|УФМС|МВД|ПОДПИСЬ|ЗАВЕРИЛ|КОД ПОДРАЗДЕЛЕНИЯ/i.test(line)) break;
-          if (!/МЕСТО ЖИТЕЛЬСТВА|ЗАРЕГИСТРИРОВАН|\b\d{2}\.\d{2}\.\d{4}\b/i.test(line)) addressLines.push(line);
+          if (!/МЕСТО ЖИТЕЛЬСТВА|ЗАРЕГИСТРИРОВАН|\b\d{2}\.\d{2}\.\d{4}\b/i.test(line)) addressLines.push(line.replace(/^(?:РЕГ\.?|РЕГИОН|ПУНКТ|УЛИЦА)\s*[:.]\s*/i, ""));
         }
         data.address = addressLines.join(", ").slice(0, 500);
       }
