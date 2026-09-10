@@ -8,6 +8,7 @@ import Script from "next/script";
 
 import { Toaster } from "@/components/ui/sonner";
 import { notifyMaxWebAppReady } from "@/lib/max/bridge";
+import { reportBootStage } from "@/lib/diagnostics/boot-client";
 import { isPublicRoute } from "@/lib/routing/public-routes";
 
 import { AuthProvider } from "./auth-provider";
@@ -29,7 +30,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (useMaxBridge) notifyMaxWebAppReady();
+    if (useMaxBridge) {
+      reportBootStage("react-mounted");
+      notifyMaxWebAppReady();
+    }
   }, [useMaxBridge]);
 
   return (
@@ -38,7 +42,8 @@ export function AppProviders({ children }: { children: ReactNode }) {
         <Script
           src="https://st.max.ru/js/max-web-app.js"
           strategy="afterInteractive"
-          onReady={() => { notifyMaxWebAppReady(); }}
+          onReady={() => { reportBootStage("sdk-ready"); notifyMaxWebAppReady(); }}
+          onError={() => { reportBootStage("sdk-error"); }}
         />
       ) : null}
       <MotionConfig reducedMotion="user">

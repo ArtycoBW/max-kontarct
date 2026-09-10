@@ -18,6 +18,8 @@ import { ApiError } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/query-keys";
 import { getMaxInitData, waitForMaxWebApp } from "@/lib/max/bridge";
 import { isPublicRoute } from "@/lib/routing/public-routes";
+import { reportBootStage } from "@/lib/diagnostics/boot-client";
+import type { BootDetail } from "@/lib/diagnostics/boot-schema";
 
 interface AuthContextValue {
   error: Error | null;
@@ -28,7 +30,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function bootstrapSession() {
+async function loadSession() {
   if (process.env.NODE_ENV === "production") {
     await waitForMaxWebApp();
   }
@@ -46,6 +48,22 @@ async function bootstrapSession() {
   }
 
   return authenticateWithMax(getMaxInitData());
+}
+
+async function bootstrapSession() {
+  reportBootStage("auth-start");
+  try {
+    const session = await loadSession();
+    reportBootStage("auth-success");
+    return session;
+  } catch (error) {
+    let detail: BootDetail = "other";
+    if (error instanceof ApiError) {
+      detail = error.status === 401 ? "unauthorized" : error.status === 403 ? "forbidden" : error.status === 429 ? "rate-limited" : error.status === 504 ? "timeout" : error.status >= 500 ? "server-error" : "other";
+    } else if (error instanceof TypeError) detail = "network";
+    reportBootStage("auth-error", detail);
+    throw error;
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

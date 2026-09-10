@@ -1,6 +1,7 @@
 "use client";
 
 import type { MaxContactRequest } from "@max-contract/contracts";
+import { reportBootStage } from "../diagnostics/boot-client";
 
 export type MaxContactBridgeResult =
   | { kind: "development" }
@@ -29,8 +30,10 @@ export function notifyMaxWebAppReady(): boolean {
   try {
     webApp.ready();
     readyWebApps.add(webApp);
+    reportBootStage("ready-called");
     return true;
   } catch {
+    reportBootStage("ready-error");
     // A host bridge failure must not prevent the UI (including retry) rendering.
     return false;
   }
@@ -49,11 +52,13 @@ export function waitForMaxWebApp(
     const checkBridge = (): void => {
       const webApp = window.WebApp;
       if (webApp) {
+        reportBootStage("bridge-found");
         resolve(webApp);
         return;
       }
 
       if (Date.now() - startedAt >= timeoutMs) {
+        reportBootStage("bridge-timeout");
         reject(new Error("Откройте приложение внутри MAX и повторите попытку"));
         return;
       }
