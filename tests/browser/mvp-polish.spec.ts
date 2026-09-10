@@ -58,9 +58,9 @@ test("speech is opt-in, preserves manual edits, handles denial and unsupported W
   await expect(page.getByRole("dialog")).toContainText("аудио может передаваться");
   await page.getByRole("button", { name: "Включить микрофон", exact: true }).click();
   const emit = async (text: string, isFinal: boolean) => page.evaluate(({ text, isFinal }) => {
-    (window as unknown as { speech: { onresult: (e: unknown) => void } }).speech.onresult({ results: [{ isFinal, 0: { transcript: text } }] });
+    (window as unknown as { speech: { onresult: (e: unknown) => void } }).speech.onresult({ resultIndex: 0, results: [{ isFinal, 0: { transcript: text } }] });
   }, { text, isFinal });
-  await emit("На десять слайдов.", false); await expect(field).toHaveValue("Нужна презентация.");
+  await emit("На десять слайдов.", false); await expect(field).toHaveValue("Нужна презентация. На десять слайдов.");
   await emit("На десять слайдов.", true); await emit("На десять слайдов.", true);
   await expect(field).toHaveValue("Нужна презентация. На десять слайдов.");
   await field.fill("Правка вручную."); await emit("не затирать", true);

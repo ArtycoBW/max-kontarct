@@ -1001,6 +1001,7 @@ function CreateDealScreen({
         <DealIntakePanel
           key={intakeDescription.revision}
           initialDescription={intakeDescription.text}
+          active={creationMode === "ai"}
           isCreating={draftCreation.isPending}
           onAccept={proposal => void beginDraft(proposal)}
         />
@@ -1139,6 +1140,7 @@ function CreateDealScreen({
             <span>Краткое описание</span>
             <Textarea
               aria-invalid={Boolean(descriptionError && description.trim().length < 10)}
+              id="deal-description"
               className="deal-description-textarea"
               maxLength={500}
               onChange={(event) => {
@@ -1150,7 +1152,7 @@ function CreateDealScreen({
             />
             <small className="field-meta">{description.length}/500</small>
           </label>
-          <VoiceInput value={description} onChange={value => { setDescription(value); setDescriptionError(""); }} />
+          <VoiceInput inputId="deal-description" value={description} onChange={value => { setDescription(value); setDescriptionError(""); }} />
           {descriptionError ? (
             <span className="field-error" role="alert">
               <CircleAlert size={13} /> {descriptionError}
@@ -1814,7 +1816,7 @@ function AiQuestionControl({
       placeholder="Введите ответ"
       value={typeof answer === "string" ? answer : ""}
     />
-    <VoiceInput value={typeof answer === "string" ? answer : ""} maxLength={1000} onChange={onAnswer} /></div>
+    <VoiceInput inputId={question.id} value={typeof answer === "string" ? answer : ""} maxLength={1000} onChange={onAnswer} /></div>
   );
 }
 

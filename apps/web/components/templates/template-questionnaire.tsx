@@ -163,7 +163,7 @@ function QuestionnaireFieldControl({
             {stringValue.length}/{field.maxLength}
           </span>
         ) : null}
-        <VoiceInput value={stringValue} maxLength={field.maxLength ?? 1000} onChange={text => onChange(field.key, text)} />
+        <VoiceInput inputId={field.key} value={stringValue} maxLength={field.maxLength ?? 1000} onChange={text => onChange(field.key, text)} />
         <FieldDescription text={field.description} />
         <FieldError id={errorId} message={error} />
       </div>

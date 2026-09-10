@@ -2,7 +2,7 @@
 
 import type { DealIntakeResponse } from "@max-contract/contracts";
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,12 +10,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { VoiceInput } from "@/components/ui/voice-input";
 import { suggestDeal } from "@/lib/api/templates";
 
-export function DealIntakePanel({ initialDescription = "", isCreating, onAccept }: {
+export function DealIntakePanel({ initialDescription = "", isCreating, active = true, onAccept }: {
   initialDescription?: string;
   isCreating: boolean;
+  active?: boolean;
   onAccept: (proposal: DealIntakeResponse) => void;
 }) {
   const [description, setDescription] = useState(initialDescription);
+  const descriptionId = useId();
   const [validationError, setValidationError] = useState("");
   const inputRef = useRef<HTMLLabelElement>(null);
   useEffect(() => {
@@ -34,6 +36,7 @@ export function DealIntakePanel({ initialDescription = "", isCreating, onAccept 
       <label className="form-field" ref={inputRef}>
         <span>Что хотите оформить?</span>
         <Textarea
+          id={descriptionId}
           className="deal-description-textarea"
           maxLength={500}
           value={description}
@@ -44,7 +47,7 @@ export function DealIntakePanel({ initialDescription = "", isCreating, onAccept 
         />
         <small className="field-meta">{description.length}/500 · Не указывайте паспорт, телефон и другие личные реквизиты.</small>
       </label>
-      <VoiceInput value={description} disabled={busy} onChange={value => { setDescription(value); setValidationError(""); intake.reset(); }} />
+      <VoiceInput inputId={descriptionId} value={description} disabled={busy || !active} onChange={value => { setDescription(value); setValidationError(""); intake.reset(); }} />
       {validationError ? <p className="field-error" role="alert">{validationError}</p> : null}
       {intake.isError ? <p className="field-error" role="alert">{intake.error.message}</p> : null}
       <Button className="full-width" disabled={busy} onClick={() => {
