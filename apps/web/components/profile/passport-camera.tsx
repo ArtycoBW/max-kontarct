@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { Camera, Check, CircleAlert, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { DialogFooter } from "@/components/ui/dialog";
 import { cameraCrop } from "@/lib/ocr/image-quality";
-import { liveCaptureReady, liveDefinitions } from "@/lib/ocr/live-fields";
+import { goodCapture, liveCaptureReady, liveDefinitions } from "@/lib/ocr/live-fields";
 import { startLiveScanner, type LiveScanState } from "@/lib/ocr/live-scanner";
 import type { Quad } from "@/lib/ocr/perspective";
 import type { PassportPage } from "@/lib/ocr/passport-parser";
@@ -19,7 +20,10 @@ export function PassportCamera({ page, onCapture, onCancel }: { page: PassportPa
   const [ready, setReady] = useState(false);
   const [taking, setTaking] = useState(false);
   const [error, setError] = useState("");
-  const [scan, setScan] = useState<LiveScanState>({ fields: [], phase: "loading", quality: null });
+  const [automatic, setAutomatic] = useState(false);
+  const [scan, setScan] = useState<LiveScanState>({ fields: [], phase: "loading", quality: null, hint: "checking" });
+  const captureHandler = useRef(onCapture);
+  useEffect(() => { captureHandler.current = onCapture; }, [onCapture]);
   const quality = scan.quality;
   const canRead = ready && liveCaptureReady(page, scan.fields, quality);
   const stop = () => { stream.current?.getTracks().forEach(track => track.stop()); stream.current = null; };
@@ -50,9 +54,12 @@ export function PassportCamera({ page, onCapture, onCancel }: { page: PassportPa
   }, []);
   useEffect(() => {
     if (!ready || taking || !video.current) return;
-    const scanner = startLiveScanner(video.current, page, crop, setScan);
+    const scanner = startLiveScanner(video.current, page, crop, setScan, automatic ? (file, corners) => {
+      if (!alive.current) return;
+      setTaking(true); stop(); captureHandler.current(file, corners);
+    } : undefined);
     return () => scanner.stop();
-  }, [ready, taking, page]);
+  }, [ready, taking, page, automatic]);
   const capture = async () => {
     const guide = crop();
     if (!guide || !video.current || !ready || taking) return;
@@ -78,35 +85,37 @@ export function PassportCamera({ page, onCapture, onCancel }: { page: PassportPa
     } catch { if (alive.current) { setError("Не удалось сделать снимок. Попробуйте ещё раз или загрузите фото."); setTaking(false); } }
     finally { canvas.width = 0; canvas.height = 0; }
   };
-  const messages = quality ? [
-    quality.dark ? "Темно: добавьте свет или подойдите к окну." : "",
-    quality.glare ? "Возможен блик: измените угол камеры или освещения." : "",
-    quality.moving ? "Камера движется: задержите её неподвижно." : "",
-    quality.soft && !quality.dark && !quality.moving ? "Мало чётких деталей: наведите фокус на текст и проверьте расстояние." : "",
-  ].filter(Boolean) : [];
+  const instructions = {
+    checking: "Проверяем освещение и чёткость…",
+    dark: "Темно: добавьте свет или подойдите к окну.",
+    glare: "Возможен блик: измените угол камеры или освещения.",
+    moving: "Камера движется: задержите её неподвижно.",
+    soft: "Мало чётких деталей: наведите фокус на текст и проверьте расстояние.",
+    good: "Света достаточно. Проверьте, что текст читается и вся страница попала в рамку.",
+  };
   return <><div className="app-modal-body"><section className="passport-camera" aria-label="Съёмка страницы паспорта">
     <p>{page === "identity" ? "Снимите одну страницу. ФИО и обе строки с символами внизу должны целиком попасть в рамку." : page === "registration" ? "Расположите страницу с актуальным штампом регистрации внутри рамки. Не закрывайте текст пальцами." : "Расположите страницу с органом и датой выдачи внутри рамки. Не закрывайте текст пальцами."}</p>
     <div className="passport-camera-view">
       <video ref={video} autoPlay playsInline muted aria-label="Предпросмотр камеры" onLoadedData={() => { if (stream.current) setReady(true); }} />
       <div ref={frame} className={`passport-camera-guide ${page === "registration" ? "is-portrait" : "is-landscape"} ${canRead ? "is-readable" : ""}`} aria-hidden="true">
-        {ready ? scan.fields.map(field => <div key={field.key} className={`passport-live-zone ${field.stable ? "is-stable" : ""}`}
-          style={{ left: `${field.box.x * 100}%`, top: `${field.box.y * 100}%`, width: `${field.box.width * 100}%`, height: `${field.box.height * 100}%` }}><span>{field.stable ? "✓ " : ""}{field.label}</span></div>) : null}
+        {ready && !quality?.moving ? scan.fields.map(field => <div key={field.key} className={`passport-live-zone ${field.stable && goodCapture(quality) ? "is-stable" : ""}`}
+          style={{ left: `${field.box.x * 100}%`, top: `${field.box.y * 100}%`, width: `${field.box.width * 100}%`, height: `${field.box.height * 100}%` }}><span>{field.stable && goodCapture(quality) ? "✓ " : ""}{field.label}</span></div>) : null}
       </div>
     </div>
     <div role="status" className="passport-camera-quality">
       {!ready && !error ? <p>Подключаем камеру…</p> : null}
-      {ready && !quality ? <p>Проверяем освещение и чёткость…</p> : null}
-      {ready && quality && !messages.length ? <p>Света достаточно. Проверьте, что текст читается и вся страница попала в рамку.</p> : null}
-      {ready ? messages.map(message => <p className="ocr-warning" key={message}><CircleAlert size={16} aria-hidden="true" /> {message}</p>) : null}
+      {ready ? <p className={scan.hint !== "good" && scan.hint !== "checking" ? "ocr-warning" : ""}>{scan.hint !== "good" && scan.hint !== "checking" ? <CircleAlert size={16} aria-hidden="true" /> : null}{instructions[scan.hint]}</p> : null}
     </div>
     {ready ? <section className={`passport-live-panel ${canRead ? "is-readable" : ""}`} aria-label="Читаемость полей">
       <div className="passport-live-heading">{canRead ? <Check size={18} /> : <ScanLine size={18} />}<strong>{canRead ? "Основные поля читаются — можно снимать" : scan.phase === "loading" ? "Готовим подсветку полей…" : scan.phase === "unavailable" ? "Подсветка пока недоступна" : "Наведите камеру на текст"}</strong></div>
       {scan.phase === "unavailable" ? <p>Можно сделать снимок и проверить его вручную. Попробуйте открыть камеру заново для подсветки.</p> : <ul className="passport-live-checklist">{liveDefinitions[page].filter(field => field.required).map(definition => {
         const found = scan.fields.find(field => field.key === definition.key);
-        return <li key={definition.key} className={found?.stable ? "is-stable" : ""}>{found?.stable ? <Check size={14} /> : <span className="passport-live-dot" />}<span>{definition.label}</span><small>{found?.stable ? "Читается" : found ? "Проверяем" : "Не найдено"}</small></li>;
+        const stable = found?.stable && goodCapture(quality);
+        return <li key={definition.key} className={stable ? "is-stable" : ""}>{stable ? <Check size={14} /> : <span className="passport-live-dot" />}<span>{definition.label}</span><small>{stable ? "Читается" : found ? "Проверяем" : "Не найдено"}</small></li>;
       })}</ul>}
     </section> : null}
     {error ? <p role="alert" className="field-error">{error}</p> : null}
+    <label className="passport-camera-auto"><span><strong>Автоснимок</strong><small>Зафиксируем кадр, когда основные поля прочитаны дважды. Затем сможете проверить и обрезать фото.</small></span><Switch checked={automatic} disabled={taking} onCheckedChange={setAutomatic} aria-label="Автоснимок" /></label>
     <p className="passport-camera-hint">Зелёный — поле прочитано в двух кадрах, жёлтый — ещё проверяем. Это подсказка, а не проверка правильности данных. Снять можно и без подсветки; после съёмки проверьте фото. Кадры не отправляются на сервер.</p>
     {error ? <label className="passport-photo-upload"><Camera size={18} /> Камера телефона
       <Input form="passport-ocr-review" type="file" capture="environment" accept="image/*" aria-label="Снять системной камерой" onChange={event => { const file = event.target.files?.[0]; if (file) { stop(); onCapture(file); } event.target.value = ""; }} />

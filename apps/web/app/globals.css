@@ -4312,6 +4312,12 @@ button.service-status {
 .passport-camera-guide.is-landscape { width: min(88%, 47.5dvh, 425px); aspect-ratio: 125 / 88; }
 .passport-camera-guide.is-portrait { height: 80%; aspect-ratio: 88 / 125; max-width: 88%; }
 .passport-camera-quality p { margin: 0 0 6px; font-size: 13px; line-height: 1.5; }
+.passport-camera-quality { min-height: 64px; }
+.passport-camera-auto { display: flex; align-items: center; gap: 14px; padding: 12px; border: 1px solid var(--border); border-radius: 14px; }
+.passport-camera-auto > span { flex: 1; min-width: 0; }
+.passport-camera-auto strong { display: block; font-size: 13px; }
+.passport-camera-auto small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.passport-camera-auto [data-slot="switch"] { flex-shrink: 0; }
 .passport-camera-quality .ocr-warning { display: flex; gap: 8px; align-items: flex-start; }
 .passport-camera-quality svg { flex-shrink: 0; margin-top: 2px; }
 .passport-camera .passport-camera-hint { font-size: 12px; color: var(--muted); }

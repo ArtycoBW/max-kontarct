@@ -21,6 +21,11 @@ describe("registration components (invented addresses)", () => {
     const read = readRegistration([row("ЗАРЕГИСТРИРОВАН"), row("22 января 2014 г."), row("Г. ПРИМЕР"), row("Д. 1"), row("ОТДЕЛ МВД ПО Г. ДРУГОМУ")]);
     expect(mergeRegistrations([read]).address).toBe("Г. ПРИМЕР, Д. 1");
   });
+  it("retains the house when OCR joins it with the authority on the same line", () => {
+    const read = readRegistration([row("Г. ПРИМЕР"), row("Д. 5 КВ. 8 ОТДЕЛ МВД ПО Г. ДРУГОМУ")]);
+    expect(mergeRegistrations([read]).address).toBe("Г. ПРИМЕР, Д. 5, КВ. 8");
+    expect(readRegistration([row("ОТДЕЛ МВД Д. 5 КВ. 8")]).parts).toEqual({});
+  });
   it("keeps consistent components and omits conflicting numbers", () => {
     const a = readRegistration([row("Г. ПРИМЕР"), row("Д. 1")]);
     const b = readRegistration([row("Г. ПРИМЕР"), row("Д. 2")]);

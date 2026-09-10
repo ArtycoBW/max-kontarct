@@ -80,15 +80,20 @@ test("speech is opt-in, preserves manual edits, handles denial and unsupported W
   await context.close();
 });
 
-async function specimen(page: Page, lines: string[]) {
+async function specimen(page: Page, lines: string[], rotation = 0) {
   // Deliberately synthetic, not an identity document. Raster pixels exercise real WASM OCR.
-  const base64 = await page.evaluate(lines => {
+  const base64 = await page.evaluate(({ lines, rotation }) => {
     const canvas = document.createElement("canvas"); canvas.width = 1500; canvas.height = 1200;
     const ctx = canvas.getContext("2d")!; ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 1500, 1200);
     ctx.fillStyle = "#000"; ctx.font = "40px Arial";
     lines.forEach((line, index) => ctx.fillText(line, 100, 100 + index * 95));
+    if (rotation) {
+      const turned = document.createElement("canvas"); turned.width = rotation % 180 ? canvas.height : canvas.width; turned.height = rotation % 180 ? canvas.width : canvas.height;
+      const target = turned.getContext("2d")!; target.translate(turned.width / 2, turned.height / 2); target.rotate(rotation * Math.PI / 180); target.drawImage(canvas, -canvas.width / 2, -canvas.height / 2);
+      return turned.toDataURL("image/png").split(",")[1]!;
+    }
     return canvas.toDataURL("image/png").split(",")[1]!;
-  }, lines);
+  }, { lines, rotation });
   return { name: "synthetic-ocr-test.png", mimeType: "image/png", buffer: Buffer.from(base64, "base64") };
 }
 
@@ -158,6 +163,38 @@ test("real local passport OCR: three images, review before persistence, private 
   await other.close();
   expect((await page.request.patch("/api/v1/profile", { data: { firstName: "Иван", lastName: "Примеров", passport: null } })).ok()).toBe(true);
   expect((await (await page.request.get("/api/v1/profile")).json()).passport).toBeNull();
+  await context.close();
+});
+
+test("real local OCR handles 90/180/270 degree photos after four-point editing", async ({ browser }) => {
+  const context = await actor(browser, 73018, "+79997003018");
+  const page = await context.newPage(); await page.goto("/"); await onboarding(page);
+  await page.getByRole("button", { name: "Профиль", exact: true }).click();
+  await page.getByRole("button", { name: "Считать данные паспорта", exact: true }).click();
+  const dialog = page.getByRole("dialog"), writes: string[] = [], external: string[] = [];
+  page.on("request", request => {
+    if (["POST", "PUT", "PATCH"].includes(request.method())) writes.push(request.url());
+    if (/^https?:/.test(request.url()) && new URL(request.url()).origin !== "http://127.0.0.1:4300") external.push(request.url());
+  });
+  await dialog.getByLabel("Фото: Фото и личные данные", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ", "ФАМИЛИЯ ПРИМЕРОВ", "ИМЯ ИВАН", "ОТЧЕСТВО ИВАНОВИЧ", "ДАТА РОЖДЕНИЯ 01.02.1990", "ПОЛ МУЖ.", "МЕСТО РОЖДЕНИЯ Г. ПРИМЕР", "СЕРИЯ НОМЕР", "00 00 000000"], 90));
+  await dialog.getByRole("button", { name: "Редактировать: Фото и личные данные", exact: true }).click();
+  const corner = dialog.getByRole("button", { name: "Верхний левый угол", exact: true });
+  await corner.focus(); await corner.press("Shift+ArrowRight"); await corner.press("Shift+ArrowDown");
+  await dialog.getByRole("button", { name: "Посмотреть результат", exact: true }).click();
+  await dialog.getByRole("button", { name: "Использовать фото", exact: true }).click();
+  await dialog.getByLabel("Фото: Кем выдан паспорт", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ", "ПАСПОРТ ВЫДАН", "ТЕСТОВЫМ ОТДЕЛОМ", "ДАТА ВЫДАЧИ 02.03.2010", "КОД ПОДРАЗДЕЛЕНИЯ 000-000"], 270));
+  await dialog.getByLabel("Фото: Регистрация", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ", "ЗАРЕГИСТРИРОВАН", "Г. ПРИМЕР", "УЛ. ТЕСТОВАЯ, Д. 1, КВ. 2", "ПОДПИСЬ СОТРУДНИКА"], 180));
+  await dialog.getByRole("button", { name: "Распознать данные", exact: true }).click();
+  await expect(dialog.getByRole("heading", { name: "Проверьте данные", exact: true })).toBeVisible({ timeout: 160_000 });
+  await expect(dialog.getByLabel("Фамилия", { exact: true })).toHaveValue("Примеров");
+  await expect(dialog.getByLabel("Имя", { exact: true })).toHaveValue("Иван");
+  await expect(dialog.getByLabel("Серия паспорта", { exact: true })).toHaveValue("0000");
+  await expect(dialog.getByLabel("Номер паспорта", { exact: true })).toHaveValue("000000");
+  await expect(dialog.getByLabel("Дата выдачи", { exact: true })).toHaveText("02.03.2010");
+  await expect(dialog.getByLabel("Код подразделения", { exact: true })).toHaveValue("000-000");
+  await expect(dialog.getByLabel("Адрес регистрации", { exact: true })).toHaveValue(/Г. ПРИМЕР.*ТЕСТОВАЯ.*Д. 1/);
+  expect(writes).toEqual([]); expect(external).toEqual([]);
+  await expect(dialog.getByRole("button", { name: "Перенести в профиль" })).toBeDisabled();
   await context.close();
 });
 

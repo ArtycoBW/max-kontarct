@@ -23,10 +23,10 @@ export function readPassportLayout(page: PassportPage, input: PassportOcrLine[],
   if (page !== "registration") {
     const patronymics = words.filter(word => /[А-ЯЁ]{2,}(?:ВИЧ|ВНА|ИЧНА)$/.test(word.text) && name(word.text));
     // Ambiguous layouts are left to manual review rather than choosing an arbitrary person.
-    if (patronymics.length === 1) {
+    if (page === "identity" && patronymics.length === 1) {
       const patronymic = patronymics[0]!, h = patronymic.bbox.y1 - patronymic.bbox.y0;
       const cx = (patronymic.bbox.x0 + patronymic.bbox.x1) / 2;
-      const nearby = words.filter(word => name(word.text) && !label.test(word.text) && word.bbox.y1 < patronymic.bbox.y0 && patronymic.bbox.y0 - word.bbox.y1 < h * 9 && Math.abs((word.bbox.x0 + word.bbox.x1) / 2 - cx) < h * 5).sort((a, b) => b.bbox.y0 - a.bbox.y0);
+      const nearby = words.filter(word => name(word.text) && !label.test(word.text) && word.bbox.y1 - word.bbox.y0 >= h * .65 && word.bbox.y1 - word.bbox.y0 <= h * 1.6 && word.bbox.y1 < patronymic.bbox.y0 && patronymic.bbox.y0 - word.bbox.y1 < h * 9 && Math.abs((word.bbox.x0 + word.bbox.x1) / 2 - cx) < h * 5).sort((a, b) => b.bbox.y0 - a.bbox.y0);
       data.middleName ||= name(patronymic.text);
       if (nearby[0]) data.firstName ||= name(nearby[0].text);
       if (nearby[1] && nearby[0]!.bbox.y0 - nearby[1].bbox.y1 > h * .3) data.lastName ||= name(nearby[1].text);

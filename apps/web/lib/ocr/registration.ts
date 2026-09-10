@@ -15,8 +15,9 @@ export function readRegistration(lines: PassportOcrLine[]): RegistrationRead {
   const parts: RegistrationRead["parts"] = {};
   if (ambiguous) return { parts, ambiguous };
   for (const line of lines) {
-    if (authority.test(line.text)) continue;
-    const row = line.words.filter(word => word.confidence >= 25 || /^(?:Д|КВ|УЛ|Г|РЕСП)[.:]?$/.test(word.text)).map(word => word.text).join(" ");
+    const authorityIndex = line.words.findIndex(word => authority.test(word.text));
+    const addressWords = authorityIndex < 0 ? line.words : line.words.slice(0, authorityIndex);
+    const row = addressWords.filter(word => word.confidence >= 25 || /^(?:Д|КВ|УЛ|Г|РЕСП)[.,:]?$/.test(word.text)).map(word => word.text).join(" ");
     const add = (part: AddressPart, raw: string | undefined) => {
       const value = raw?.trim().replace(/^[,\s]+|[,\s]+$/g, "").replace(/\s+/g, " ");
       if (!value || value.length > 180) return;

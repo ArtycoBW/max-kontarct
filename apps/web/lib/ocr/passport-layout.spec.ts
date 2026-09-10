@@ -21,6 +21,11 @@ describe("passport layout and checksums (invented fixtures only)", () => {
     const row = { ...value, confidence: 40, text: "ФАМИЛИЯ ПРИМЕРОВ", words: [{ ...caption.words[0]!, confidence: 10 }, value.words[0]!] };
     expect(readPassportLayout("identity", [row], row.text).data.lastName).toBe("Примеров");
   });
+  it("does not infer personal names from a partial identity page beside issuance", () => {
+    const rows = [line("ПРИМЕРОВ", 600, 700), line("ИВАН", 624, 755), line("ИВАНОВИЧ", 600, 790)];
+    const read = readPassportLayout("issuance", rows, "");
+    expect(read.data.firstName).toBe(""); expect(read.data.lastName).toBe(""); expect(read.data.middleName).toBe("");
+  });
   it("reads abbreviated registration captions and excludes authority/signatures", () => {
     const rows = ["ЗАРЕГИСТРИРОВАН", "Рег.: РЕСП. ПРИМЕРНАЯ", "Пункт: Г. ПРИМЕР", "Улица: УЛ. ТЕСТОВАЯ", "Д. 1, КВ. 2", "ОТДЕЛ ПО ВОПРОСАМ МИГРАЦИИ", "ПОДПИСЬ СОТРУДНИКА"].map((text, i) => line(text, 100, i * 40));
     expect(readPassportLayout("registration", rows, "").data.address).toBe("РЕСП. ПРИМЕРНАЯ, Г. ПРИМЕР, УЛ. ТЕСТОВАЯ, Д. 1, КВ. 2");

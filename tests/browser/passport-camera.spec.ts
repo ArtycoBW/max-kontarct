@@ -166,6 +166,31 @@ test("camera remains usable when the local OCR worker hangs and terminates on cl
   await context.close();
 });
 
+test("opt-in auto capture freezes a corroborated frame and stops camera without saving profile", async ({ browser }) => {
+  const context = await actor(browser, 76007, "+79997006007"); await cameraMock(context);
+  const page = await context.newPage(); await openScanner(page);
+  const writes: string[] = [];
+  page.on("request", request => { if (["POST", "PUT", "PATCH"].includes(request.method())) writes.push(request.url()); });
+  await page.getByRole("button", { name: "Снять: Фото и личные данные", exact: true }).click();
+  const dialog = page.getByRole("dialog"), auto = dialog.getByRole("switch", { name: "Автоснимок" });
+  await expect(auto).not.toBeChecked();
+  await auto.check();
+  await expect(dialog.getByRole("status")).toContainText("Темно:");
+  await expect(dialog.getByRole("heading", { name: "Обрезка и выравнивание", exact: true })).toHaveCount(0);
+  await page.evaluate(() => { (window as unknown as TestWindow).cameraTest.mode = "sharp"; });
+  await expect(dialog.getByRole("heading", { name: "Обрезка и выравнивание", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as TestWindow).cameraTest.reads)).toBeGreaterThanOrEqual(2);
+  expect(await counters(page)).toEqual({ calls: 1, stopped: 1 });
+  const workersStopped = await page.evaluate(() => (window as unknown as TestWindow).cameraTest.workerStopped);
+  expect(workersStopped).toBeGreaterThanOrEqual(1);
+  await expect(dialog.locator(".passport-crop-handle")).toHaveCount(4);
+  await page.screenshot({ path: "test-results/passport-auto-frozen.png" });
+  await dialog.getByRole("button", { name: "Посмотреть результат", exact: true }).click();
+  await dialog.getByRole("button", { name: "Использовать фото", exact: true }).click();
+  expect(writes).toEqual([]);
+  await context.close();
+});
+
 test("real WASM live OCR recognizes invented camera text locally and closes its worker", async ({ browser }) => {
   const context = await actor(browser, 76006, "+79997006006"); await cameraMock(context, false);
   const page = await context.newPage(); await openScanner(page);
