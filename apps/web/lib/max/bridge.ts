@@ -18,6 +18,23 @@ export class MaxContactBridgeError extends Error {
 
 const MAX_BRIDGE_POLL_INTERVAL_MS = 25;
 const MAX_BRIDGE_TIMEOUT_MS = 5_000;
+const readyWebApps = new WeakSet<MaxWebApp>();
+
+// Call after the initial UI mounts, not after authentication or data loading.
+export function notifyMaxWebAppReady(): boolean {
+  const webApp = typeof window === "undefined" ? undefined : window.WebApp;
+  if (!webApp || typeof webApp.ready !== "function") return false;
+  if (readyWebApps.has(webApp)) return true;
+
+  try {
+    webApp.ready();
+    readyWebApps.add(webApp);
+    return true;
+  } catch {
+    // A host bridge failure must not prevent the UI (including retry) rendering.
+    return false;
+  }
+}
 
 export function waitForMaxWebApp(
   timeoutMs = MAX_BRIDGE_TIMEOUT_MS,

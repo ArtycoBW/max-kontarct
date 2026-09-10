@@ -1,4 +1,4 @@
-import { getMaxInitData, getMaxStartPayload, waitForMaxWebApp } from "./bridge";
+import { getMaxInitData, getMaxStartPayload, notifyMaxWebAppReady, waitForMaxWebApp } from "./bridge";
 
 function setWindow(value: Partial<Window>): void {
   Object.defineProperty(global, "window", {
@@ -57,6 +57,55 @@ describe("MAX Bridge startup", () => {
     );
     await jest.advanceTimersByTimeAsync(125);
     await rejection;
+  });
+
+  it("announces UI readiness once per bridge, independently of authentication", () => {
+    const ready = jest.fn(function (this: MaxWebApp) {
+      expect(this).toBe(window.WebApp);
+    });
+    setWindow({ WebApp: { initData: "", ready } });
+
+    expect(notifyMaxWebAppReady()).toBe(true);
+    expect(notifyMaxWebAppReady()).toBe(true);
+    expect(ready).toHaveBeenCalledTimes(1);
+  });
+
+  it("can announce readiness when the SDK loads after the initial UI", () => {
+    setWindow({});
+    expect(notifyMaxWebAppReady()).toBe(false);
+    const ready = jest.fn();
+    window.WebApp = { initData: "", ready };
+
+    expect(notifyMaxWebAppReady()).toBe(true);
+    expect(ready).toHaveBeenCalledTimes(1);
+  });
+
+  it("announces readiness again for a replaced bridge instance", () => {
+    const ready = jest.fn();
+    setWindow({ WebApp: { initData: "", ready } });
+    notifyMaxWebAppReady();
+    window.WebApp = { initData: "", ready };
+    notifyMaxWebAppReady();
+
+    expect(ready).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not crash outside the browser or without ready support", () => {
+    expect(notifyMaxWebAppReady()).toBe(false);
+    setWindow({ WebApp: { initData: "" } });
+    expect(notifyMaxWebAppReady()).toBe(false);
+  });
+
+  it("isolates host errors and allows a later readiness attempt", () => {
+    const ready = jest.fn().mockImplementationOnce(() => {
+      throw new Error("host unavailable");
+    });
+    setWindow({ WebApp: { initData: "", ready } });
+
+    expect(notifyMaxWebAppReady()).toBe(false);
+    expect(notifyMaxWebAppReady()).toBe(true);
+    expect(notifyMaxWebAppReady()).toBe(true);
+    expect(ready).toHaveBeenCalledTimes(2);
   });
 
   it("parses an opaque invitation payload without exposing personal data", () => {
