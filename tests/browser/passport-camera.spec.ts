@@ -33,6 +33,7 @@ async function cameraMock(context: BrowserContext, stubOcr = true) {
       }
       terminate() { if (!this.ended) state.workerStopped++; this.ended = true; }
     } });
+    if (!navigator.mediaDevices) Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: {} });
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", { configurable: true, value: async (constraints: MediaStreamConstraints) => {
       state.calls.push(constraints);
       if (state.deny) throw new DOMException("Test denial", "NotAllowedError");
