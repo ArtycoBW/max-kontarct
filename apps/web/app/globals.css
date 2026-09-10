@@ -4315,7 +4315,7 @@ button.service-status {
 .passport-camera-quality .ocr-warning { display: flex; gap: 8px; align-items: flex-start; }
 .passport-camera-quality svg { flex-shrink: 0; margin-top: 2px; }
 .passport-camera .passport-camera-hint { font-size: 12px; color: var(--muted); }
-.passport-camera-actions { display: grid; gap: 8px; }
+.passport-camera-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .passport-review-fields .input { width: 100%; min-width: 0; }
 .ocr-confirm { display: flex; gap: 12px; align-items: flex-start; margin: 24px 0 12px; font-size: 14px; line-height: 1.5; }
 .ocr-confirm .checkbox { width: 20px; height: 20px; }
