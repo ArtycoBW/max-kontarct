@@ -12,6 +12,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   Check,
+  ChevronDown,
   CircleAlert,
   CircleCheck,
   Clock3,
@@ -30,6 +31,8 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import { Command, CommandInput, CommandList, CommandItem } from "@/components/ui/command";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -101,6 +104,7 @@ export function ProfileScreen({
   const queryClient = useQueryClient();
   const [saved, setSaved] = useState(false);
   const [scanned, setScanned] = useState(false);
+  const [passportOpen, setPassportOpen] = useState(false);
   const profile = useQuery({
     queryFn: getProfile,
     queryKey: queryKeys.profile.current(),
@@ -263,7 +267,7 @@ export function ProfileScreen({
           for (const key of passportKeys) {
             if (result[key]) form.setValue(`passport.${key}`, result[key], { shouldDirty: true, shouldValidate: true });
           }
-          setScanned(true); setSaved(false);
+          setScanned(true); setPassportOpen(true); setSaved(false);
         }} />
         {scanned ? <p className="validation-success" role="status">Данные перенесены в форму. Проверьте их и нажмите «Сохранить профиль».</p> : null}
 
@@ -343,13 +347,13 @@ export function ProfileScreen({
           <p className="field-hint" role="status">Адрес сохранён вручную. Автоматическая проверка недоступна — проверьте написание самостоятельно.</p>
         ) : null}
 
-        <details className="passport-profile-fields" open={scanned || undefined}>
-          <summary>Паспортные данные</summary>
-          <div>{passportKeys.map(key => <ProfileField key={key} inputId={`passport-${key}`} label={passportFieldLabels[key]} error={form.formState.errors.passport?.[key]?.message}>
-            <Input {...form.register(`passport.${key}`)} id={`passport-${key}`} type={key === "issuedAt" ? "date" : "text"}
-              autoComplete="off" maxLength={key === "issuer" ? 500 : 250} />
-          </ProfileField>)}</div>
-        </details>
+        <Collapsible className="passport-profile-fields" open={passportOpen} onOpenChange={setPassportOpen}>
+          <CollapsibleTrigger asChild><Button variant="unstyled" className="collapsible-trigger" type="button">Паспортные данные<ChevronDown className="collapsible-chevron" size={16} aria-hidden="true" /></Button></CollapsibleTrigger>
+          <CollapsibleContent>{passportKeys.map(key => <ProfileField key={key} inputId={`passport-${key}`} label={passportFieldLabels[key]} error={form.formState.errors.passport?.[key]?.message}>
+            {key === "issuedAt" ? <Controller control={form.control} name="passport.issuedAt" render={({ field }) => <DatePicker id="passport-issuedAt" value={field.value} onChange={field.onChange} />} />
+              : <Input {...form.register(`passport.${key}`)} id={`passport-${key}`} autoComplete="off" maxLength={key === "issuer" ? 500 : 250} />}
+          </ProfileField>)}</CollapsibleContent>
+        </Collapsible>
 
         <Card className="verified-contact-card">
           <LockKeyhole size={18} />
@@ -433,44 +437,37 @@ function AddressAutocomplete({
   });
 
   return (
-    <div className="address-autocomplete">
-      <div className="input-with-icon">
-        <MapPin size={16} />
+    <Command className="address-autocomplete" label="Адрес регистрации" shouldFilter={false} loop
+      onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false); }}
+      onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); setFocused(false); } }}>
+        <CommandInput asChild value={value} onValueChange={next => { onChange(next); setFocused(true); }}>
         <Input
-          aria-autocomplete="list"
           aria-expanded={focused && Boolean(suggestions.data?.items.length)}
           aria-invalid={invalid}
           autoComplete="street-address"
           id="profile-address"
           maxLength={500}
-          onBlur={() => window.setTimeout(() => setFocused(false), 100)}
-          onChange={(event) => onChange(event.target.value)}
           onFocus={() => setFocused(true)}
           placeholder="Начните вводить адрес"
-          role="combobox"
-          value={value}
         />
-      </div>
-      {focused && suggestions.data?.items.length ? (
-        <Card className="address-suggestions" role="listbox">
-          {suggestions.data.items.map((suggestion) => (
-            <button
+        </CommandInput>
+        <CommandList label="Подсказки адресов" className="address-suggestions" hidden={!focused || !suggestions.data?.items.length}>
+          {focused ?
+          suggestions.data?.items.map((suggestion) => (
+            <CommandItem
               key={`${suggestion.value}:${suggestion.fiasId ?? ""}`}
-              aria-selected={suggestion.value === value}
+              value={suggestion.value}
               onMouseDown={(event) => event.preventDefault()}
-              onClick={() => {
+              onSelect={() => {
                 onChange(suggestion.value);
                 setFocused(false);
               }}
-              role="option"
-              type="button"
             >
               <MapPin size={14} /> {suggestion.value}
-            </button>
-          ))}
-        </Card>
-      ) : null}
-    </div>
+            </CommandItem>
+          )) : null}
+        </CommandList>
+    </Command>
   );
 }
 

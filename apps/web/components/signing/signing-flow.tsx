@@ -2,12 +2,16 @@
 
 import type { DealSigningStateResponse, IssueSigningOtpResponse } from "@max-contract/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CheckCircle2, Clock3, Download, KeyRound, LockKeyhole, RefreshCw, ShieldCheck } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Check, CheckCircle2, ChevronDown, Clock3, Download, KeyRound, LockKeyhole, RefreshCw, ShieldCheck } from "lucide-react";
+import { useEffect, useState } from "react";
+import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { queryKeys } from "@/lib/api/query-keys";
 import { ACTIVE_DEAL_REFRESH_MS } from "@/lib/api/deal-refresh";
 import { confirmDealSignature, getDealSigningState, issueDealSigningOtp } from "@/lib/api/signing";
@@ -16,8 +20,7 @@ export function SigningFlow({ dealId }: { dealId: string }) {
   const queryClient = useQueryClient();
   const [accepted, setAccepted] = useState(false);
   const [delivery, setDelivery] = useState<IssueSigningOtpResponse | null>(null);
-  const [digits, setDigits] = useState(["", "", "", ""]);
-  const refs = useRef<Array<HTMLInputElement | null>>([]);
+  const [code, setCode] = useState("");
   const signing = useQuery({
     queryFn: () => getDealSigningState(dealId),
     queryKey: queryKeys.deals.signing(dealId),
@@ -37,15 +40,14 @@ export function SigningFlow({ dealId }: { dealId: string }) {
     onError: (error: Error) => toast.error("Код не отправлен", { description: apiMessage(error) }),
     onSuccess: (value) => {
       setDelivery(value);
-      setDigits(["", "", "", ""]);
+      setCode("");
       toast.success(value.channel === "MAX_TEST" ? "Код отправлен в личное сообщение MAX" : "Код отправлен");
-      window.setTimeout(() => refs.current[0]?.focus(), 0);
     },
   });
   const confirm = useMutation({
     mutationFn: () => {
       if (!signing.data) throw new Error("Версия договора ещё загружается");
-      return confirmDealSignature(dealId, { code: digits.join(""), versionId: signing.data.versionId });
+      return confirmDealSignature(dealId, { code, versionId: signing.data.versionId });
     },
     onError: (error: Error) => toast.error("Подпись не подтверждена", { description: apiMessage(error) }),
     onSuccess: async (state) => {
@@ -68,21 +70,13 @@ export function SigningFlow({ dealId }: { dealId: string }) {
     return (
       <OtpStep
         delivery={delivery}
-        digits={digits}
+        code={code}
         isConfirming={confirm.isPending}
         isResending={issue.isPending}
         onBack={() => setDelivery(null)}
         onConfirm={() => confirm.mutate()}
-        onDigit={(index, value) => {
-          const digit = value.replace(/\D/g, "").slice(-1);
-          setDigits((current) => current.map((item, itemIndex) => itemIndex === index ? digit : item));
-          if (digit && index < 3) refs.current[index + 1]?.focus();
-        }}
-        onKeyDown={(index, key) => {
-          if (key === "Backspace" && !digits[index] && index > 0) refs.current[index - 1]?.focus();
-        }}
+        onCode={setCode}
         onResend={() => issue.mutate()}
-        refs={refs}
       />
     );
   }
@@ -104,10 +98,10 @@ function AgreementStep({ accepted, onAccepted, onIssue, pending, state }: {
         <strong>{state.pepAgreement.title}</strong>
         {state.pepAgreement.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
         <dl><dt>Подписываемая редакция</dt><dd>Версия № {state.versionNumber}</dd></dl>
-        <details className="signing-fingerprint"><summary>Контрольный отпечаток (SHA-256)</summary><p>Этот отпечаток связывает подпись с неизменным текстом и данными договора. Это не код из сообщения.</p><code>{state.documentHash}</code><small>Версия соглашения: {state.pepAgreement.version}</small></details>
+        <Collapsible className="signing-fingerprint"><CollapsibleTrigger asChild><Button variant="unstyled" className="collapsible-trigger" type="button">Контрольный отпечаток (SHA-256)<ChevronDown className="collapsible-chevron" size={16} aria-hidden="true" /></Button></CollapsibleTrigger><CollapsibleContent><p>Этот отпечаток связывает подпись с неизменным текстом и данными договора. Это не код из сообщения.</p><code>{state.documentHash}</code><small>Версия соглашения: {state.pepAgreement.version}</small></CollapsibleContent></Collapsible>
       </Card>
       <label className="signing-consent">
-        <input checked={accepted} onChange={(event) => onAccepted(event.target.checked)} type="checkbox" />
+        <Checkbox checked={accepted} onCheckedChange={value => onAccepted(value === true)} />
         <span>Я принимаю соглашение и согласен использовать одноразовый код как простую электронную подпись.</span>
       </label>
       <Button className="full-width" disabled={!accepted || pending} onClick={onIssue}>
@@ -117,17 +111,15 @@ function AgreementStep({ accepted, onAccepted, onIssue, pending, state }: {
   );
 }
 
-function OtpStep({ delivery, digits, isConfirming, isResending, onBack, onConfirm, onDigit, onKeyDown, onResend, refs }: {
+function OtpStep({ delivery, code, isConfirming, isResending, onBack, onConfirm, onCode, onResend }: {
   delivery: IssueSigningOtpResponse;
-  digits: string[];
+  code: string;
   isConfirming: boolean;
   isResending: boolean;
   onBack: () => void;
   onConfirm: () => void;
-  onDigit: (index: number, value: string) => void;
-  onKeyDown: (index: number, key: string) => void;
+  onCode: (value: string) => void;
   onResend: () => void;
-  refs: React.RefObject<Array<HTMLInputElement | null>>;
 }) {
   const [now, setNow] = useState(0);
   useEffect(() => {
@@ -142,12 +134,13 @@ function OtpStep({ delivery, digits, isConfirming, isResending, onBack, onConfir
       <div className="signing-state-icon"><KeyRound size={32} /></div>
       <div className="signing-title"><p>Подписание договора</p><h2>Введите код</h2><span>{delivery.channel === "MAX_TEST" ? "Отправили 4 цифры в личное сообщение MAX" : `Отправили 4 цифры на номер ${delivery.maskedPhone}`}</span></div>
       <div className="signing-otp-inputs">
-        {digits.map((digit, index) => (
-          <input aria-label={`Цифра ${index + 1}`} inputMode="numeric" key={index} maxLength={1} onChange={(event) => onDigit(index, event.target.value)} onKeyDown={(event) => onKeyDown(index, event.key)} ref={(node) => { refs.current[index] = node; }} value={digit} />
-        ))}
+        <InputOTP aria-label="Код подписи из 4 цифр" autoFocus maxLength={4} pattern={REGEXP_ONLY_DIGITS}
+          value={code} onChange={onCode} disabled={isConfirming || isResending || expiresSeconds === 0}>
+          <InputOTPGroup>{[0, 1, 2, 3].map(index => <InputOTPSlot key={index} index={index} />)}</InputOTPGroup>
+        </InputOTP>
       </div>
       <div className="signing-resend"><Clock3 size={14} /><span>Код действует ещё {formatTimer(expiresSeconds)}</span></div>
-      <Button className="full-width" disabled={digits.some((digit) => !digit) || isConfirming || expiresSeconds === 0} onClick={onConfirm}>
+      <Button className="full-width" disabled={code.length !== 4 || isConfirming || isResending || expiresSeconds === 0} onClick={onConfirm}>
         <Check size={18} /> {isConfirming ? "Проверяем код…" : "Подписать договор"}
       </Button>
       <Button className="full-width" disabled={resendSeconds > 0 || isResending} onClick={onResend} variant="ghost">

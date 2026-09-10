@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, RotateCw, ScanLine, Trash2 } from "lucide-react";
+import { Camera, RotateCw, ScanLine, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Modal } from "@/components/ui/modal";
+import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogClose, DialogFooter } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Progress } from "@/components/ui/progress";
 import { passportFieldLabels, type PassportData, type PassportField, type PassportPage } from "@/lib/ocr/passport-parser";
 import { recognizePassport, validatePassportPhoto } from "@/lib/ocr/passport-ocr";
 
@@ -18,13 +21,13 @@ const dateFields = new Set(["birthDate", "issuedAt"]);
 
 export function PassportScanner({ onApply }: { onApply: (data: PassportData) => void }) {
   const [open, setOpen] = useState(false);
-  return <>
-    <Button type="button" variant="outline" className="full-width" onClick={() => setOpen(true)}><ScanLine size={18} /> Считать данные паспорта</Button>
-    {open ? <PassportScanDialog onClose={() => setOpen(false)} onApply={data => { onApply(data); setOpen(false); }} /> : null}
-  </>;
+  return <Dialog open={open} onOpenChange={setOpen}>
+    <DialogTrigger asChild><Button type="button" variant="outline" className="full-width"><ScanLine size={18} /> Считать данные паспорта</Button></DialogTrigger>
+    {open ? <PassportScanDialog onApply={data => { onApply(data); setOpen(false); }} /> : null}
+  </Dialog>;
 }
 
-function PassportScanDialog({ onClose, onApply }: { onClose: () => void; onApply: (data: PassportData) => void }) {
+function PassportScanDialog({ onApply }: { onApply: (data: PassportData) => void }) {
   const [photos, setPhotos] = useState<Partial<Record<PassportPage, Photo>>>({});
   const resources = useRef(new Set<string>());
   const task = useRef<AbortController | null>(null);
@@ -62,10 +65,11 @@ function PassportScanDialog({ onClose, onApply }: { onClose: () => void; onApply
     } finally { if (task.current === controller) { task.current = null; setBusy(false); } }
   };
   const entries = Object.entries(passportFieldLabels) as [PassportField, string][];
-  return <Modal open onClose={onClose} title={data ? "Проверьте данные" : "Сканирование паспорта"}
-    footer={data ? <Button type="button" className="full-width" disabled={!confirmed || !Object.values(data).some(Boolean)} onClick={() => onApply(data)}>Перенести в профиль</Button>
-      : busy ? <Button type="button" variant="outline" className="full-width" onClick={() => { task.current?.abort(); setBusy(false); }}>Отменить распознавание</Button>
-        : <Button type="button" className="full-width" disabled={!Object.values(photos).some(Boolean)} onClick={() => void scan()}>Распознать данные</Button>}>
+  return <DialogContent className="app-modal" showCloseButton={false} aria-describedby={undefined}>
+    <DialogHeader className="app-modal-header"><DialogTitle>{data ? "Проверьте данные" : "Сканирование паспорта"}</DialogTitle>
+      <DialogClose asChild><Button variant="unstyled" className="app-modal-close" type="button" aria-label="Закрыть окно"><X size={20} /></Button></DialogClose>
+    </DialogHeader>
+    <div className="app-modal-body">
     <p>Фотографии обрабатываются на вашем устройстве и не отправляются на сервер. Сохранение данных в профиле — отдельным действием.</p>
     {!data ? <>
       <p>Снимайте страницу целиком, ровно и без бликов. Можно добавить до трёх фотографий; страница регистрации может находиться дальше в паспорте.</p>
@@ -78,22 +82,27 @@ function PassportScanDialog({ onClose, onApply }: { onClose: () => void; onApply
           <div className="passport-photo-actions"><Button type="button" variant="ghost" disabled={busy} onClick={() => setPhotos(current => ({ ...current, [key]: { ...current[key]!, rotation: (current[key]!.rotation + 90) % 360 } }))}><RotateCw size={16} /> Повернуть</Button>
             <Button type="button" variant="ghost" disabled={busy} aria-label={`Удалить: ${title}`} onClick={() => replace(key)}><Trash2 size={16} /></Button></div>
         </> : <label className="passport-photo-upload"><Camera size={18} /> Добавить фото
-          <input form="passport-ocr-review" type="file" accept="image/jpeg,image/png,image/webp" aria-label={`Фото: ${title}`} disabled={busy}
+          <Input form="passport-ocr-review" type="file" accept="image/jpeg,image/png,image/webp" aria-label={`Фото: ${title}`} disabled={busy}
             onChange={event => { const file = event.target.files?.[0]; if (file) replace(key, file); event.target.value = ""; }} />
         </label>}
       </section>)}</div>
     </> : <>
       <p>Сверьте каждое поле с паспортом. Исправьте ошибки и оставьте пустыми поля, которые не удалось прочитать. Заполненные поля заменят соответствующие значения в форме профиля.</p>
       {warnings.map(warning => <p className="ocr-warning" key={warning}>{warning}</p>)}
-      <div className="passport-review-fields">{entries.map(([key, label]) => <label className="form-field" key={key}><span>{label}</span>
+      <div className="passport-review-fields">{entries.map(([key, label]) => <div className="form-field" key={key}><label htmlFor={`ocr-${key}`}>{label}</label>
         {/* No ancestor form owner: Enter must never submit the profile behind this dialog. */}
-        <Input form="passport-ocr-review" type={dateFields.has(key) ? "date" : "text"} maxLength={key === "address" || key === "issuer" ? 500 : 250} value={data[key]}
-          onChange={event => { setConfirmed(false); setData({ ...data, [key]: event.target.value }); }} />
-      </label>)}</div>
-      <label className="ocr-confirm"><input form="passport-ocr-review" type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} /> Я проверил данные по паспорту</label>
+        {dateFields.has(key) ? <DatePicker id={`ocr-${key}`} value={data[key]} onChange={value => { setConfirmed(false); setData({ ...data, [key]: value }); }} />
+          : <Input id={`ocr-${key}`} form="passport-ocr-review" maxLength={key === "address" || key === "issuer" ? 500 : 250} value={data[key]}
+            onChange={event => { setConfirmed(false); setData({ ...data, [key]: event.target.value }); }} />}
+      </div>)}</div>
+      <label className="ocr-confirm"><Checkbox form="passport-ocr-review" checked={confirmed} onCheckedChange={value => setConfirmed(value === true)} /> Я проверил данные по паспорту</label>
       <Button type="button" variant="ghost" onClick={() => { setData(null); setConfirmed(false); setWarnings([]); }}>Выбрать другие фотографии</Button>
     </>}
-    {busy ? <div className="ocr-progress" role="status"><progress max={100} value={progress} /><span>{progress < 15 ? "Загружаем локальный модуль распознавания…" : `Распознаём страницы: ${progress}%`}</span></div> : null}
+    {busy ? <div className="ocr-progress" role="status"><Progress value={progress} aria-label="Распознавание паспорта" /><span>{progress < 15 ? "Загружаем локальный модуль распознавания…" : `Распознаём страницы: ${progress}%`}</span></div> : null}
     {error ? <p className="field-error" role="alert">{error}</p> : null}
-  </Modal>;
+    </div>
+    <DialogFooter className="app-modal-footer">{data ? <Button type="button" className="full-width" disabled={!confirmed || !Object.values(data).some(Boolean)} onClick={() => onApply(data)}>Перенести в профиль</Button>
+      : busy ? <Button type="button" variant="outline" className="full-width" onClick={() => { task.current?.abort(); setBusy(false); }}>Отменить распознавание</Button>
+        : <Button type="button" className="full-width" disabled={!Object.values(photos).some(Boolean)} onClick={() => void scan()}>Распознать данные</Button>}</DialogFooter>
+  </DialogContent>;
 }

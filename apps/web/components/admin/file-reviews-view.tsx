@@ -11,11 +11,12 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -28,6 +29,7 @@ import { queryKeys } from "@/lib/api/query-keys";
 export function AdminFileReviewsView({ canReview }: { canReview: boolean }) {
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<AdminFileReviewItem | null>(null);
+  const opener = useRef<HTMLButtonElement | null>(null);
   const [comment, setComment] = useState("");
   const files = useQuery({
     queryFn: getAdminFileReviews,
@@ -86,16 +88,17 @@ export function AdminFileReviewsView({ canReview }: { canReview: boolean }) {
             </div>
             <footer>
               {canReview ? <Button asChild variant="outline"><a href={getAdminFileDownloadUrl(file.id)}><Download size={15} /> Скачать</a></Button> : null}
-              {canReview ? <Button onClick={() => { setSelected(file); setComment(file.reviewComment ?? ""); }} variant={file.reviewStatus === "PENDING" ? "primary" : "outline"}><ShieldCheck size={15} /> {file.reviewStatus === "PENDING" ? "Проверить" : "Результат проверки"}</Button> : <small>Только администратор может открыть файл и принять решение.</small>}
+              {canReview ? <Button onClick={event => { opener.current = event.currentTarget; setSelected(file); setComment(file.reviewComment ?? ""); }} variant={file.reviewStatus === "PENDING" ? "primary" : "outline"}><ShieldCheck size={15} /> {file.reviewStatus === "PENDING" ? "Проверить" : "Результат проверки"}</Button> : <small>Только администратор может открыть файл и принять решение.</small>}
             </footer>
           </Card>
         ))}
       </div>
 
       {selected ? (
-        <div className="admin-editor-backdrop" role="presentation">
-          <Card aria-labelledby="file-review-title" aria-modal="true" className="admin-file-review-dialog" role="dialog">
-            <header><span><small>Ручная проверка</small><h2 id="file-review-title">{selected.originalName}</h2></span><Button aria-label="Закрыть" onClick={() => setSelected(null)} size="icon" variant="ghost"><X size={18} /></Button></header>
+        <Dialog open onOpenChange={open => { if (!open) setSelected(null); }}>
+          <DialogContent className="admin-file-review-dialog" showCloseButton={false} aria-describedby={undefined}
+            onCloseAutoFocus={event => { event.preventDefault(); opener.current?.focus(); }}>
+            <header><span><small>Ручная проверка</small><DialogTitle>{selected.originalName}</DialogTitle></span><Button aria-label="Закрыть" onClick={() => setSelected(null)} size="icon" variant="ghost"><X size={18} /></Button></header>
             <p>{canDecide ? "Проверьте, что файл читается и соответствует требованию. Примите материал или укажите, что нужно исправить." : `Материал ${selectedFile?.reviewStatus === "ACCEPTED" ? "принят" : "отклонён"}. Решение сохранено. Для новой проверки нужен новый файл.`}</p>
             <Button asChild variant="outline"><a href={getAdminFileDownloadUrl(selected.id)}><Download size={15} /> Скачать материал</a></Button>
             <label>Комментарий<Textarea readOnly={!canDecide} maxLength={1000} onChange={(event) => setComment(event.target.value)} placeholder={canDecide ? "Обязателен при отклонении" : "Без комментария"} rows={4} value={canDecide ? comment : selectedFile?.reviewComment ?? ""} /></label>
@@ -105,8 +108,8 @@ export function AdminFileReviewsView({ canReview }: { canReview: boolean }) {
                 <Button disabled={review.isPending} onClick={() => review.mutate({ fileId: selected.id, status: "ACCEPTED" })}><Check size={15} /> {review.isPending ? "Сохраняем…" : "Принять"}</Button>
               </> : <Button onClick={() => setSelected(null)}>Закрыть</Button>}
             </footer>
-          </Card>
-        </div>
+          </DialogContent>
+        </Dialog>
       ) : null}
     </div>
   );

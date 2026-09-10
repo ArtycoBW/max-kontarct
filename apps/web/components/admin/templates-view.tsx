@@ -17,7 +17,7 @@ import {
   Rocket,
   Trash2,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -50,6 +51,7 @@ type PendingAction =
 
 export function AdminTemplatesView({ canManage }: { canManage: boolean }) {
   const queryClient = useQueryClient();
+  const editorTrigger = useRef<HTMLButtonElement | null>(null);
   const [editing, setEditing] = useState<{
     template: AdminContractTemplate;
     version: AdminTemplateVersion;
@@ -152,7 +154,7 @@ export function AdminTemplatesView({ canManage }: { canManage: boolean }) {
                     {canManage && version.status === "DRAFT" ? (
                       <div className="admin-version-actions">
                         <Button
-                          onClick={() => setEditing({ template, version })}
+                          onClick={event => { editorTrigger.current = event.currentTarget; setEditing({ template, version }); }}
                           type="button"
                           variant="outline"
                         >
@@ -239,6 +241,7 @@ export function AdminTemplatesView({ canManage }: { canManage: boolean }) {
           }}
           template={editing.template}
           version={editing.version}
+          onRestoreFocus={() => editorTrigger.current?.focus()}
         />
       ) : null}
     </div>
@@ -247,11 +250,13 @@ export function AdminTemplatesView({ canManage }: { canManage: boolean }) {
 
 function DocumentRequirementsEditor({
   onClose,
+  onRestoreFocus,
   onSaved,
   template,
   version,
 }: {
   onClose: () => void;
+  onRestoreFocus: () => void;
   onSaved: () => Promise<void>;
   template: AdminContractTemplate;
   version: AdminTemplateVersion;
@@ -316,12 +321,13 @@ function DocumentRequirementsEditor({
   };
 
   return (
-    <div className="admin-editor-backdrop" role="presentation">
-      <Card aria-labelledby="requirements-title" className="admin-requirements-editor" role="dialog">
+    <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
+      <DialogContent className="admin-requirements-editor" showCloseButton={false} aria-describedby={undefined}
+        onCloseAutoFocus={event => { event.preventDefault(); onRestoreFocus(); }}>
         <header>
           <span>
             <small>{template.title}</small>
-            <h2 id="requirements-title">Документы · версия {version.versionNumber}</h2>
+            <DialogTitle>Документы · версия {version.versionNumber}</DialogTitle>
           </span>
           <Button onClick={onClose} type="button" variant="ghost">Закрыть</Button>
         </header>
@@ -379,8 +385,8 @@ function DocumentRequirementsEditor({
             {save.isPending ? "Сохраняем…" : "Сохранить документы"}
           </Button>
         </footer>
-      </Card>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

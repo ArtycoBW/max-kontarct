@@ -5,6 +5,7 @@ import { useState } from "react";
 import { apiRequest } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 type LegalDocument = { type: string; title: string; version: string; status: "DRAFT"; paragraphs: string[] };
 
@@ -17,16 +18,18 @@ export function LegalDocuments({ type, label = "Документы и согла
     staleTime: 60_000,
     retry: false,
   });
-  return <>
-    <button className="legal-document-link" type="button" onClick={() => setOpen(true)}>{label}</button>
-    <Modal open={open} onClose={() => setOpen(false)} title={type ? "Документ" : "Документы и согласия"}
+  return <Modal open={open} onClose={() => setOpen(false)} title={type ? "Документ" : "Документы и согласия"}
+      trigger={<Button variant="unstyled" className="legal-document-link" type="button" onClick={() => setOpen(true)}>{label}</Button>}
       footer={<Button className="full-width" type="button" onClick={() => setOpen(false)}>Понятно</Button>}>
       <div className="legal-document-body">
-        {!type && documents.data ? <label className="legal-document-picker">Выберите документ
-          <select className="input" value={selected} onChange={event => setSelected(event.target.value)}>
-            {documents.data.items.map(item => <option key={item.type} value={item.type}>{item.title}</option>)}
-          </select>
-        </label> : null}
+        {!type && documents.data ? <div className="legal-document-picker"><span>Выберите документ</span>
+          <Select value={selected} onValueChange={setSelected}>
+            <SelectTrigger aria-label="Выберите документ"><SelectValue /></SelectTrigger>
+            <SelectContent className="legal-document-options" collisionPadding={16}>
+              {documents.data.items.map(item => <SelectItem key={item.type} value={item.type}>{item.title}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div> : null}
         {documents.isPending ? <p role="status">Загружаем документы…</p> : null}
         {documents.error ? <div role="alert"><p>Не удалось загрузить документы.</p><Button onClick={() => void documents.refetch()}>Повторить</Button></div> : null}
         {documents.data?.items.filter(item => item.type === (type ?? selected)).map(item => <article key={item.type}>
@@ -34,6 +37,5 @@ export function LegalDocuments({ type, label = "Документы и согла
           {item.paragraphs.map(paragraph => <p key={paragraph}>{paragraph}</p>)}
         </article>)}
       </div>
-    </Modal>
-  </>;
+    </Modal>;
 }

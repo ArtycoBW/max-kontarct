@@ -128,10 +128,14 @@ test("two participants create, review, approve, sign and verify a deal", async (
     await expect(page.getByRole("checkbox")).toBeVisible({ timeout: 45_000 });
     await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: "Получить код подписи" }).click();
-    await expect(page.getByLabel("Цифра 1")).toBeVisible();
+    const otp = page.getByRole("textbox", { name: "Код подписи из 4 цифр" });
+    await expect(otp).toBeVisible();
     const { code } = await (await page.request.get(`http://127.0.0.1:4301/_test/otp/${encodeURIComponent(phone)}`)).json();
     expect(code).toMatch(/^\d{4}$/);
-    for (let i = 0; i < 4; i++) await page.getByLabel(`Цифра ${i + 1}`).fill(code[i]);
+    await otp.fill(code.slice(0, 3));
+    await expect(page.getByRole("button", { name: "Подписать договор" })).toBeDisabled();
+    await otp.fill(code);
+    await expect(page.locator(".input-otp-slot")).toHaveText(code.split(""));
     await page.getByRole("button", { name: "Подписать договор" }).click();
   }
   // The first tab stays open: the second party's signature must appear without navigation.

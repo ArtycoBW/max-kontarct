@@ -110,8 +110,15 @@ test("real local passport OCR: three images, review before persistence, private 
   expect(writes).toEqual([]); expect(external).toEqual([]);
   await expect(dialog.getByLabel("Фамилия", { exact: true })).toHaveValue("Примеров");
   await expect(dialog.getByLabel("Имя", { exact: true })).toHaveValue("Иван");
-  await expect(dialog.getByLabel("Дата рождения", { exact: true })).toHaveValue("1990-02-01");
-  await expect(dialog.getByLabel("Дата выдачи", { exact: true })).toHaveValue("2010-03-02");
+  await expect(dialog.getByLabel("Дата рождения", { exact: true })).toHaveText("01.02.1990");
+  await expect(dialog.getByLabel("Дата выдачи", { exact: true })).toHaveText("02.03.2010");
+  // Calendar and its month Select must remain interactive inside the Dialog portal.
+  await dialog.getByLabel("Дата выдачи", { exact: true }).click();
+  await page.getByRole("combobox", { name: "Месяц", exact: true }).click();
+  await expect(page.getByRole("option")).toHaveCount(12);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Закрыть", exact: true }).click();
+  await expect(dialog.getByRole("heading", { name: "Проверьте данные" })).toBeVisible();
   await expect(dialog.getByLabel("Код подразделения", { exact: true })).toHaveValue("000-000");
   await expect(dialog.getByLabel("Адрес регистрации", { exact: true })).toHaveValue(/Г. ПРИМЕР.*ТЕСТОВАЯ/);
   await expect(dialog.getByRole("button", { name: "Перенести в профиль" })).toBeDisabled();
@@ -119,6 +126,7 @@ test("real local passport OCR: three images, review before persistence, private 
   expect(writes).toEqual([]);
   expect((await (await page.request.get("/api/v1/profile")).json()).passport).toEqual(before.passport);
   await dialog.getByLabel("Я проверил данные по паспорту").check();
+  await expect(dialog.getByLabel("Я проверил данные по паспорту")).toHaveAttribute("data-state", "checked");
   await page.screenshot({ path: "test-results/ocr-review.png" });
   await dialog.getByRole("button", { name: "Перенести в профиль" }).click();
   expect((await (await page.request.get("/api/v1/profile")).json()).firstName).toBe(before.firstName);

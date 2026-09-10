@@ -544,20 +544,20 @@ textarea:focus-visible {
   letter-spacing: 0.065em;
 }
 
-.start-screen-progress-track {
+.progress.start-screen-progress-track {
   height: 2px;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(50, 28, 24, 0.18);
 }
 
-.start-screen-progress-track i {
+.start-screen-progress-track .progress-indicator {
   display: block;
-  width: calc(var(--start-screen-progress) * 100%);
+  width: 100%;
   height: 100%;
   border-radius: inherit;
   background: var(--accent);
-  transition: width 0.08s linear;
+  transition: transform 0.08s linear;
 }
 
 .start-screen-progress strong {
@@ -1873,7 +1873,7 @@ button.service-status {
   box-shadow: 0 18px 48px rgb(48 29 24 / 14%);
 }
 
-.address-suggestions button {
+.address-suggestions .command-item {
   display: flex;
   gap: 8px;
   align-items: flex-start;
@@ -1888,8 +1888,7 @@ button.service-status {
   cursor: pointer;
 }
 
-.address-suggestions button:hover,
-.address-suggestions button:focus-visible {
+.address-suggestions .command-item[data-selected="true"] {
   background: var(--accent-soft);
   outline: none;
 }
@@ -2154,7 +2153,7 @@ button.service-status {
 .admin-file-review-comment.is-empty { visibility: hidden; }
 .admin-file-review-card > footer { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: auto; }
 .admin-file-review-card > footer > small { color: var(--muted-foreground); font-size: 10px; }
-.admin-file-review-dialog { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; width: min(520px, calc(100vw - 28px)); max-width: 100%; min-width: 0; max-height: calc(100dvh - 28px); overflow-x: hidden; overflow-y: auto; padding: 22px; }
+.dialog-content.admin-file-review-dialog { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; width: min(520px, calc(100vw - 32px)); max-width: 100%; min-width: 0; max-height: calc(100dvh - 32px); overflow-x: hidden; overflow-y: auto; padding: 22px; }
 .admin-file-review-dialog > * { min-width: 0; max-width: 100%; }
 .admin-file-review-dialog > header { display: flex; min-width: 0; gap: 12px; align-items: flex-start; justify-content: space-between; }
 .admin-file-review-dialog > header > span { min-width: 0; flex: 1; }
@@ -2908,20 +2907,9 @@ button.service-status {
   white-space: nowrap;
 }
 
-.admin-editor-backdrop {
-  position: fixed;
-  z-index: 50;
-  inset: 0;
+.dialog-content.admin-requirements-editor {
   display: grid;
-  padding: 24px;
-  place-items: center;
-  background: rgb(41 24 20 / 40%);
-  backdrop-filter: blur(5px);
-}
-
-.admin-requirements-editor {
-  display: grid;
-  width: min(760px, 100%);
+  width: min(760px, calc(100vw - 32px));
   max-height: calc(100dvh - 48px);
   gap: 16px;
   padding: 22px;
@@ -3272,7 +3260,7 @@ button.service-status {
     padding: 8px;
   }
 
-  .admin-requirements-editor {
+  .dialog-content.admin-requirements-editor {
     max-height: calc(100dvh - 16px);
     padding: 16px;
   }
@@ -3777,7 +3765,7 @@ button.service-status {
   margin-bottom: 20px;
 }
 
-.clarification-progress {
+.progress.clarification-progress {
   width: 100%;
   height: 5px;
   overflow: hidden;
@@ -3997,7 +3985,7 @@ button.service-status {
   background: var(--accent);
 }
 
-.generation-progress {
+.progress.generation-progress {
   width: min(100%, 300px);
   height: 6px;
   overflow: hidden;
@@ -4273,16 +4261,24 @@ button.service-status {
 .consent-document-action { grid-column: 2 / -1; }
 .early-invitation-panel { display: grid; gap: 12px; padding: 18px; font-size: 13px; line-height: 1.5; }
 .legal-document-link { color: var(--accent); font-size: 12px; text-align: left; text-decoration: underline; text-underline-offset: 3px; padding: 8px 0; cursor: pointer; }
-.app-modal { width: min(600px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); margin: auto; padding: 0; border: 1px solid var(--border); border-radius: 24px; overflow: hidden; color: var(--ink-deep); background: #fff; box-shadow: 0 24px 80px #21171333; }
-.app-modal::backdrop { background: #21171366; backdrop-filter: blur(4px); }
-.app-modal-panel { display: flex; flex-direction: column; max-height: calc(100dvh - 34px); }
+.dialog-overlay { position: fixed; inset: 0; z-index: 100; background: #21171366; backdrop-filter: blur(4px); }
+.dialog-content { position: fixed; left: 50%; top: 50%; z-index: 110; transform: translate(-50%, -50%); width: min(600px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 24px; border: 1px solid var(--border); border-radius: 24px; color: var(--ink-deep); background: #fff; box-shadow: 0 24px 80px #21171333; }
+.dialog-title { margin: 0; font-size: 20px; line-height: 1.25; letter-spacing: -.03em; }
+.dialog-header { display: grid; gap: 8px; }
+.dialog-description { color: var(--muted); font-size: 14px; }
+.dialog-footer { display: flex; justify-content: flex-end; gap: 12px; }
+.dialog-close { position: absolute; right: 16px; top: 16px; }
+.app-modal { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
 .app-modal-header { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; border-bottom: 1px solid var(--border); }
 .app-modal-header h2 { margin: 0; font-size: 20px; line-height: 1.25; letter-spacing: -.03em; }
 .app-modal-close { display: grid; flex: none; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--surface-muted, #f6f2ef); cursor: pointer; }
 .app-modal-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 24px; scrollbar-gutter: stable; }
 .app-modal-footer { flex: none; padding: 16px 24px; border-top: 1px solid var(--border); }
 .legal-document-picker { display: grid; gap: 8px; font-size: 12px; color: var(--muted); }
-.legal-document-picker select { width: 100%; min-width: 0; font-size: 13px; text-overflow: ellipsis; padding-right: 24px; }
+.legal-document-picker .select-trigger { width: 100%; min-width: 0; height: auto; min-height: 46px; font-size: 13px; text-align: left; }
+.legal-document-picker .select-trigger > span:first-child { white-space: normal; overflow-wrap: anywhere; }
+.legal-document-options { max-width: calc(100vw - 32px); }
+.legal-document-options .select-item { white-space: normal; overflow-wrap: anywhere; }
 .legal-document-body { font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
 .legal-document-body article { margin-top: 24px; }
 .legal-document-body h3 { font-size: 18px; }
@@ -4308,13 +4304,12 @@ button.service-status {
 .passport-photo-actions { display: flex; gap: 8px; justify-content: space-between; }
 .passport-review-fields .input { width: 100%; min-width: 0; }
 .ocr-confirm { display: flex; gap: 12px; align-items: flex-start; margin: 24px 0 12px; font-size: 14px; line-height: 1.5; }
-.ocr-confirm input { width: 20px; height: 20px; flex: none; accent-color: var(--accent); }
+.ocr-confirm .checkbox { width: 20px; height: 20px; }
 .ocr-progress { display: grid; gap: 8px; margin-top: 16px; font-size: 13px; }
-.ocr-progress progress { width: 100%; accent-color: var(--accent); }
 .ocr-warning { padding: 12px; border-radius: 12px; background: #fff5df; font-size: 13px; line-height: 1.5; }
 .passport-profile-fields { display: grid; gap: 16px; padding-top: 20px; border-top: 1px solid var(--border); }
-.passport-profile-fields summary { cursor: pointer; padding: 4px 0 12px; font-size: 16px; }
-.passport-profile-fields[open] > div { display: grid; gap: 16px; padding-top: 8px; }
+.passport-profile-fields .collapsible-trigger { padding: 4px 0 12px; font-size: 16px; }
+.passport-profile-fields > div[data-state="open"] { display: grid; gap: 16px; padding-top: 8px; }
 @media (max-width: 380px) { .app-modal-header, .app-modal-body, .app-modal-footer { padding: 16px; } .app-modal-header h2 { font-size: 18px; } .invitation-offer { padding: 16px; } }
 .start-screen-chapters { display: flex; gap: 10px; margin-top: 12px; }
 .start-screen-chapters button { border: 1px solid #bcaea5; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; }
@@ -4846,15 +4841,42 @@ button.service-status {
 .signing-agreement dt { color: var(--app-muted); }
 .signing-agreement dd { margin: 0; font-weight: 700; }
 .signing-fingerprint { min-width: 0; margin-top: 14px; font-size: 10px; }
-.signing-fingerprint summary { cursor: pointer; font-weight: 700; }
+.signing-fingerprint .collapsible-trigger { font-weight: 700; }
 .signing-fingerprint p { margin-top: 9px; }
 .signing-fingerprint code { display: block; overflow-wrap: anywhere; line-height: 1.6; }
 .signing-fingerprint small { display: block; margin-top: 8px; color: var(--app-muted); overflow-wrap: anywhere; }
 .signing-consent { display: flex; align-items: flex-start; gap: 11px; padding: 14px; border: 1px solid var(--app-border); border-radius: 15px; font-size: 10px; line-height: 1.45; }
-.signing-consent input { width: 18px; height: 18px; margin: 0; flex: 0 0 auto; accent-color: var(--app-accent); }
+.signing-consent .checkbox { width: 18px; height: 18px; }
 .signing-otp-inputs { display: flex; justify-content: center; gap: 10px; margin: 8px 0 2px; }
-.signing-otp-inputs input { width: 54px; height: 62px; border: 1px solid #d8cac8; border-radius: 15px; background: var(--app-surface-soft); text-align: center; color: var(--app-text); font-size: 24px; font-weight: 700; outline: none; }
-.signing-otp-inputs input:focus { border-color: var(--app-accent); box-shadow: 0 0 0 3px var(--app-accent-soft); }
+.input-otp { display: flex; align-items: center; gap: 8px; }
+.input-otp:has(input:disabled) { opacity: .5; }
+.input-otp-group { display: flex; align-items: center; gap: 10px; }
+.input-otp-slot { position: relative; display: flex; align-items: center; justify-content: center; width: 54px; height: 62px; border: 1px solid #d8cac8; border-radius: 15px; background: var(--app-surface-soft); color: var(--app-text); font-size: 24px; font-weight: 700; }
+.input-otp-slot.is-active { border-color: var(--app-accent); box-shadow: 0 0 0 3px var(--app-accent-soft); }
+.input-otp-caret { position: absolute; width: 1px; height: 24px; background: currentColor; pointer-events: none; animation: otp-caret-blink 1s step-end infinite; }
+@keyframes otp-caret-blink { 50% { opacity: 0; } }
+.checkbox { display: grid; place-items: center; width: 20px; height: 20px; flex: none; border: 1px solid var(--accent); border-radius: 5px; background: white; cursor: pointer; }
+.checkbox[data-state="checked"], .checkbox[data-state="indeterminate"] { background: var(--accent); color: white; }
+.checkbox-indicator { display: grid; place-items: center; }
+.checkbox:disabled { opacity: .5; cursor: not-allowed; }
+.checkbox:focus-visible, .tabs-trigger:focus-visible, .tabs-content:focus-visible, .collapsible-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.tabs-content { min-width: 0; }
+.collapsible-trigger { display: flex; align-items: center; gap: 8px; text-align: left; cursor: pointer; }
+.collapsible-chevron { flex-shrink: 0; margin-left: auto; }
+.collapsible-trigger[data-state="open"] .collapsible-chevron { transform: rotate(180deg); }
+.progress { position: relative; width: 100%; height: 6px; overflow: hidden; border-radius: 999px; background: var(--border); }
+.progress-indicator { width: 100%; height: 100%; background: var(--accent); transition: transform .3s ease; }
+.command { display: flex; flex-direction: column; min-width: 0; }
+.command-input-wrapper { display: flex; position: relative; align-items: center; }
+.command-input-wrapper > svg { position: absolute; left: 14px; color: var(--muted); pointer-events: none; }
+.command-input { width: 100%; padding-left: 40px; }
+.command-list { max-height: 240px; overflow-y: auto; overflow-x: hidden; }
+.command-list[hidden] { display: none; }
+.command-item { display: flex; align-items: center; gap: 8px; padding: 10px; cursor: pointer; outline: none; border-radius: 8px; }
+.command-item[data-selected="true"] { background: var(--accent-soft); }
+.command-item[data-disabled="true"] { opacity: .5; pointer-events: none; }
+.command-item > svg { flex-shrink: 0; }
+@media (prefers-reduced-motion: reduce) { .progress-indicator { transition: none; } .input-otp-caret { animation: none; } }
 .signing-resend, .signing-integrity { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 0; color: var(--app-muted); font-size: 9px; line-height: 1.45; }
 .signing-package-note { margin: -4px 8px 0; text-align: center; color: var(--app-muted); font-size: 9px; line-height: 1.45; }
 .signing-party-list { display: grid; gap: 0; padding: 4px 14px; }

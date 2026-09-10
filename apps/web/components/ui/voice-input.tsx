@@ -76,14 +76,14 @@ export function VoiceInput({ value, onChange, disabled, maxLength = 500 }: {
     } catch { finish(); engine.abort(); setNotice("Не удалось включить микрофон. Попробуйте голосовой ввод клавиатуры."); }
   };
   return <div className="voice-input">
-    <Button type="button" variant="ghost" disabled={disabled && !active} aria-pressed={active} onClick={() => {
-      if (active) { stop(); return; }
-      if (!speechConstructor()) { start(); return; }
-      if (allowed.current) start(); else setConsentOpen(true);
-    }}>{active ? <><Square size={14} /> Остановить диктовку</> : <><Mic size={16} /> Продиктовать</>}</Button>
     {active ? <p role="status">{interim || "Слушаю… Говорите по-русски."}</p> : null}
     {notice ? <p role="status">{notice}</p> : null}
     <Modal open={consentOpen} onClose={() => setConsentOpen(false)} title="Голосовой ввод"
+      trigger={<Button type="button" variant="ghost" disabled={disabled && !active} aria-pressed={active} onClick={() => {
+        if (active) { stop(); return; }
+        if (!speechConstructor()) { start(); return; }
+        if (allowed.current) start(); else setConsentOpen(true);
+      }}>{active ? <><Square size={14} /> Остановить диктовку</> : <><Mic size={16} /> Продиктовать</>}</Button>}
       footer={<Button className="full-width" type="button" onClick={() => { allowed.current = true; setConsentOpen(false); start(); }}>Включить микрофон</Button>}>
       <p>Речь распознаёт браузер. В зависимости от браузера аудио может передаваться его сервису распознавания. Макс-Контракт не записывает и не хранит аудио.</p>
       <p>Не диктуйте паспортные данные и другие личные реквизиты. Полученный текст можно исправить перед отправкой.</p>

@@ -25,6 +25,8 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getDeals } from "@/lib/api/deals";
 import {
@@ -62,11 +64,11 @@ function DealDocumentPicker({ onSelectDeal }: { onSelectDeal: (dealId: string) =
       ) : null}
       <div className="document-deal-list">
         {deals.data?.items.map((deal) => (
-          <button key={deal.id} onClick={() => onSelectDeal(deal.id)} type="button">
+          <Button variant="unstyled" key={deal.id} onClick={() => onSelectDeal(deal.id)} type="button">
             <span><FileCheck2 size={19} /></span>
             <i><small>{deal.templateTitle}</small><strong>{deal.title}</strong><em>Версия {deal.versionNumber}</em></i>
             <FolderOpen size={18} />
-          </button>
+          </Button>
         ))}
       </div>
       <PrivacyNote />
@@ -137,7 +139,7 @@ function DealDocuments({ dealId, onBack }: { dealId: string; onBack: () => void 
       {upload ? (
         <Card className="upload-progress-card" role="status">
           <UploadCloud size={20} />
-          <span><strong>Загружаем: {upload.label}</strong><i><b style={{ width: `${upload.progress}%` }} /></i><small>{upload.progress}%</small></span>
+          <span><strong>Загружаем: {upload.label}</strong><Progress value={upload.progress} aria-label="Загрузка файла" /><small>{upload.progress}%</small></span>
         </Card>
       ) : null}
       {success ? (
@@ -201,7 +203,7 @@ function UploadButton({ accept, disabled, label, onSelect }: { accept: string; d
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
-      <input
+      <Input
         accept={accept}
         aria-label="Загрузить файл"
         tabIndex={-1}

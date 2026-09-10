@@ -41,13 +41,15 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import type { FormEvent } from "react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import { VoiceInput } from "@/components/ui/voice-input";
 import { DealIntakePanel } from "@/components/templates/deal-intake-panel";
 import { useAuth } from "@/components/providers/auth-provider";
@@ -459,7 +461,6 @@ function CreateDealScreen({
   const [query, setQuery] = useState("");
   const [creationMode, setCreationMode] = useState<"ai" | "catalog">("ai");
   const [intakeDescription, setIntakeDescription] = useState({ text: "", revision: 0 });
-  const creationTabsId = useId();
   const [saveState, setSaveState] = useState<DraftSaveState>("idle");
   const [selectedSlug, setSelectedSlug] = useState("");
   const [step, setStep] = useState<CreateDealStep>("type");
@@ -980,41 +981,21 @@ function CreateDealScreen({
           Опишите задачу своими словами или выберите готовый шаблон.
         </p>
 
-        <div
-          className="deal-creation-tabs"
-          role="tablist"
-          aria-label="Способ создания договора"
-          onKeyDown={event => {
-            if (draftCreation.isPending || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-            event.preventDefault();
-            const next = event.key === "Home" ? "ai" : event.key === "End" ? "catalog" : creationMode === "ai" ? "catalog" : "ai";
-            setCreationMode(next);
-            event.currentTarget.querySelector<HTMLButtonElement>(`[data-mode="${next}"]`)?.focus();
-          }}
-        >
+        <Tabs value={creationMode} onValueChange={value => setCreationMode(value as "ai" | "catalog")}>
+        <TabsList className="deal-creation-tabs" aria-label="Способ создания договора">
           {([{ mode: "ai", label: "С помощью ИИ" }, { mode: "catalog", label: "Готовые шаблоны" }] as const).map(({ mode, label }) => (
-            <button
+            <TabsTrigger
               key={mode}
-              id={`${creationTabsId}-${mode}-tab`}
-              role="tab"
-              type="button"
-              data-mode={mode}
-              aria-selected={creationMode === mode}
-              aria-controls={`${creationTabsId}-${mode}-panel`}
-              tabIndex={creationMode === mode ? 0 : -1}
+              value={mode}
               disabled={draftCreation.isPending}
-              onClick={() => setCreationMode(mode)}
             >
               {label}
-            </button>
+            </TabsTrigger>
           ))}
-        </div>
+        </TabsList>
 
-        <div
+        <TabsContent value="ai" forceMount
           className="deal-creation-panel"
-          id={`${creationTabsId}-ai-panel`}
-          role="tabpanel"
-          aria-labelledby={`${creationTabsId}-ai-tab`}
           hidden={creationMode !== "ai"}
         >
         <DealIntakePanel
@@ -1023,13 +1004,10 @@ function CreateDealScreen({
           isCreating={draftCreation.isPending}
           onAccept={proposal => void beginDraft(proposal)}
         />
-        </div>
+        </TabsContent>
 
-        <div
+        <TabsContent value="catalog" forceMount
           className="deal-creation-panel"
-          id={`${creationTabsId}-catalog-panel`}
-          role="tabpanel"
-          aria-labelledby={`${creationTabsId}-catalog-tab`}
           hidden={creationMode !== "catalog"}
         >
 
@@ -1122,7 +1100,8 @@ function CreateDealScreen({
             {draftCreation.isPending ? "Создаём черновик" : "Продолжить"}
           </Button>
         </div>
-        </div>
+        </TabsContent>
+        </Tabs>
         {draftCreation.isError ? (
           <RequestErrorCard message={draftCreation.error.message} />
         ) : null}
@@ -1587,19 +1566,11 @@ function ContractGenerationScreen({
             Проверяем ответы, формулируем обязательства сторон и структуру
             документа.
           </p>
-          <div
+          <Progress
             aria-label="Прогресс подготовки договора"
-            aria-valuemax={100}
-            aria-valuemin={0}
-            aria-valuenow={generation?.progress ?? 5}
+            value={generation?.progress ?? 5}
             className="generation-progress"
-            role="progressbar"
-          >
-            <motion.span
-              animate={{ width: `${generation?.progress ?? 5}%` }}
-              transition={{ duration: 0.55, ease: "easeOut" }}
-            />
-          </div>
+          />
           <strong className="generation-progress-value">
             {generation?.progress ?? 5}%
           </strong>
@@ -1664,18 +1635,12 @@ function AiClarificationScreen({
       <p className="screen-copy">
         Ответы помогут сделать условия точнее и понятнее обеим сторонам.
       </p>
-      <div
+      <Progress
         aria-label={`Пройдено ${questionIndex + 1} из ${total}`}
         className="clarification-progress"
-        role="progressbar"
-        aria-valuemax={total}
-        aria-valuemin={1}
-        aria-valuenow={questionIndex + 1}
-      >
-        <span
-          style={{ width: `${((questionIndex + 1) / total) * 100}%` }}
-        />
-      </div>
+        max={total}
+        value={questionIndex + 1}
+      />
 
       <AnimatePresence mode="wait">
         <motion.div
@@ -2135,7 +2100,7 @@ function StartScreen({
   ];
   const rootRef = useRef<HTMLDivElement>(null);
   const frameCanvasRef = useRef<HTMLCanvasElement>(null);
-  const progressRef = useRef<HTMLDivElement>(null);
+  const [scrollPercent, setScrollPercent] = useState(0);
   const progressValueRef = useRef<HTMLElement>(null);
   const progressChapterRef = useRef<HTMLSpanElement>(null);
 
@@ -2202,7 +2167,7 @@ function StartScreen({
         "--start-screen-hint-opacity",
         hintOpacity.toFixed(3),
       );
-      progressRef.current?.setAttribute("aria-valuenow", String(percent));
+      setScrollPercent(percent);
       if (progressValueRef.current) {
         progressValueRef.current.textContent = String(percent).padStart(2, "0");
       }
@@ -2305,11 +2270,11 @@ function StartScreen({
                   </motion.div>)}
                 </div>
                 <nav className="start-screen-chapters" aria-label="Возможности сервиса">
-                  {chapters.map((item, index) => <button key={item.title} type="button" aria-label={item.title} aria-current={index === chapterIndex ? "step" : undefined} onClick={() => {
+                  {chapters.map((item, index) => <Button variant="unstyled" key={item.title} type="button" aria-label={item.title} aria-current={index === chapterIndex ? "step" : undefined} onClick={() => {
                     const root = rootRef.current;
                     const scroller = root?.parentElement;
                     if (root && scroller) scroller.scrollTo({ top: (root.offsetHeight - scroller.clientHeight) * (index / 3), behavior: reducedMotion ? "instant" : "smooth" });
-                  }}>{index + 1}</button>)}
+                  }}>{index + 1}</Button>)}
                 </nav>
                 <LegalDocuments />
               </section>
@@ -2320,24 +2285,14 @@ function StartScreen({
               </div>
 
               <footer className="start-screen-footer">
-                <div
-                  aria-label="Прогресс просмотра"
-                  aria-valuemax={100}
-                  aria-valuemin={0}
-                  aria-valuenow={0}
-                  className="start-screen-progress"
-                  ref={progressRef}
-                  role="progressbar"
-                >
+                <div className="start-screen-progress">
                   <span
                     className="start-screen-progress-chapter"
                     ref={progressChapterRef}
                   >
                     УСЛОВИЯ
                   </span>
-                  <span className="start-screen-progress-track" aria-hidden="true">
-                    <i />
-                  </span>
+                  <Progress className="start-screen-progress-track" aria-label="Прогресс просмотра" value={scrollPercent} />
                   <strong ref={progressValueRef}>00</strong>
                 </div>
                 <Button
