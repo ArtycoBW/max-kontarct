@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   HttpCode,
   HttpStatus,
   Post,
@@ -23,6 +24,7 @@ export class AuthController {
 
   @Post("max")
   @HttpCode(HttpStatus.OK)
+  @Header("Cache-Control", "no-store")
   async authenticateMax(
     @Body() body: MaxAuthDto,
     @Req() request: RequestWithId,
@@ -35,6 +37,7 @@ export class AuthController {
 
   @Post("dev")
   @HttpCode(HttpStatus.OK)
+  @Header("Cache-Control", "no-store")
   async authenticateDevelopment(
     @Req() request: RequestWithId,
     @Res({ passthrough: true }) response: Response,
@@ -45,6 +48,7 @@ export class AuthController {
   }
 
   @Get("me")
+  @Header("Cache-Control", "no-store")
   @UseGuards(SessionAuthGuard)
   getMe(@Req() request: AuthenticatedRequest): AuthSessionResponse {
     return { user: request.auth.user };
@@ -52,6 +56,7 @@ export class AuthController {
 
   @Post("logout")
   @HttpCode(HttpStatus.NO_CONTENT)
+  @Header("Cache-Control", "no-store")
   @UseGuards(SessionAuthGuard)
   async logout(
     @Req() request: AuthenticatedRequest,
@@ -62,13 +67,24 @@ export class AuthController {
       this.auth.getCookieName(),
       this.auth.getClearCookieOptions(),
     );
+    this.clearLegacySessionCookie(response);
   }
 
   private setSessionCookie(response: Response, token: string): void {
+    this.clearLegacySessionCookie(response);
     response.cookie(
       this.auth.getCookieName(),
       token,
       this.auth.getCookieOptions(),
     );
+  }
+
+  private clearLegacySessionCookie(response: Response): void {
+    const options = this.auth.getClearCookieOptions();
+    if (options.partitioned) {
+      // A new partitioned cookie must not coexist with an old unpartitioned
+      // cookie of the same name (the Cookie header does not identify its jar).
+      response.clearCookie(this.auth.getCookieName(), { ...options, partitioned: false });
+    }
   }
 }

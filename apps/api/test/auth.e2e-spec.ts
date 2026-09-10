@@ -299,7 +299,7 @@ describe("MAX authentication (e2e)", () => {
     }),
   } as unknown as RedisService;
 
-  beforeAll(async () => {
+  async function createApplication(nodeEnv?: string): Promise<INestApplication> {
     const moduleRef = await Test.createTestingModule({
       controllers: [AuthController, OnboardingController],
       providers: [
@@ -309,7 +309,9 @@ describe("MAX authentication (e2e)", () => {
         MaxReplayProtectionService,
         OnboardingService,
         SessionAuthGuard,
-        { provide: ConfigService, useValue: config },
+        { provide: ConfigService, useValue: nodeEnv ? {
+          getOrThrow: (key: string) => key === "NODE_ENV" ? nodeEnv : config.getOrThrow(key),
+        } : config },
         { provide: PrismaService, useValue: prisma },
         { provide: RedisService, useValue: redisService },
       ],
@@ -320,10 +322,15 @@ describe("MAX authentication (e2e)", () => {
       warn: jest.fn(),
     } as unknown as PinoLogger;
 
-    app = moduleRef.createNestApplication();
-    configureApplication(app);
-    app.useGlobalFilters(new ApiExceptionFilter(logger));
-    await app.init();
+    const application = moduleRef.createNestApplication();
+    configureApplication(application);
+    application.useGlobalFilters(new ApiExceptionFilter(logger));
+    await application.init();
+    return application;
+  }
+
+  beforeAll(async () => {
+    app = await createApplication();
   });
 
   afterAll(async () => {
@@ -378,6 +385,45 @@ describe("MAX authentication (e2e)", () => {
       .expect(401);
 
     expect(response.body.code).toBe("MAX_INIT_DATA_INVALID");
+  });
+
+  it("issues a protected partitioned production cookie and clears both cookie scopes on logout", async () => {
+    const production = await createApplication("production");
+    try {
+      const server = production.getHttpServer();
+      const proof = createMaxInitDataFixture({ queryId: "e2e-partitioned-session" });
+      const authenticated = await request(server).post(`/${API_PREFIX}/auth/max`).send({ initData: proof }).expect(200);
+      expect(authenticated.headers["cache-control"]).toBe("no-store");
+      expect(Object.keys(authenticated.body)).toEqual(["user"]);
+      const cookies = authenticated.headers["set-cookie"] as unknown as string[];
+      expect(cookies).toHaveLength(2);
+      // First delete the pre-CHIPS cookie, then issue the new isolated session.
+      expect(cookies[0]).toMatch(/^max_contract_session=;/);
+      expect(cookies[0]).not.toContain("Partitioned");
+      expect(cookies[1]).toContain("Partitioned");
+      for (const cookie of cookies) {
+        expect(cookie).toContain("HttpOnly");
+        expect(cookie).toContain("Secure");
+        expect(cookie).toContain("SameSite=None");
+        expect(cookie).toContain("Path=/");
+        expect(cookie).not.toContain("Domain=");
+      }
+      const sessionCookie = cookies[1]!.split(";")[0]!;
+      // Supertest uses HTTP; supply the opaque synthetic cookie manually here.
+      // Browser policy/isolation is tested separately in real browser engines.
+      await request(server).get(`/${API_PREFIX}/auth/me`).set("Cookie", sessionCookie).expect(200);
+      await request(server).get(`/${API_PREFIX}/onboarding`).set("Cookie", sessionCookie).expect(200);
+      const replay = await request(server).post(`/${API_PREFIX}/auth/max`).send({ initData: proof }).expect(401);
+      expect(replay.body.code).toBe("MAX_INIT_DATA_REPLAYED");
+      expect(replay.headers["set-cookie"]).toBeUndefined();
+      const loggedOut = await request(server).post(`/${API_PREFIX}/auth/logout`).set("Cookie", sessionCookie).expect(204);
+      const cleared = loggedOut.headers["set-cookie"] as unknown as string[];
+      expect(cleared).toHaveLength(2);
+      expect(cleared.filter(cookie => cookie.includes("Partitioned"))).toHaveLength(1);
+      expect(cleared.every(cookie => cookie.startsWith("max_contract_session=;") && cookie.includes("1970"))).toBe(true);
+      const revoked = await request(server).get(`/${API_PREFIX}/auth/me`).set("Cookie", sessionCookie).expect(401);
+      expect(revoked.body.code).toBe("AUTH_SESSION_INVALID");
+    } finally { await production.close(); }
   });
 
   it("rejects expired initData", async () => {

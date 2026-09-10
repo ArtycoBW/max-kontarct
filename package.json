@@ -23,6 +23,7 @@
     "test:e2e": "npm run test:e2e --workspaces --if-present",
     "test:integration": "npm run test:integration --workspaces --if-present",
     "test:browser": "node scripts/run-browser-tests.cjs",
+    "test:cookies": "npm run build --workspace @max-contract/api && playwright test --config playwright.cookies.config.ts",
     "build": "npm run build --workspaces --if-present",
     "postinstall": "npm run prisma:generate && npm run build --workspace @max-contract/contracts && node scripts/prepare-ocr-assets.cjs",
     "prisma:generate": "npm run prisma:generate --workspace @max-contract/api",

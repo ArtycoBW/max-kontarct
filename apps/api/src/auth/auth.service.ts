@@ -164,6 +164,9 @@ export class AuthService {
       httpOnly: true,
       maxAge: this.sessionTtlSeconds * 1_000,
       path: "/",
+      // CHIPS keeps the HttpOnly session available inside MAX on iOS 26.2+,
+      // without granting cross-site cookie access or exposing tokens to JS.
+      partitioned: this.nodeEnv === "production",
       sameSite: this.nodeEnv === "production" ? "none" : "lax",
       secure: this.nodeEnv === "production",
     };
@@ -173,6 +176,7 @@ export class AuthService {
     return {
       httpOnly: true,
       path: "/",
+      partitioned: this.nodeEnv === "production",
       sameSite: this.nodeEnv === "production" ? "none" : "lax",
       secure: this.nodeEnv === "production",
     };
