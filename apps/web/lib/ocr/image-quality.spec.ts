@@ -1,4 +1,4 @@
-import { cameraCrop, enhanceDocument, inspectCapture } from "./image-quality";
+import { cameraCrop, documentRedChannel, enhanceDocument, inspectCapture } from "./image-quality";
 
 function pixels(value: (x: number, y: number) => number) {
   const width = 128, height = 128, data = new Uint8ClampedArray(width * height * 4);
@@ -9,6 +9,11 @@ function pixels(value: (x: number, y: number) => number) {
   return { width, height, data };
 }
 describe("local capture hints (synthetic pixels only)", () => {
+  it("keeps soft edges in the red channel without mutating the source", () => {
+    const source = { width: 2, height: 1, data: new Uint8ClampedArray([72, 30, 20, 255, 180, 110, 95, 255]) };
+    expect(documentRedChannel(source)).toEqual(new Uint8ClampedArray([72, 72, 72, 255, 180, 180, 180, 255]));
+    expect(source.data[1]).toBe(30);
+  });
   it("detects darkness, low detail and motion without treating plain white paper as glare", () => {
     expect(inspectCapture(pixels(() => 30)).quality.dark).toBe(true);
     const white = inspectCapture(pixels(() => 255));

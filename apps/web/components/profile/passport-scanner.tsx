@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, RotateCw, ScanLine, Trash2, Upload, X } from "lucide-react";
+import { ArrowDown, CircleAlert, Camera, RotateCw, ScanLine, ShieldCheck, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogClose, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Progress } from "@/components/ui/progress";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { passportFieldLabels, type PassportData, type PassportField, type PassportPage } from "@/lib/ocr/passport-parser";
 import { recognizePassport, validatePassportPhoto } from "@/lib/ocr/passport-ocr";
 import { PassportCamera } from "./passport-camera";
+import { activeReviewIssues, issueDescription, reviewGroups, type PassportReview } from "@/lib/ocr/passport-review";
 
 const pages: { key: PassportPage; title: string; hint: string }[] = [
   { key: "issuance", title: "Кем выдан паспорт", hint: "Страница с органом выдачи, датой и кодом подразделения" },
@@ -36,7 +38,8 @@ function PassportScanDialog({ onApply }: { onApply: (data: PassportData) => void
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [data, setData] = useState<PassportData | null>(null);
-  const [warnings, setWarnings] = useState<string[]>([]);
+  const [review, setReview] = useState<Pick<PassportReview, "issues" | "expected">>({ issues: [], expected: [] });
+  const [edited, setEdited] = useState<PassportField[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const [cameraPage, setCameraPage] = useState<PassportPage | null>(null);
   useEffect(() => {
@@ -51,7 +54,7 @@ function PassportScanDialog({ onApply }: { onApply: (data: PassportData) => void
       const url = file ? URL.createObjectURL(file) : "";
       if (url) resources.current.add(url);
       setPhotos(current => ({ ...current, [key]: file ? { file, url, rotation: 0 } : undefined }));
-      setError(""); setData(null); setConfirmed(false);
+      setError(""); setData(null); setConfirmed(false); setEdited([]);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось открыть фотографию."); }
   };
   const scan = async () => {
@@ -61,18 +64,29 @@ function PassportScanDialog({ onApply }: { onApply: (data: PassportData) => void
     try {
       const result = await recognizePassport(pages.flatMap(({ key }) => photos[key] ? [{ ...photos[key]!, page: key }] : []), controller.signal, setProgress);
       if (controller.signal.aborted) return;
-      setData(result.data); setWarnings(result.warnings);
+      setData(result.data); setReview({ issues: result.issues, expected: result.expected }); setEdited([]);
     } catch (cause) {
       if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Не удалось распознать страницы.");
     } finally { if (task.current === controller) { task.current = null; setBusy(false); } }
   };
-  const entries = Object.entries(passportFieldLabels) as [PassportField, string][];
+  const issues = data ? activeReviewIssues(data, review, edited) : [];
+  const filledCount = data ? review.expected.filter(key => data[key].trim()).length : 0;
+  const changeField = (key: PassportField, value: string) => {
+    setConfirmed(false); setData(current => current ? { ...current, [key]: value } : current);
+    setEdited(current => current.includes(key) ? current : [...current, key]);
+  };
+  const focusIssue = () => {
+    const field = issues[0]?.field;
+    if (!field) return;
+    const input = document.getElementById(`ocr-${field}`);
+    input?.scrollIntoView({ block: "center", behavior: "auto" }); input?.focus({ preventScroll: true });
+  };
   return <DialogContent className="app-modal" showCloseButton={false} aria-describedby={undefined}>
     <DialogHeader className="app-modal-header"><DialogTitle>{cameraPage ? `Съёмка: ${pages.find(page => page.key === cameraPage)?.title}` : data ? "Проверьте данные" : "Сканирование паспорта"}</DialogTitle>
       <DialogClose asChild><Button variant="unstyled" className="app-modal-close" type="button" aria-label="Закрыть окно"><X size={20} /></Button></DialogClose>
     </DialogHeader>
     {cameraPage ? <PassportCamera key={cameraPage} page={cameraPage} onCancel={() => setCameraPage(null)} onCapture={file => { replace(cameraPage, file); setCameraPage(null); }} /> : <div className="app-modal-body">
-    <p>Фотографии обрабатываются на вашем устройстве и не отправляются на сервер. Сохранение данных в профиле — отдельным действием.</p>
+    <p className="ocr-privacy"><ShieldCheck size={16} aria-hidden="true" /> Фото обрабатываются только на вашем устройстве. Данные сохранятся после отдельного нажатия «Сохранить профиль».</p>
     {!data ? <>
       <p>Лучше снять каждую страницу отдельно, ровно и без бликов. Разворот с выдачей и личными данными можно загрузить в «Фото и личные данные». До трёх фотографий; регистрация может находиться дальше в паспорте.</p>
       <div className="passport-photo-list">{pages.map(({ key, title, hint }) => <section className="passport-photo" key={key}>
@@ -90,19 +104,30 @@ function PassportScanDialog({ onApply }: { onApply: (data: PassportData) => void
         </label><Button type="button" variant="outline" disabled={busy} onClick={() => { setError(""); setCameraPage(key); }} aria-label={`Снять: ${title}`}><Camera size={18} /> Снять</Button></div>
       </section>)}</div>
     </> : <>
-      <p>Сверьте каждое поле с паспортом. Исправьте ошибки и оставьте пустыми поля, которые не удалось прочитать. Заполненные поля заменят соответствующие значения в форме профиля.</p>
-      {warnings.map(warning => <p className="ocr-warning" key={warning}>{warning}</p>)}
-      <div className="passport-review-fields">{entries.map(([key, label]) => <div className="form-field" key={key}><label htmlFor={`ocr-${key}`}>{label}</label>
+      <Alert role="status" className={`ocr-review-summary ${issues.length ? "has-issues" : ""}`}>
+        <ScanLine size={20} aria-hidden="true" />
+        <div><AlertTitle>Заполнено {filledCount} из {review.expected.length} полей</AlertTitle>
+          <AlertDescription>{issues.length ? `Требуют внимания: ${issues.length}. Подсказки находятся рядом с полями.` : "Сверьте данные с оригиналом перед переносом в профиль."}</AlertDescription>
+          {issues.length ? <Button type="button" variant="ghost" className="ocr-summary-action" onClick={focusIssue}>К первому полю <ArrowDown size={14} /></Button> : null}
+        </div>
+      </Alert>
+      <div className="passport-review-groups">{reviewGroups.map(group => <fieldset className="passport-review-group" key={group.title}>
+        <legend>{group.title}<span>{group.fields.filter(key => data[key].trim()).length} / {group.fields.length}</span></legend>
+        <div className="passport-review-fields">{group.fields.map(key => {
+          const issue = issues.find(issue => issue.field === key);
+          return <div className={`form-field ocr-review-field ${issue ? "needs-attention" : ""}`} key={key}><label htmlFor={`ocr-${key}`}>{passportFieldLabels[key]}{key === "middleName" ? <small>если есть</small> : null}</label>
         {/* No ancestor form owner: Enter must never submit the profile behind this dialog. */}
-        {dateFields.has(key) ? <DatePicker id={`ocr-${key}`} value={data[key]} onChange={value => { setConfirmed(false); setData({ ...data, [key]: value }); }} />
-          : <Input id={`ocr-${key}`} form="passport-ocr-review" maxLength={key === "address" || key === "issuer" ? 500 : 250} value={data[key]}
-            onChange={event => { setConfirmed(false); setData({ ...data, [key]: event.target.value }); }} />}
-      </div>)}</div>
+        {dateFields.has(key) ? <DatePicker id={`ocr-${key}`} value={data[key]} aria-describedby={issue ? `ocr-hint-${key}` : undefined} aria-invalid={Boolean(issue)} onChange={value => changeField(key, value)} />
+          : <Input id={`ocr-${key}`} form="passport-ocr-review" maxLength={key === "address" || key === "issuer" ? 500 : 250} value={data[key]} aria-describedby={issue ? `ocr-hint-${key}` : undefined} aria-invalid={Boolean(issue)}
+            onChange={event => changeField(key, event.target.value)} />}
+        {issue ? <p id={`ocr-hint-${key}`} className="ocr-field-hint"><CircleAlert size={14} aria-hidden="true" />{issueDescription(issue)}</p> : null}
+      </div>; })}</div>
+      </fieldset>)}</div>
       <label className="ocr-confirm"><Checkbox form="passport-ocr-review" checked={confirmed} onCheckedChange={value => setConfirmed(value === true)} /> Я проверил данные по паспорту</label>
-      <Button type="button" variant="ghost" onClick={() => { setData(null); setConfirmed(false); setWarnings([]); }}>Выбрать другие фотографии</Button>
+      <Button type="button" variant="ghost" onClick={() => { setData(null); setConfirmed(false); }}>Выбрать другие фотографии</Button>
     </>}
     {busy ? <div className="ocr-progress" role="status"><Progress value={progress} aria-label="Распознавание паспорта" /><span>{progress < 15 ? "Загружаем локальный модуль распознавания…" : `Распознаём страницы: ${progress}%`}</span></div> : null}
-    {error ? <p className="field-error" role="alert">{error}</p> : null}
+    {error ? <Alert variant="destructive" className="ocr-failure"><CircleAlert size={20} aria-hidden="true" /><div><AlertTitle>Не получилось прочитать фото</AlertTitle><AlertDescription>{error}</AlertDescription></div></Alert> : null}
     </div>}
     {!cameraPage ? <DialogFooter className="app-modal-footer">{data ? <Button type="button" className="full-width" disabled={!confirmed || !Object.values(data).some(Boolean)} onClick={() => onApply(data)}>Перенести в профиль</Button>
       : busy ? <Button type="button" variant="outline" className="full-width" onClick={() => { task.current?.abort(); setBusy(false); }}>Отменить распознавание</Button>

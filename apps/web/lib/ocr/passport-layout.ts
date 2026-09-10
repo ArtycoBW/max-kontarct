@@ -1,10 +1,11 @@
 import { emptyPassport, parsePassportPages, passportDate, type PassportData, type PassportField, type PassportPage } from "./passport-parser";
+import { mergeRegistrations, readRegistration, type RegistrationRead } from "./registration";
 
 type Box = { x0: number; y0: number; x1: number; y1: number };
 export type PassportOcrLine = { text: string; confidence: number; bbox: Box; words: { text: string; confidence: number; bbox: Box }[] };
-export type PassportRead = { data: PassportData; warnings: string[]; mrz: boolean; checkedFields?: PassportField[]; confidence?: Partial<Record<PassportField, number>> };
+export type PassportRead = { data: PassportData; warnings: string[]; mrz: boolean; checkedFields?: PassportField[]; confidence?: Partial<Record<PassportField, number>>; registration?: RegistrationRead; uncertainFields?: PassportField[] };
 const lookalikes: Record<string, string> = { A: "А", B: "В", E: "Е", K: "К", M: "М", H: "Н", O: "О", P: "Р", C: "С", T: "Т", Y: "У", X: "Х" };
-const russian = (text: string) => text.normalize("NFKC").replace(/[ABEKMHOPCTYX]/g, char => lookalikes[char]!).replace(/\s+/g, " ").trim();
+export const normalizePassportText = (text: string) => text.normalize("NFKC").replace(/[ABEKMHOPCTYX]/g, char => lookalikes[char]!).replace(/\s+/g, " ").trim();
 const name = (text: string) => /^[А-ЯЁ][А-ЯЁ-]{1,39}$/.test(text) ? text.toLocaleLowerCase("ru").replace(/(^|-)([а-яё])/g, (_, separator: string, letter: string) => separator + letter.toLocaleUpperCase("ru")) : "";
 const label = /ФАМИЛИЯ|ОТЧЕСТВО|(?:^|\s)ИМЯ(?:\s|$)|РОЖДЕНИЯ|ПАСПОРТ|ВЫДАЧИ|ПОДРАЗДЕЛЕНИЯ|ЛИЧНЫЙ|ПОДПИСЬ|МЕСТО|РОССИЙСК|ФЕДЕРАЦ|ЗАРЕГИСТР|НАИМЕНОВАНИЕ|ЗАВЕРИЛ/i;
 const addressLabel = /^(?:РЕГ[.:]|РЕСП|ПУНКТ|Г[.:]|УЛ[.:]|УЛИЦА|Д[.:]|КВ[.:])/i;
@@ -12,7 +13,7 @@ const centerY = (box: Box) => (box.y0 + box.y1) / 2;
 
 /** Recognize value positions as well as tiny printed captions; no identity lookup/dictionaries. */
 export function readPassportLayout(page: PassportPage, input: PassportOcrLine[], rawText: string): PassportRead {
-  const lines = input.map(line => ({ ...line, text: russian(line.text), words: line.words.map(word => ({ ...word, text: russian(word.text) })) }));
+  const lines = input.map(line => ({ ...line, text: normalizePassportText(line.text), words: line.words.map(word => ({ ...word, text: normalizePassportText(word.text) })) }));
   // A low-confidence caption must not discard a high-confidence value on the same line.
   const usable = lines.map(line => line.words.filter(word => word.confidence >= 50 || label.test(word.text) || (page === "registration" && addressLabel.test(word.text))).map(word => word.text).join(" ")).filter(Boolean);
   const parsed = parsePassportPages({ [page]: usable.join("\n") });
@@ -58,7 +59,7 @@ export function readPassportLayout(page: PassportPage, input: PassportOcrLine[],
     const matches = words.filter(word => parts.includes(word.text.toLocaleUpperCase("ru")));
     confidence[field] = mrz?.[field] ? 100 : matches.length ? matches.reduce((sum, word) => sum + word.confidence, 0) / matches.length : 50;
   }
-  return { data, warnings: parsed.warnings, mrz: Boolean(mrz), checkedFields: Object.keys(mrz ?? {}) as PassportField[], confidence };
+  return { data, warnings: parsed.warnings, mrz: Boolean(mrz), checkedFields: Object.keys(mrz ?? {}) as PassportField[], confidence, ...(page === "registration" ? { registration: readRegistration(lines) } : {}) };
 }
 
 /** RF national passport lower MRZ: fixed positions and all numeric checksums, not an authenticity check.
@@ -86,7 +87,7 @@ export function readRussianMrz(text: string): Partial<PassportData> | null {
 }
 
 export function mergePassportReads(reads: PassportRead[]) {
-  const data = { ...emptyPassport }, conflicts: PassportField[] = [];
+  const data = { ...emptyPassport }, conflicts: PassportField[] = [], uncertain: PassportField[] = [];
   for (const key of Object.keys(data) as PassportField[]) {
     const checked = reads.filter(read => read.checkedFields?.includes(key) && read.data[key]);
     const candidates = (checked.length ? checked : reads).map(read => read.data[key]).filter(Boolean);
@@ -102,5 +103,14 @@ export function mergePassportReads(reads: PassportRead[]) {
       else conflicts.push(key);
     }
   }
-  return { data, conflicts };
+  const registrations = reads.flatMap(read => read.registration ? [read.registration] : []);
+  if (registrations.some(read => read.ambiguous || Object.keys(read.parts).length)) {
+    const result = mergeRegistrations(registrations);
+    data.address = result.address;
+    const index = conflicts.indexOf("address"); if (index >= 0) conflicts.splice(index, 1);
+    if (!result.address && result.conflict) conflicts.push("address");
+    else if (result.uncertain && result.address) uncertain.push("address");
+  }
+  for (const read of reads) for (const field of read.uncertainFields ?? []) if (data[field] && !uncertain.includes(field)) uncertain.push(field);
+  return { data, conflicts, uncertain };
 }

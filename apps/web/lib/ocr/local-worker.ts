@@ -45,10 +45,10 @@ export function createLocalOcrWorker(progress: (value: number) => void) {
       await send("initialize", { langs: ["rus", "eng"], oem: 1, config: {} });
       await send("setParameters", { params: { tessedit_pageseg_mode: "11", preserve_interword_spaces: "1" } });
     },
-    async recognize(canvas: HTMLCanvasElement, options: { mode?: "6" | "11" | "7"; whitelist?: string } = {}) {
+    async recognize(canvas: HTMLCanvasElement, options: { mode?: "6" | "11" | "7" | "8"; whitelist?: string; rotateAuto?: boolean } = {}) {
       const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(unavailable()), "image/png"));
       const image = new Uint8Array(await blob.arrayBuffer());
-      return await send("recognize", { image, options: { rotateAuto: true, tessedit_pageseg_mode: options.mode ?? "11", user_defined_dpi: "300", ...(options.whitelist ? { tessedit_char_whitelist: options.whitelist } : {}) }, output: { text: true, blocks: true } }) as OcrPage;
+      return await send("recognize", { image, options: { rotateAuto: options.rotateAuto ?? true, tessedit_pageseg_mode: options.mode ?? "11", user_defined_dpi: "300", ...(options.whitelist ? { tessedit_char_whitelist: options.whitelist } : {}) }, output: { text: true, blocks: true } }) as OcrPage;
     },
     terminate,
   };

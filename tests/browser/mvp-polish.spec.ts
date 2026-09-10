@@ -186,3 +186,46 @@ test("OCR releases the worker on a model failure and on cancellation during load
   unblock();
   await context.close();
 });
+
+test("passport OCR review groups inline issues and clears them after manual correction", async ({ browser }) => {
+  test.setTimeout(180_000);
+  const context = await actor(browser, 73016, "+79997003016");
+  const page = await context.newPage(); await page.goto("/"); await onboarding(page);
+  await page.getByRole("button", { name: "Профиль", exact: true }).click();
+  await page.getByRole("button", { name: "Считать данные паспорта", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Фото: Фото и личные данные", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ", "ИМЯ ИВАН", "ДАТА РОЖДЕНИЯ 01.02.1990", "ПОЛ МУЖ."]));
+  await dialog.getByLabel("Фото: Регистрация", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ", "ЗАРЕГИСТРИРОВАН", "Г. ПРИМЕР"]));
+  const writes: string[] = [];
+  page.on("request", request => { if (["POST", "PATCH", "PUT"].includes(request.method())) writes.push(request.url()); });
+  await dialog.getByRole("button", { name: "Распознать данные", exact: true }).click();
+  await expect(dialog.getByRole("heading", { name: "Проверьте данные" })).toBeVisible({ timeout: 160_000 });
+  await expect(dialog.getByRole("status")).toHaveCount(1);
+  await expect(dialog.getByRole("status")).toContainText(/Заполнено \d+ из \d+ полей/);
+  await expect(dialog.locator("fieldset")).toHaveCount(3);
+  await expect(dialog).not.toContainText(/Некоторые фрагменты|Результаты распознавания расходятся|ФИО распознано не полностью/);
+  const surname = dialog.getByLabel("Фамилия", { exact: true });
+  await expect(surname).toHaveAttribute("aria-invalid", "true");
+  await expect(surname).toHaveAttribute("aria-describedby", "ocr-hint-lastName");
+  await dialog.getByRole("button", { name: "К первому полю" }).click();
+  await expect(surname).toBeFocused();
+  await surname.fill("Примеров");
+  await expect(surname).toHaveAttribute("aria-invalid", "false");
+  await expect(dialog.locator("#ocr-hint-lastName")).toHaveCount(0);
+  await surname.fill("");
+  await expect(dialog.locator("#ocr-hint-lastName")).toBeVisible();
+  const address = dialog.getByLabel("Адрес регистрации", { exact: true });
+  await expect(dialog.locator("#ocr-hint-address")).toContainText("Прочитан не весь адрес");
+  await address.fill("Г. ПРИМЕР, УЛ. ТЕСТОВАЯ, Д. 1");
+  await expect(dialog.locator("#ocr-hint-address")).toHaveCount(0);
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 740 }); await noOverflow(page);
+    await dialog.locator(".app-modal-body").evaluate(element => { element.scrollTop = 0; });
+    await expect(dialog.getByRole("button", { name: "Закрыть окно" })).toBeInViewport();
+    await expect(dialog.getByRole("button", { name: "Перенести в профиль" })).toBeInViewport();
+    await expect(dialog.getByRole("button", { name: "Перенести в профиль" })).toBeDisabled();
+    await page.screenshot({ path: `test-results/ocr-structured-review-${width}.png` });
+  }
+  expect(writes).toEqual([]);
+  await context.close();
+});

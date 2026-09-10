@@ -1,5 +1,15 @@
 export type PixelImage = { data: ArrayLike<number>; width: number; height: number };
 
+/** Preserve soft letter edges while reducing the coloured document background. */
+export function documentRedChannel(image: PixelImage): Uint8ClampedArray {
+  const output = new Uint8ClampedArray(image.width * image.height * 4);
+  for (let i = 0; i < output.length; i += 4) {
+    output[i] = output[i + 1] = output[i + 2] = image.data[i]!;
+    output[i + 3] = 255;
+  }
+  return output;
+}
+
 export type CaptureQuality = { dark: boolean; glare: boolean; soft: boolean; moving: boolean };
 export function inspectCapture(image: PixelImage, previous?: Uint8Array): { quality: CaptureQuality; gray: Uint8Array } {
   const { width, height, data } = image;

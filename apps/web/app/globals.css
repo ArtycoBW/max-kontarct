@@ -4321,6 +4321,26 @@ button.service-status {
 .ocr-confirm .checkbox { width: 20px; height: 20px; }
 .ocr-progress { display: grid; gap: 8px; margin-top: 16px; font-size: 13px; }
 .ocr-warning { padding: 12px; border-radius: 12px; background: #fff5df; font-size: 13px; line-height: 1.5; }
+.alert { display: flex; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 14px; font-size: 13px; line-height: 1.5; }
+.alert > svg { flex-shrink: 0; margin-top: 2px; }
+.alert-title { margin: 0 0 4px; font-size: 14px; font-weight: 600; line-height: 1.4; }
+.alert-description { font-size: 13px; line-height: 1.5; }
+.alert-destructive { color: #a32e24; background: #fff3f1; border-color: #f2c6c1; }
+.ocr-review-summary { margin-bottom: 24px; background: #f4f8f6; border-color: #d9e7de; }
+.ocr-review-summary.has-issues { background: #fff8ec; border-color: #f0dfbd; }
+.ocr-review-summary .ocr-summary-action { min-height: 32px; margin: 6px 0 -6px -8px; padding: 4px 8px; font-size: 12px; }
+.app-modal-body > .ocr-privacy { display: flex; gap: 8px; color: var(--muted); font-size: 12px; line-height: 1.5; margin-bottom: 16px; }
+.ocr-privacy svg { flex-shrink: 0; margin-top: 2px; color: #43816d; }
+.passport-review-groups { display: grid; gap: 24px; }
+.passport-review-group { min-width: 0; margin: 0; padding: 18px 0 0; border: 0; border-top: 1px solid var(--border); }
+.passport-review-group legend { display: flex; align-items: center; gap: 10px; padding: 0 12px 0 0; font-size: 15px; font-weight: 600; }
+.passport-review-group legend span { font-size: 11px; font-weight: 400; color: var(--muted); padding: 3px 8px; border-radius: 99px; background: #f6f3f0; }
+.ocr-review-field > label { display: flex; align-items: baseline; gap: 6px; }
+.ocr-review-field > label small { font-weight: 400; color: var(--muted); }
+.ocr-review-field.needs-attention .input, .ocr-review-field.needs-attention .date-picker-trigger { border-color: #d6a75b; }
+.ocr-review-field .ocr-field-hint { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: #8a6326; font-size: 12px; line-height: 1.45; }
+.ocr-field-hint svg { flex-shrink: 0; margin-top: 2px; }
+.ocr-failure { margin-top: 16px; }
 .passport-profile-fields { display: grid; gap: 16px; padding-top: 20px; border-top: 1px solid var(--border); }
 .passport-profile-fields .collapsible-trigger { padding: 4px 0 12px; font-size: 16px; }
 .passport-profile-fields > div[data-state="open"] { display: grid; gap: 16px; padding-top: 8px; }

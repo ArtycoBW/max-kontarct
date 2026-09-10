@@ -64,11 +64,11 @@ test("passport camera is opt-in, checks light locally, crops a preview and never
   await expect(dialog.getByRole("status")).toContainText("Света достаточно");
   for (const width of [320, 390, 1440]) {
     await page.setViewportSize({ width, height: 740 }); await noOverflow(page);
-    const view = (await dialog.locator(".passport-camera-view").boundingBox())!, guide = (await dialog.locator(".passport-camera-guide").boundingBox())!;
-    expect(guide.width).toBeGreaterThan(guide.height);
-    expect(Math.abs(guide.width / guide.height - 125 / 88)).toBeLessThan(.02);
-    expect(guide.x).toBeGreaterThan(view.x); expect(guide.x + guide.width).toBeLessThan(view.x + view.width);
-    expect(guide.y).toBeGreaterThan(view.y); expect(guide.y + guide.height).toBeLessThan(view.y + view.height);
+    // Read both rectangles in the same frame; separate calls can straddle a resize.
+    await expect.poll(() => dialog.locator(".passport-camera-view").evaluate(element => {
+      const view = element.getBoundingClientRect(), guide = element.querySelector(".passport-camera-guide")!.getBoundingClientRect();
+      return guide.width > guide.height && Math.abs(guide.width / guide.height - 125 / 88) < .02 && guide.x > view.x && guide.right < view.right && guide.y > view.y && guide.bottom < view.bottom;
+    })).toBe(true);
     await expect(dialog.getByRole("button", { name: "Сделать снимок", exact: true })).toBeInViewport();
     await expect(dialog.getByRole("button", { name: "Отменить съёмку", exact: true })).toBeInViewport();
     await dialog.locator(".passport-camera-view").scrollIntoViewIfNeeded();
