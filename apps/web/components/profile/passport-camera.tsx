@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Camera, CircleAlert } from "lucide-react";
+import { Camera, Check, CircleAlert, ScanLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DialogFooter } from "@/components/ui/dialog";
-import { cameraCrop, inspectCapture, type CaptureQuality } from "@/lib/ocr/image-quality";
+import { cameraCrop } from "@/lib/ocr/image-quality";
+import { liveCaptureReady, liveDefinitions } from "@/lib/ocr/live-fields";
+import { startLiveScanner, type LiveScanState } from "@/lib/ocr/live-scanner";
+import type { Quad } from "@/lib/ocr/perspective";
 import type { PassportPage } from "@/lib/ocr/passport-parser";
 
-export function PassportCamera({ page, onCapture, onCancel }: { page: PassportPage; onCapture: (file: File) => void; onCancel: () => void }) {
+export function PassportCamera({ page, onCapture, onCancel }: { page: PassportPage; onCapture: (file: File, corners?: Quad) => void; onCancel: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const frame = useRef<HTMLDivElement>(null);
   const alive = useRef(true);
@@ -16,7 +19,9 @@ export function PassportCamera({ page, onCapture, onCancel }: { page: PassportPa
   const [ready, setReady] = useState(false);
   const [taking, setTaking] = useState(false);
   const [error, setError] = useState("");
-  const [quality, setQuality] = useState<CaptureQuality | null>(null);
+  const [scan, setScan] = useState<LiveScanState>({ fields: [], phase: "loading", quality: null });
+  const quality = scan.quality;
+  const canRead = ready && liveCaptureReady(page, scan.fields, quality);
   const stop = () => { stream.current?.getTracks().forEach(track => track.stop()); stream.current = null; };
   const crop = () => {
     if (!video.current || !frame.current || !video.current.videoWidth) return null;
@@ -44,23 +49,19 @@ export function PassportCamera({ page, onCapture, onCancel }: { page: PassportPa
     return () => { cancelled = true; alive.current = false; stop(); if (element) element.srcObject = null; document.removeEventListener("visibilitychange", hidden); };
   }, []);
   useEffect(() => {
-    if (!ready) return;
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    let previous: Uint8Array | undefined;
-    const timer = setInterval(() => {
-      const area = crop();
-      if (!ctx || !area || !video.current || video.current.readyState < 2) return;
-      canvas.width = 240; canvas.height = Math.round(240 * area.height / area.width);
-      ctx.drawImage(video.current, area.left, area.top, area.width, area.height, 0, 0, canvas.width, canvas.height);
-      const result = inspectCapture(ctx.getImageData(0, 0, canvas.width, canvas.height), previous);
-      previous = result.gray; setQuality(result.quality);
-    }, 500);
-    return () => { clearInterval(timer); previous = undefined; canvas.width = 0; canvas.height = 0; };
-  }, [ready]);
+    if (!ready || taking || !video.current) return;
+    const scanner = startLiveScanner(video.current, page, crop, setScan);
+    return () => scanner.stop();
+  }, [ready, taking, page]);
   const capture = async () => {
-    const area = crop();
-    if (!area || !video.current || !ready || taking) return;
+    const guide = crop();
+    if (!guide || !video.current || !ready || taking) return;
+    const view = video.current.getBoundingClientRect();
+    // Keep the entire visible camera image so the four-point editor can recover margins.
+    const area = cameraCrop(video.current.videoWidth, video.current.videoHeight, view.width, view.height, { x: 0, y: 0, width: view.width, height: view.height });
+    const left = Math.max(0, (guide.left - area.left) / area.width), top = Math.max(0, (guide.top - area.top) / area.height);
+    const right = Math.min(1, left + guide.width / area.width), bottom = Math.min(1, top + guide.height / area.height);
+    const corners: Quad = [{ x: left, y: top }, { x: right, y: top }, { x: right, y: bottom }, { x: left, y: bottom }];
     setTaking(true);
     const canvas = document.createElement("canvas");
     try {
@@ -73,7 +74,7 @@ export function PassportCamera({ page, onCapture, onCancel }: { page: PassportPa
       if (!alive.current) return;
       if (!blob) throw new Error();
       stop();
-      onCapture(new File([blob], `passport-${page}.jpg`, { type: "image/jpeg" }));
+      onCapture(new File([blob], `passport-${page}.jpg`, { type: "image/jpeg" }), corners);
     } catch { if (alive.current) { setError("Не удалось сделать снимок. Попробуйте ещё раз или загрузите фото."); setTaking(false); } }
     finally { canvas.width = 0; canvas.height = 0; }
   };
@@ -87,7 +88,10 @@ export function PassportCamera({ page, onCapture, onCancel }: { page: PassportPa
     <p>{page === "identity" ? "Снимите одну страницу. ФИО и обе строки с символами внизу должны целиком попасть в рамку." : page === "registration" ? "Расположите страницу с актуальным штампом регистрации внутри рамки. Не закрывайте текст пальцами." : "Расположите страницу с органом и датой выдачи внутри рамки. Не закрывайте текст пальцами."}</p>
     <div className="passport-camera-view">
       <video ref={video} autoPlay playsInline muted aria-label="Предпросмотр камеры" onLoadedData={() => { if (stream.current) setReady(true); }} />
-      <div ref={frame} className={`passport-camera-guide ${page === "registration" ? "is-portrait" : "is-landscape"}`} aria-hidden="true" />
+      <div ref={frame} className={`passport-camera-guide ${page === "registration" ? "is-portrait" : "is-landscape"} ${canRead ? "is-readable" : ""}`} aria-hidden="true">
+        {ready ? scan.fields.map(field => <div key={field.key} className={`passport-live-zone ${field.stable ? "is-stable" : ""}`}
+          style={{ left: `${field.box.x * 100}%`, top: `${field.box.y * 100}%`, width: `${field.box.width * 100}%`, height: `${field.box.height * 100}%` }}><span>{field.stable ? "✓ " : ""}{field.label}</span></div>) : null}
+      </div>
     </div>
     <div role="status" className="passport-camera-quality">
       {!ready && !error ? <p>Подключаем камеру…</p> : null}
@@ -95,8 +99,15 @@ export function PassportCamera({ page, onCapture, onCancel }: { page: PassportPa
       {ready && quality && !messages.length ? <p>Света достаточно. Проверьте, что текст читается и вся страница попала в рамку.</p> : null}
       {ready ? messages.map(message => <p className="ocr-warning" key={message}><CircleAlert size={16} aria-hidden="true" /> {message}</p>) : null}
     </div>
+    {ready ? <section className={`passport-live-panel ${canRead ? "is-readable" : ""}`} aria-label="Читаемость полей">
+      <div className="passport-live-heading">{canRead ? <Check size={18} /> : <ScanLine size={18} />}<strong>{canRead ? "Основные поля читаются — можно снимать" : scan.phase === "loading" ? "Готовим подсветку полей…" : scan.phase === "unavailable" ? "Подсветка пока недоступна" : "Наведите камеру на текст"}</strong></div>
+      {scan.phase === "unavailable" ? <p>Можно сделать снимок и проверить его вручную. Попробуйте открыть камеру заново для подсветки.</p> : <ul className="passport-live-checklist">{liveDefinitions[page].filter(field => field.required).map(definition => {
+        const found = scan.fields.find(field => field.key === definition.key);
+        return <li key={definition.key} className={found?.stable ? "is-stable" : ""}>{found?.stable ? <Check size={14} /> : <span className="passport-live-dot" />}<span>{definition.label}</span><small>{found?.stable ? "Читается" : found ? "Проверяем" : "Не найдено"}</small></li>;
+      })}</ul>}
+    </section> : null}
     {error ? <p role="alert" className="field-error">{error}</p> : null}
-    <p className="passport-camera-hint">Подсказки приблизительные и не гарантируют качество. Перед распознаванием проверьте снимок. Кадры не отправляются на сервер.</p>
+    <p className="passport-camera-hint">Зелёный — поле прочитано в двух кадрах, жёлтый — ещё проверяем. Это подсказка, а не проверка правильности данных. Снять можно и без подсветки; после съёмки проверьте фото. Кадры не отправляются на сервер.</p>
     {error ? <label className="passport-photo-upload"><Camera size={18} /> Камера телефона
       <Input form="passport-ocr-review" type="file" capture="environment" accept="image/*" aria-label="Снять системной камерой" onChange={event => { const file = event.target.files?.[0]; if (file) { stop(); onCapture(file); } event.target.value = ""; }} />
     </label> : null}

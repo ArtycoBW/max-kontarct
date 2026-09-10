@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, CircleAlert, Camera, RotateCw, ScanLine, ShieldCheck, Trash2, Upload, X } from "lucide-react";
+import { ArrowDown, CircleAlert, Camera, Crop, ScanLine, ShieldCheck, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogClose, DialogFooter } from "@/components/ui/dialog";
@@ -12,6 +12,8 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { passportFieldLabels, type PassportData, type PassportField, type PassportPage } from "@/lib/ocr/passport-parser";
 import { recognizePassport, validatePassportPhoto } from "@/lib/ocr/passport-ocr";
 import { PassportCamera } from "./passport-camera";
+import { PassportPhotoEditor, type PhotoEdit } from "./passport-photo-editor";
+import { fullPhoto } from "@/lib/ocr/perspective";
 import { activeReviewIssues, issueDescription, reviewGroups, type PassportReview } from "@/lib/ocr/passport-review";
 
 const pages: { key: PassportPage; title: string; hint: string }[] = [
@@ -19,7 +21,7 @@ const pages: { key: PassportPage; title: string; hint: string }[] = [
   { key: "identity", title: "Фото и личные данные", hint: "Страница с ФИО, датой и местом рождения" },
   { key: "registration", title: "Регистрация", hint: "Страница с актуальной отметкой о месте жительства" },
 ];
-type Photo = { file: File; url: string; rotation: number };
+type Photo = { file: File; url: string; rotation: number; edit?: PhotoEdit };
 const dateFields = new Set(["birthDate", "issuedAt"]);
 
 export function PassportScanner({ onApply }: { onApply: (data: PassportData) => void }) {
@@ -42,20 +44,22 @@ function PassportScanDialog({ onApply }: { onApply: (data: PassportData) => void
   const [edited, setEdited] = useState<PassportField[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const [cameraPage, setCameraPage] = useState<PassportPage | null>(null);
+  const [editingPage, setEditingPage] = useState<PassportPage | null>(null);
   useEffect(() => {
     const urls = resources.current;
     return () => { task.current?.abort(); urls.forEach(url => URL.revokeObjectURL(url)); urls.clear(); };
   }, []);
-  const replace = (key: PassportPage, file?: File) => {
+  const replace = (key: PassportPage, file?: File, edit?: PhotoEdit) => {
     try {
       if (file) validatePassportPhoto(file);
       const previous = photos[key];
       if (previous) { URL.revokeObjectURL(previous.url); resources.current.delete(previous.url); }
       const url = file ? URL.createObjectURL(file) : "";
       if (url) resources.current.add(url);
-      setPhotos(current => ({ ...current, [key]: file ? { file, url, rotation: 0 } : undefined }));
+      setPhotos(current => ({ ...current, [key]: file ? { file, url, rotation: 0, edit } : undefined }));
       setError(""); setData(null); setConfirmed(false); setEdited([]);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось открыть фотографию."); }
+      return true;
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось открыть фотографию."); return false; }
   };
   const scan = async () => {
     const controller = new AbortController();
@@ -82,10 +86,12 @@ function PassportScanDialog({ onApply }: { onApply: (data: PassportData) => void
     input?.scrollIntoView({ block: "center", behavior: "auto" }); input?.focus({ preventScroll: true });
   };
   return <DialogContent className="app-modal" showCloseButton={false} aria-describedby={undefined}>
-    <DialogHeader className="app-modal-header"><DialogTitle>{cameraPage ? `Съёмка: ${pages.find(page => page.key === cameraPage)?.title}` : data ? "Проверьте данные" : "Сканирование паспорта"}</DialogTitle>
+    <DialogHeader className="app-modal-header"><DialogTitle>{editingPage ? "Обрезка и выравнивание" : cameraPage ? `Съёмка: ${pages.find(page => page.key === cameraPage)?.title}` : data ? "Проверьте данные" : "Сканирование паспорта"}</DialogTitle>
       <DialogClose asChild><Button variant="unstyled" className="app-modal-close" type="button" aria-label="Закрыть окно"><X size={20} /></Button></DialogClose>
     </DialogHeader>
-    {cameraPage ? <PassportCamera key={cameraPage} page={cameraPage} onCancel={() => setCameraPage(null)} onCapture={file => { replace(cameraPage, file); setCameraPage(null); }} /> : <div className="app-modal-body">
+    {editingPage && photos[editingPage] ? <PassportPhotoEditor page={editingPage} edit={photos[editingPage]!.edit ?? { source: photos[editingPage]!.file, rotation: photos[editingPage]!.rotation, corners: fullPhoto() }}
+      onCancel={() => setEditingPage(null)} onApply={(file, edit) => { replace(editingPage, file, edit); setEditingPage(null); }} />
+      : cameraPage ? <PassportCamera key={cameraPage} page={cameraPage} onCancel={() => setCameraPage(null)} onCapture={(file, corners) => { if (replace(cameraPage, file, { source: file, rotation: 0, corners: corners ?? fullPhoto() })) setEditingPage(cameraPage); setCameraPage(null); }} /> : <div className="app-modal-body">
     <p className="ocr-privacy"><ShieldCheck size={16} aria-hidden="true" /> Фото обрабатываются только на вашем устройстве. Данные сохранятся после отдельного нажатия «Сохранить профиль».</p>
     {!data ? <>
       <p>Лучше снять каждую страницу отдельно, ровно и без бликов. Разворот с выдачей и личными данными можно загрузить в «Фото и личные данные». До трёх фотографий; регистрация может находиться дальше в паспорте.</p>
@@ -95,7 +101,7 @@ function PassportScanDialog({ onApply }: { onApply: (data: PassportData) => void
           <div className="passport-photo-preview">{/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={photos[key]!.url} alt={title} style={{ transform: `rotate(${photos[key]!.rotation}deg)` }} />
           </div>
-          <div className="passport-photo-actions"><Button type="button" variant="ghost" disabled={busy} onClick={() => setPhotos(current => ({ ...current, [key]: { ...current[key]!, rotation: (current[key]!.rotation + 90) % 360 } }))}><RotateCw size={16} /> Повернуть</Button>
+          <div className="passport-photo-actions"><Button type="button" variant="ghost" disabled={busy} aria-label={`Редактировать: ${title}`} onClick={() => setEditingPage(key)}><Crop size={16} /> Редактировать</Button>
             <Button type="button" variant="ghost" disabled={busy} aria-label={`Удалить: ${title}`} onClick={() => replace(key)}><Trash2 size={16} /></Button></div>
         </> : null}
         <div className="passport-photo-source-actions"><label className="passport-photo-upload"><Upload size={18} /> {photos[key] ? "Заменить фото" : "Загрузить фото"}
@@ -129,7 +135,7 @@ function PassportScanDialog({ onApply }: { onApply: (data: PassportData) => void
     {busy ? <div className="ocr-progress" role="status"><Progress value={progress} aria-label="Распознавание паспорта" /><span>{progress < 15 ? "Загружаем локальный модуль распознавания…" : `Распознаём страницы: ${progress}%`}</span></div> : null}
     {error ? <Alert variant="destructive" className="ocr-failure"><CircleAlert size={20} aria-hidden="true" /><div><AlertTitle>Не получилось прочитать фото</AlertTitle><AlertDescription>{error}</AlertDescription></div></Alert> : null}
     </div>}
-    {!cameraPage ? <DialogFooter className="app-modal-footer">{data ? <Button type="button" className="full-width" disabled={!confirmed || !Object.values(data).some(Boolean)} onClick={() => onApply(data)}>Перенести в профиль</Button>
+    {!cameraPage && !editingPage ? <DialogFooter className="app-modal-footer">{data ? <Button type="button" className="full-width" disabled={!confirmed || !Object.values(data).some(Boolean)} onClick={() => onApply(data)}>Перенести в профиль</Button>
       : busy ? <Button type="button" variant="outline" className="full-width" onClick={() => { task.current?.abort(); setBusy(false); }}>Отменить распознавание</Button>
         : <Button type="button" className="full-width" disabled={!Object.values(photos).some(Boolean)} onClick={() => void scan()}>Распознать данные</Button>}</DialogFooter> : null}
   </DialogContent>;

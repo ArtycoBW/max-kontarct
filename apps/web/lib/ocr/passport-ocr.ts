@@ -11,7 +11,7 @@ export function validatePassportPhoto(file: Pick<File, "size" | "type">) {
   if (file.size > 12 * 1024 * 1024) throw new Error("Фотография слишком большая. Максимум — 12 МБ на страницу.");
   if (!file.size) throw new Error("Файл пустой. Выберите другую фотографию.");
 }
-async function preparePhoto(photo: PassportPhoto, signal: AbortSignal) {
+export async function preparePhoto(photo: PassportPhoto, signal: AbortSignal) {
   validatePassportPhoto(photo.file);
   signal.throwIfAborted();
   let bitmap: ImageBitmap;

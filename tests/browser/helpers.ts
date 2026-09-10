@@ -15,7 +15,7 @@ export async function actor(browser: Browser, id: number, phone: string) {
     const authDate = String(Date.now());
     const hash = createHmac("sha256", testBotToken).update(`authDate=${authDate}\nphone=${phone.replace("+", "")}\nuserId=${id}`).digest("hex");
     const contact = { authDate, hash, phone };
-    await route.fulfill({ contentType: "application/javascript", body: `window.WebApp={initData:${JSON.stringify(maxProof(id))},initDataUnsafe:{},ready(){},expand(){},requestContact:async()=>(${JSON.stringify(contact)})};` });
+    await route.fulfill({ contentType: "application/javascript", body: `window.WebApp={initData:${JSON.stringify(maxProof(id))},initDataUnsafe:{},ready(){window.testMaxUiReady=true},expand(){},requestContact:async()=>(${JSON.stringify(contact)})};` });
   });
   await context.route("https://max.ru/browser_test_bot**", async (route) => {
     const payload = new URL(route.request().url()).searchParams.get("startapp") || "";
@@ -24,6 +24,9 @@ export async function actor(browser: Browser, id: number, phone: string) {
   return context;
 }
 export async function onboarding(page: Page, landing = true) {
+  // The SSR landing button is visible before React attaches its click handler,
+  // particularly in WebKit. The fake MAX ready callback acknowledges UI mount.
+  await page.waitForFunction(() => (window as Window & { testMaxUiReady?: boolean }).testMaxUiReady === true);
   if (landing) await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
   await page.getByRole("switch", { name: "Обработка персональных данных" }).check();
   await page.getByRole("switch", { name: "Условия использования" }).check();
