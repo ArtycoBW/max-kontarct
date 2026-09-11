@@ -54,7 +54,6 @@ import { VoiceInput } from "@/components/ui/voice-input";
 import { DealIntakePanel } from "@/components/templates/deal-intake-panel";
 import { useAuth } from "@/components/providers/auth-provider";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
-import { LegalDocuments } from "@/components/onboarding/legal-documents";
 import { ProfileScreen } from "@/components/profile/profile-screen";
 import { DealWorkspaceScreen } from "@/components/deals/deal-workspace-screen";
 import { DocumentsScreen } from "@/components/files/documents-screen";
@@ -2278,7 +2277,6 @@ function StartScreen({
                     if (root && scroller) scroller.scrollTo({ top: (root.offsetHeight - scroller.clientHeight) * (index / 3), behavior: reducedMotion ? "instant" : "smooth" });
                   }}>{index + 1}</Button>)}
                 </nav>
-                <LegalDocuments />
               </section>
 
               <div className="start-screen-scroll-cue" aria-hidden="true">

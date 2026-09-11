@@ -18,7 +18,10 @@ test("smooth start keeps card size stable and legal modal chrome stays visible o
     await expect(page.locator(".start-screen-canvas")).toHaveCSS("opacity", "1");
     if (title === "Подпишите и сохраните") await expect.poll(() => page.locator(".start-screen-canvas").evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL())).not.toBe(initialFrame);
   }
-  await page.getByRole("button", { name: "Документы и согласия", exact: true }).click();
+  await expect(page.locator(".start-screen-card .legal-document-link")).toHaveCount(0);
+  await page.screenshot({ path: "test-results/start-without-legal-link.png" });
+  await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
+  await page.getByRole("button", { name: "Читать: Обработка персональных данных", exact: true }).click();
   const dialog = page.getByRole("dialog");
   for (const width of [320, 390, 1440]) {
     await page.setViewportSize({ width, height: 640 });

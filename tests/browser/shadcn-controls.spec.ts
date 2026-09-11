@@ -1,30 +1,24 @@
 import { expect, test } from "@playwright/test";
 import { actor, noOverflow, onboarding } from "./helpers";
 
-test("legal Select fits small viewports, traps focus in Dialog and restores the trigger", async ({ browser }) => {
+test("registration legal Dialog fits small viewports, traps focus and restores the trigger", async ({ browser }) => {
   const context = await actor(browser, 74001, "+79997004001");
   const page = await context.newPage();
   await page.goto("/");
-  const trigger = page.getByRole("button", { name: "Документы и согласия", exact: true });
+  await page.waitForFunction(() => (window as Window & { testMaxUiReady?: boolean }).testMaxUiReady === true);
+  await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
+  const trigger = page.getByRole("button", { name: "Читать: Уведомления о статусах", exact: true });
   for (const [width, height] of [[320, 568], [390, 740], [1440, 900]]) {
     await page.setViewportSize({ width, height });
     await trigger.click();
     const dialog = page.getByRole("dialog");
-    const select = dialog.getByRole("combobox", { name: "Выберите документ" });
-    await select.click();
-    const list = page.getByRole("listbox");
-    await expect(page.getByRole("option")).toHaveCount(4);
-    // Floating positioning is asynchronous after mounting/resizing the portal.
+    await expect(dialog.getByRole("article")).toContainText("Согласие на сервисные уведомления");
     await expect.poll(async () => {
-      const bounds = await list.boundingBox();
+      const bounds = await dialog.boundingBox();
       return Boolean(bounds && bounds.x >= 8 && bounds.x + bounds.width <= width - 8
         && bounds.y >= 8 && bounds.y + bounds.height <= height - 8);
     }).toBe(true);
-    await page.screenshot({ path: `test-results/shadcn-select-${width}.png` });
-    await page.keyboard.press("End");
-    await expect(page.getByRole("option", { name: "Согласие на сервисные уведомления", exact: true })).toBeFocused();
-    await page.keyboard.press("Enter");
-    await expect(dialog.getByRole("article")).toContainText("Согласие на сервисные уведомления");
+    await page.screenshot({ path: `test-results/shadcn-legal-registration-${width}.png` });
     await dialog.getByRole("button", { name: "Понятно" }).focus();
     await page.keyboard.press("Tab");
     expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true);

@@ -1,40 +1,45 @@
 import { expect, test } from "@playwright/test";
 import { actor, noOverflow, onboarding } from "./helpers";
 
-test("start chapters reveal content and legal documents open without accepting them", async ({ browser }) => {
+test("legal documents are available only during registration and reading does not accept them", async ({ browser }) => {
   const context = await actor(browser, 72011, "+79997002011");
   const page = await context.newPage();
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Опишите свою сделку" })).toBeVisible();
   await page.getByRole("button", { name: "Подпишите и сохраните", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Подпишите и сохраните" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Документы и согласия", exact: true })).toHaveCount(0);
+  await expect(page.locator(".legal-document-link")).toHaveCount(0);
   await page.screenshot({ path: "test-results/start-chapters.png", fullPage: true });
-  await page.getByRole("button", { name: "Документы и согласия", exact: true }).click();
-  await expect(page.getByRole("dialog")).not.toContainText("Проект · версия");
-  await expect(page.getByRole("dialog").getByRole("article")).toHaveCount(1);
-  const picker = page.getByRole("combobox", { name: "Выберите документ" });
-  await picker.click();
-  await expect(page.getByRole("option")).toHaveCount(4);
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(picker).toBeFocused();
-  for (const title of ["Пользовательские условия / оферта", "Соглашение о простой электронной подписи", "Согласие на сервисные уведомления", "Обработка персональных данных"]) {
-    await picker.click();
-    await page.getByRole("option", { name: title, exact: true }).click();
-    await expect(page.getByRole("dialog").getByRole("article")).toHaveCount(1);
-    await expect(page.getByRole("dialog").getByRole("article").getByRole("heading")).toHaveText(title);
-  }
-  await page.screenshot({ path: "test-results/legal-documents.png", fullPage: true });
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: "Документы и согласия", exact: true })).toBeFocused();
   await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
-  await page.getByRole("button", { name: "Читать: Обработка персональных данных", exact: true }).click();
-  await expect(page.getByRole("dialog")).toContainText("Обработка персональных данных");
-  await page.getByRole("dialog").getByRole("button", { name: "Понятно" }).click();
-  await expect(page.getByRole("switch", { name: "Обработка персональных данных" })).not.toBeChecked();
+  const accept = page.getByRole("button", { name: "Принять и продолжить", exact: true });
+  await expect(accept).toBeDisabled();
+  for (const [label, title] of [
+    ["Читать: Обработка персональных данных", "Обработка персональных данных"],
+    ["Читать: Условия использования", "Пользовательские условия / оферта"],
+    ["Читать: Уведомления о статусах", "Согласие на сервисные уведомления"],
+    ["Соглашение о простой электронной подписи", "Соглашение о простой электронной подписи"],
+  ]) {
+    const trigger = page.getByRole("button", { name: label, exact: true });
+    await trigger.click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).not.toContainText("Проект · версия");
+    await expect(dialog.getByRole("article")).toHaveCount(1);
+    await expect(dialog.getByRole("article").getByRole("heading")).toHaveText(title);
+    await page.keyboard.press("Escape");
+    await expect(trigger).toBeFocused();
+    await expect(accept).toBeDisabled();
+  }
+  for (const label of ["Обработка персональных данных", "Условия использования", "Уведомления о статусах"]) {
+    await expect(page.getByRole("switch", { name: label, exact: true })).not.toBeChecked();
+  }
   for (const width of [320, 390, 1440]) {
     await page.setViewportSize({ width, height: 740 }); await noOverflow(page);
   }
+  await onboarding(page, false);
+  await page.getByRole("button", { name: "Профиль", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Основные данные", exact: true })).toBeVisible();
+  await expect(page.locator(".legal-document-link")).toHaveCount(0);
   await context.close();
 });
 

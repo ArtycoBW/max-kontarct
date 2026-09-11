@@ -36,7 +36,6 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { getProfile, updateProfile } from "@/lib/api/profile";
 import { getAddressSuggestions, normalizeAddress } from "@/lib/api/data-normalization";
 import { queryKeys } from "@/lib/api/query-keys";
-import { LegalDocuments } from "@/components/onboarding/legal-documents";
 import { PassportScanner } from "./passport-scanner";
 import { passportFieldLabels } from "@/lib/ocr/passport-parser";
 
@@ -352,7 +351,6 @@ export function ProfileScreen({
           <Save size={16} /> {mutation.isPending ? "Сохраняем…" : "Сохранить профиль"}
         </Button>
       </form>
-      <LegalDocuments />
     </div>
   );
 }
