@@ -117,7 +117,7 @@ test("passport camera is opt-in, checks light locally, crops a preview and never
   const result = dialog.getByRole("region", { name: "Результат фото: Фото и личные данные", exact: true });
   await expect(result).toContainText("мало света");
   await expect(result).toContainText("Прочитано 4 из 8 полей", { timeout: 30_000 });
-  await expect(result).toContainText("после обрезки");
+  await expect(result).toContainText("целиком видна на фото");
   await expect.poll(() => page.evaluate(() => (window as unknown as TestWindow).cameraTest.workerStopped)).toBe(1);
   expect(writes).toEqual([]); expect(external).toEqual([]);
   expect(await (await page.request.get("/api/v1/profile")).json()).toEqual(before);

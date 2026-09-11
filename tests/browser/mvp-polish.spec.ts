@@ -83,20 +83,27 @@ test("speech is opt-in, preserves manual edits, handles denial and unsupported W
   await context.close();
 });
 
-async function specimen(page: Page, lines: string[], rotation = 0) {
+async function specimen(page: Page, lines: string[], rotation = 0, uncropped = false) {
   // Deliberately synthetic, not an identity document. Raster pixels exercise real WASM OCR.
-  const base64 = await page.evaluate(({ lines, rotation }) => {
-    const canvas = document.createElement("canvas"); canvas.width = 1500; canvas.height = 1200;
+  const base64 = await page.evaluate(({ lines, rotation, uncropped }) => {
+    let canvas = document.createElement("canvas"); canvas.width = 1500; canvas.height = 1200;
     const ctx = canvas.getContext("2d")!; ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, 1500, 1200);
     ctx.fillStyle = "#000"; ctx.font = "40px Arial";
     lines.forEach((line, index) => ctx.fillText(line, 100, 100 + index * 95));
+    if (uncropped) {
+      const frame = document.createElement("canvas"); frame.width = 1780; frame.height = 1560;
+      const background = frame.getContext("2d")!; background.fillStyle = "#78694d"; background.fillRect(0, 0, frame.width, frame.height);
+      background.strokeStyle = "#564b37";
+      for (let x = 0; x < frame.width; x += 17) { background.beginPath(); background.moveTo(x, 0); background.lineTo(x + 70, frame.height); background.stroke(); }
+      background.drawImage(canvas, 120, 170); canvas = frame;
+    }
     if (rotation) {
       const turned = document.createElement("canvas"); turned.width = rotation % 180 ? canvas.height : canvas.width; turned.height = rotation % 180 ? canvas.width : canvas.height;
       const target = turned.getContext("2d")!; target.translate(turned.width / 2, turned.height / 2); target.rotate(rotation * Math.PI / 180); target.drawImage(canvas, -canvas.width / 2, -canvas.height / 2);
       return turned.toDataURL("image/png").split(",")[1]!;
     }
     return canvas.toDataURL("image/png").split(",")[1]!;
-  }, { lines, rotation });
+  }, { lines, rotation, uncropped });
   return { name: "synthetic-ocr-test.png", mimeType: "image/png", buffer: Buffer.from(base64, "base64") };
 }
 
@@ -197,6 +204,33 @@ test("real local OCR handles 90/180/270 degree photos after four-point editing",
   expect(writes).toEqual([]); expect(external).toEqual([]);
   await expect(dialog.getByRole("button", { name: "Перенести в профиль" })).toBeDisabled();
   await context.close();
+});
+
+test("real local passport OCR combines uncropped sideways photos without saving or external requests", async ({ browser }) => {
+  const context = await actor(browser, 73019, "+79997003019");
+  const page = await context.newPage(); await page.goto("/"); await onboarding(page);
+  await page.getByRole("button", { name: "Профиль", exact: true }).click();
+  const before = await (await page.request.get("/api/v1/profile")).json();
+  await page.getByRole("button", { name: "Считать данные паспорта", exact: true }).click();
+  const dialog = page.getByRole("dialog"), writes: string[] = [], external: string[] = [];
+  page.on("request", req => { if (["POST", "PUT", "PATCH"].includes(req.method())) writes.push(req.url()); if (/^https?:/.test(req.url()) && new URL(req.url()).origin !== "http://127.0.0.1:4300") external.push(req.url()); });
+  await dialog.getByLabel("Фото: Фото и личные данные", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ", "ФАМИЛИЯ ПРИМЕРОВ", "ИМЯ ИВАН", "ОТЧЕСТВО ИВАНОВИЧ", "ДАТА РОЖДЕНИЯ 01.02.1990", "ПОЛ МУЖ.", "МЕСТО РОЖДЕНИЯ Г. ПРИМЕР", "СЕРИЯ НОМЕР", "00 00 000000"], 90, true));
+  await dialog.getByLabel("Фото: Кем выдан паспорт", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ", "ПАСПОРТ ВЫДАН", "ТЕСТОВЫМ ОТДЕЛОМ", "ДАТА ВЫДАЧИ 02.03.2010", "КОД ПОДРАЗДЕЛЕНИЯ 000-000"], 270, true));
+  await dialog.getByLabel("Фото: Регистрация", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ", "ЗАРЕГИСТРИРОВАН", "Г. ПРИМЕР", "УЛ. ТЕСТОВАЯ, Д. 1, КВ. 2", "ПОДПИСЬ СОТРУДНИКА"], 0, true));
+  await dialog.getByRole("button", { name: "Проверить данные", exact: true }).click({ timeout: 180_000 });
+  await expect(dialog).toContainText("Заполнено 12 из 12 полей");
+  for (const [label, value] of [["Фамилия", "Примеров"], ["Имя", "Иван"], ["Серия паспорта", "0000"], ["Номер паспорта", "000000"], ["Код подразделения", "000-000"]]) await expect(dialog.getByLabel(label!, { exact: true })).toHaveValue(value!);
+  await expect(dialog.locator("#ocr-middleName")).toHaveValue("Иванович");
+  await expect(dialog.getByLabel("Место рождения", { exact: true })).toHaveValue("Г. ПРИМЕР");
+  await expect(dialog.getByLabel("Адрес регистрации", { exact: true })).toHaveValue(/Г. ПРИМЕР.*ТЕСТОВАЯ.*Д. 1.*КВ. 2/);
+  await expect(dialog.getByRole("button", { name: "Перенести в профиль" })).toBeDisabled();
+  await page.screenshot({ path: "test-results/ocr-uncropped-invented-review.png" });
+  await dialog.getByRole("button", { name: "Выбрать другие фотографии", exact: true }).click();
+  await dialog.getByLabel("Фото: Регистрация", { exact: true }).setInputFiles(await specimen(page, ["ЗАРЕГИСТРИРОВАН", "Г. ПРИМЕР", "УЛ. ТЕСТОВАЯ"]));
+  await expect(dialog.getByRole("region", { name: "Результат фото: Регистрация", exact: true })).toContainText("Адрес извлечён частично", { timeout: 160_000 });
+  expect(writes).toEqual([]); expect(external).toEqual([]);
+  expect(await (await page.request.get("/api/v1/profile")).json()).toEqual(before);
+  await dialog.getByRole("button", { name: "Закрыть окно" }).click(); await context.close();
 });
 
 test("OCR releases the worker on a model failure and on cancellation during loading", async ({ browser }) => {

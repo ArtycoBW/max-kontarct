@@ -77,6 +77,27 @@ describe("passport layout and checksums (invented fixtures only)", () => {
     const result = mergePassportReads([{ ...checked, checkedFields: [...checked.checkedFields] }, other]);
     expect(result.data.number).toBe("123456"); expect(result.conflicts).toEqual(["birthDate"]);
   });
+  it("reassembles birthplace rows by geometry instead of sparse OCR column order", () => {
+    const rows = [line("ИВАНОВИЧ", 600, 790), line("01.02.1990", 650, 825), line("МЕСТО РОЖДЕНИЯ", 300, 860), line("Г.", 580, 860), line("ТЕСТОВАЯ", 570, 890), line("ПРИМЕР", 630, 860), line("ОБЛАСТЬ", 720, 890)];
+    expect(readPassportLayout("identity", rows, "").data.birthPlace).toBe("Г. ПРИМЕР ТЕСТОВАЯ ОБЛАСТЬ");
+  });
+  it("excludes a separate gender row from the birthplace block", () => {
+    const rows = [line("ИВАНОВИЧ", 600, 790), line("01.02.1990", 650, 825), line("МУЖ.", 600, 855), line("Г. ПРИМЕР", 600, 885)];
+    expect(readPassportLayout("identity", rows, "").data.birthPlace).toBe("Г. ПРИМЕР");
+  });
+  it("accepts the observed full place even when its fragment has higher confidence", () => {
+    const make = (birthPlace: string, confidence: number) => ({ data: { ...emptyPassport, birthPlace }, warnings: [], mrz: false, confidence: { birthPlace: confidence } });
+    expect(mergePassportReads([make("Г. ПРИМЕР ТЕСТОВАЯ ОБЛАСТЬ", 90), make("ТЕСТОВАЯ ОБЛАСТЬ", 96), make("ПРИМЕР ТЕСТОВАЯ ОБЛАСТЬ", 94)]).data.birthPlace).toBe("Г. ПРИМЕР ТЕСТОВАЯ ОБЛАСТЬ");
+    expect(mergePassportReads([make("Г. ПРИМЕР", 90), make("Г. ДРУГОЙ", 96)]).conflicts).toEqual(["birthPlace"]);
+  });
+  it("keeps a corroborated name with a review flag, but never overrides a usable competing name", () => {
+    const make = (lastName: string, confidence: number) => ({ data: { ...emptyPassport, lastName }, warnings: [], mrz: false, confidence: { lastName: confidence } });
+    const reads = [make("Примеров", 82), make("Примеров", 78)];
+    const result = mergePassportReads([...reads, make("Ли", 72)]);
+    expect(result.data.lastName).toBe("Примеров"); expect(result.uncertain).toContain("lastName");
+    expect(mergePassportReads([...reads, make("Ли", 80)]).conflicts).toContain("lastName");
+    expect(mergePassportReads([reads[0]!, make("Ли", 72)]).conflicts).toContain("lastName");
+  });
   it("rejects impossible issuance dates even with matching numeric checksums", () => {
     expect(readRussianMrz(mrz("900201", "0100230000000<"))).toBeNull();
     expect(readRussianMrz(mrz("900201", "0910302000000<"))).toBeNull();

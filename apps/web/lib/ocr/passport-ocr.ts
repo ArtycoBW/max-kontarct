@@ -7,6 +7,7 @@ import { mergeRegistrations, readStreetRetry } from "./registration";
 import { orientDocument, rotateDocument } from "./orientation";
 import { printedNumber } from "./printed-number";
 import { readSerialRegion, serialContrast } from "./serial-region";
+import { readRegistrationNumbers, readRegistrationStreet } from "./registration-retry";
 
 export type PassportPhoto = { page: PassportPage; file: File; rotation: number };
 export function validatePassportPhoto(file: Pick<File, "size" | "type">) {
@@ -83,18 +84,9 @@ export async function recognizePassport(photos: PassportPhoto[], signal: AbortSi
             const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
             pixels.data.set(pass === 1 ? documentRedChannel(pixels) : enhanceDocument(pixels)); ctx.putImageData(pixels, 0, 0);
           }
-          const result = await worker.recognize(canvas, { rotateAuto: pass === 0, imageColor: pass === 0 });
-          if (pass === 0 && result.rotateRadians && result.imageColor?.startsWith("data:image/png;base64,")) {
-            // Deskew changes coordinates. Reuse the worker's actual corrected pixels for
-            // every later crop, rather than applying corrected boxes to the original photo.
-            const bytes = Uint8Array.from(atob(result.imageColor.slice("data:image/png;base64,".length)), char => char.charCodeAt(0));
-            const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
-            try {
-              signal.throwIfAborted();
-              source.width = canvas.width = bitmap.width; source.height = canvas.height = bitmap.height;
-              source.getContext("2d")!.drawImage(bitmap, 0, 0); canvas.getContext("2d")!.drawImage(bitmap, 0, 0);
-            } finally { bitmap.close(); }
-          }
+          // On an uncropped photo automatic skew may follow the table/security
+          // pattern and distort readable text. Deskew only isolated text regions.
+          const result = await worker.recognize(canvas, { rotateAuto: false });
           const lines = result.blocks?.flatMap(block => block.paragraphs.flatMap(paragraph => paragraph.lines)) ?? [];
           if (pass === 0) { firstLines = lines; firstText = result.text; }
           else enhancedLines = lines;
@@ -103,20 +95,20 @@ export async function recognizePassport(photos: PassportPhoto[], signal: AbortSi
           if (pageReadComplete(photo.page, read.data, read.confidence)) break;
         }
         // Read a single uncertain surname line separately from portrait and security patterns.
-        const layoutWords = (enhancedLines.length ? enhancedLines : firstLines).flatMap(line => line.words);
+        const layoutWords = (enhancedLines.length ? enhancedLines : firstLines).flatMap(line => line.words).map(word => ({ ...word, text: normalizePassportText(word.text) }));
         const anchors = layoutWords.filter(word => word.confidence >= 60 && /^[А-ЯЁ]{2,}(?:ВИЧ|ВНА|ИЧНА)$/.test(word.text));
         const surnameReview = mergePassportReads(reads);
         if (photo.page === "identity" && anchors.length === 1 && (!surnameReview.data.lastName || !reads.some(read => read.data.lastName && (read.confidence?.lastName ?? 0) >= 85))) {
           signal.throwIfAborted(); pass = 2;
           const anchor = anchors[0]!, h = anchor.bbox.y1 - anchor.bbox.y0, cx = (anchor.bbox.x0 + anchor.bbox.x1) / 2;
-          const candidates = layoutWords.filter(word => word.confidence >= 50 && word.bbox.y1 - word.bbox.y0 >= h * .65 && /^[А-ЯЁ-]{2,40}$/.test(word.text) && !/ФАМИЛИЯ|ОТЧЕСТВО|ИМЯ/.test(word.text) && anchor.bbox.y0 - word.bbox.y0 > h * 3 && anchor.bbox.y0 - word.bbox.y0 < h * 9 && Math.abs((word.bbox.x0 + word.bbox.x1) / 2 - cx) < h * 5);
+          const candidates = layoutWords.filter(word => word.confidence >= 50 && word.bbox.y1 - word.bbox.y0 >= h * .65 && word.bbox.y1 - word.bbox.y0 <= h * 1.8 && /^[А-ЯЁ-]{2,40}$/.test(word.text) && !/ФАМИЛИЯ|ОТЧЕСТВО|ИМЯ/.test(word.text) && anchor.bbox.y0 - word.bbox.y0 > h * 3 && anchor.bbox.y0 - word.bbox.y0 < h * 9 && Math.abs((word.bbox.x0 + word.bbox.x1) / 2 - cx) < h * 3);
           if (candidates.length === 1) {
             const candidate = candidates[0]!, region = document.createElement("canvas");
             try {
-              const margin = h * .65;
+              const margin = h * .25;
               const left = Math.max(0, candidate.bbox.x0 - margin), top = Math.max(0, candidate.bbox.y0 - margin);
               const width = Math.min(source.width - left, candidate.bbox.x1 - candidate.bbox.x0 + margin * 2), height = Math.min(source.height - top, candidate.bbox.y1 - candidate.bbox.y0 + margin * 2);
-              const scale = Math.min(3, 2200 / Math.max(width, height));
+              const scale = Math.min(1.5, 2200 / Math.max(width, height));
               region.width = Math.round(width * scale) + 32; region.height = Math.round(height * scale) + 32;
               const ctx = region.getContext("2d", { willReadFrequently: true })!;
               const retryReads: { text: string; confidence: number }[] = [];
@@ -130,10 +122,11 @@ export async function recognizePassport(photos: PassportPhoto[], signal: AbortSi
                 }
                 const result = await worker.recognize(region, { mode: "7", rotateAuto: false });
                 const surname = normalizePassportText(result.text.trim());
-                if (result.confidence >= 85 && /^[А-ЯЁ][А-ЯЁ-]{1,39}$/.test(surname) && !/ФАМИЛИЯ|ОТЧЕСТВО|ИМЯ/.test(surname)) retryReads.push({ text: surname, confidence: result.confidence });
+                if (result.confidence >= 75 && /^[А-ЯЁ][А-ЯЁ-]{1,39}$/.test(surname) && !/ФАМИЛИЯ|ОТЧЕСТВО|ИМЯ/.test(surname)) retryReads.push({ text: surname, confidence: result.confidence });
               }
-              // Cropping may correct the earlier whole-page guess. Accept only a
-              // high-confidence agreement of distinct views, never an inferred name.
+              // Cropping may correct the earlier whole-page guess. Accept only an
+              // agreement of distinct views, never an inferred name. Actual scores
+              // are preserved: lower-confidence agreement still requires review.
               const agreed = retryReads.filter(read => retryReads.filter(other => other.text === read.text).length >= 2);
               for (const read of agreed) {
                 const lastName = read.text.toLocaleLowerCase("ru").replace(/(^|-)([а-яё])/g, (_, separator: string, letter: string) => separator + letter.toLocaleUpperCase("ru"));
@@ -145,6 +138,14 @@ export async function recognizePassport(photos: PassportPhoto[], signal: AbortSi
         // Sparse page segmentation can split a registration stamp into unrelated fragments.
         // Retry only the stamp as a text block, preserving soft edges, in two independent views.
         const registrationReads = reads.flatMap(read => read.registration ? [read.registration] : []);
+        if (photo.page === "registration" && !registrationReads.some(read => read.ambiguous) && !registrationReads.some(read => (read.parts.house?.confidence ?? 0) >= 85)) {
+          const registration = await readRegistrationNumbers(source, firstLines, worker, signal);
+          if (registration) reads.push({ data: { ...emptyPassport }, warnings: [], mrz: false, registration });
+        }
+        if (photo.page === "registration" && !registrationReads.some(read => read.ambiguous) && !registrationReads.some(read => (read.parts.street?.confidence ?? 0) >= 85)) {
+          const registration = await readRegistrationStreet(source, firstLines, worker, signal);
+          if (registration) reads.push({ data: { ...emptyPassport }, warnings: [], mrz: false, registration });
+        }
         if (photo.page === "registration" && mergeRegistrations(registrationReads).uncertain) {
           const headers = (enhancedLines.length ? enhancedLines : firstLines).filter(line => /ЗАРЕГИСТРИРОВАН/i.test(line.text));
           if (headers.length === 1 && !reads.some(read => read.registration?.ambiguous)) {

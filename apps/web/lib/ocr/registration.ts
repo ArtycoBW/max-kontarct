@@ -14,8 +14,14 @@ export function readRegistration(lines: PassportOcrLine[]): RegistrationRead {
   const ambiguous = (text.match(/ЗАРЕГИСТРИРОВАН/gi) ?? []).length > 1 || /СНЯТ[А]? С (?:РЕГИСТРАЦИОННОГО )?УЧ[ЕЁ]ТА|ВЫПИСАН|УБЫЛ/i.test(text);
   const parts: RegistrationRead["parts"] = {};
   if (ambiguous) return { parts, ambiguous };
-  for (const line of lines) {
+  const authorityTop = Math.min(...lines.flatMap(line => line.words.filter(word => authority.test(word.text)).map(word => (word.bbox.y0 + word.bbox.y1) / 2)));
+  let afterAuthority = false;
+  for (const line of [...lines].sort((a, b) => (a.bbox.y0 + a.bbox.y1) - (b.bbox.y0 + b.bbox.y1))) {
+    if (afterAuthority || (line.bbox.y0 + line.bbox.y1) / 2 > authorityTop) continue;
     const authorityIndex = line.words.findIndex(word => authority.test(word.text));
+    // An authority can continue with a city on a separate line. That is not the
+    // residential locality, even when its OCR confidence is higher.
+    if (authorityIndex >= 0) afterAuthority = true;
     const addressWords = authorityIndex < 0 ? line.words : line.words.slice(0, authorityIndex);
     const row = addressWords.filter(word => word.confidence >= 25 || /^(?:Д|КВ|УЛ|Г|РЕСП)[.,:]?$/.test(word.text)).map(word => word.text).join(" ");
     const add = (part: AddressPart, raw: string | undefined) => {

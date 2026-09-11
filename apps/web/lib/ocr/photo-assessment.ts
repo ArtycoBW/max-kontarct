@@ -1,8 +1,17 @@
 import { inspectCapture, type CaptureQuality } from "./image-quality";
 import { preparePhoto, type PassportPhoto } from "./passport-ocr";
-import type { PassportIssue } from "./passport-review";
+import type { PassportIssue, PassportReview } from "./passport-review";
 
 export type PhotoQuality = Pick<CaptureQuality, "dark" | "glare" | "soft">;
+
+export function photoResultTitle(result: PassportReview) {
+  const filled = result.expected.filter(field => result.data[field]).length;
+  if (result.expected.length === 1 && result.expected[0] === "address") {
+    if (result.issues.some(issue => issue.code === "partial")) return "Адрес извлечён частично";
+    return filled ? "Адрес извлечён — сверьте с паспортом" : "Адрес не прочитан";
+  }
+  return `Прочитано ${filled} из ${result.expected.length} полей`;
+}
 
 export async function inspectPassportPhoto(photo: PassportPhoto, signal: AbortSignal): Promise<PhotoQuality> {
   const source = await preparePhoto(photo, signal), sample = document.createElement("canvas");
@@ -28,7 +37,7 @@ export function photoIssueDescription(issue: PassportIssue) {
   if (issue.code === "uncertain") return "Значение удалось извлечь, но оно требует внимательной сверки по оригиналу.";
   if (issue.code === "partial") return "Штамп прочитан не целиком: в адресе не хватает части сведений. Дополните их по паспорту.";
   if (issue.code === "invalid") return "Прочитанное значение не соответствует формату этого поля. Исправьте его по паспорту.";
-  if (issue.field === "series" || issue.field === "number") return "Не удалось уверенно прочитать все цифры. Проверьте, что боковая строка с серией и номером целиком осталась после обрезки.";
+  if (issue.field === "series" || issue.field === "number") return "Не удалось уверенно прочитать все цифры. Проверьте, что боковая строка с серией и номером целиком видна на фото. Номер также можно прочитать с другой страницы паспорта.";
   if (issue.field === "address") return "Не удалось выделить актуальный адрес в штампе. Нужен снимок всей отметки; адрес также можно внести вручную.";
   return "Алгоритм не смог выделить значение. Точную причину определить не удалось: проверьте этот участок снимка или заполните поле вручную.";
 }

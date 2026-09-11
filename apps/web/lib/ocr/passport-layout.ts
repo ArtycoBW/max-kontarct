@@ -33,8 +33,20 @@ export function readPassportLayout(page: PassportPage, input: PassportOcrLine[],
       const birth = dates.filter(word => centerY(word.bbox) > patronymic.bbox.y1 && word.bbox.y0 - patronymic.bbox.y1 < h * 4);
       if (birth.length === 1) {
         data.birthDate ||= birth[0]!.date;
-        const place = lines.filter(line => line.bbox.y0 > birth[0]!.bbox.y1 && line.bbox.y0 - birth[0]!.bbox.y1 < h * 6).map(line => line.words.filter(word => word.confidence >= 60 && word.bbox.x0 > cx - h * 7 && /^[А-ЯЁ.\s-]+$/.test(word.text) && !label.test(word.text)).map(word => word.text).join(" ")).filter(text => /[А-ЯЁ]{3}/.test(text));
-        if (place.length && place.length <= 3) data.birthPlace ||= place.join(" ").slice(0, 250);
+        // Sparse OCR returns columns/fragments, not reading order. Reconstruct the
+        // value rows below the date; exclude the smaller captions and portrait.
+        const placeWords = lines.flatMap(line => line.words).filter(word => word.confidence >= 60 &&
+          word.bbox.y0 > birth[0]!.bbox.y1 && word.bbox.y0 - birth[0]!.bbox.y1 < h * 6 &&
+          word.bbox.x0 > cx - h * 9 && word.bbox.x1 < birth[0]!.bbox.x1 + h * 3 &&
+          word.bbox.y1 - word.bbox.y0 >= h * .6 && word.bbox.y1 - word.bbox.y0 <= h * 1.8 &&
+          /^[А-ЯЁ.\s-]+$/.test(word.text) && !label.test(word.text) && !/^(?:МУЖ|ЖЕН|ПОЛ)\.?$/i.test(word.text)).sort((a, b) => centerY(a.bbox) - centerY(b.bbox));
+        const rows: typeof placeWords[] = [];
+        for (const word of placeWords) {
+          const row = rows.find(row => Math.abs(centerY(row[0]!.bbox) - centerY(word.bbox)) < h * .7);
+          if (row) row.push(word); else rows.push([word]);
+        }
+        const place = rows.map(row => row.sort((a, b) => a.bbox.x0 - b.bbox.x0).map(word => word.text).join(" ")).filter(text => /[А-ЯЁ]{3}/.test(text));
+        if (place.length && place.length <= 3) data.birthPlace = place.join(" ").slice(0, 250);
       }
     }
     const codes = words.filter(word => /^\d{3}[-–]\d{3}$/.test(word.text));
@@ -97,11 +109,20 @@ export function mergePassportReads(reads: PassportRead[]) {
     if (unique.size === 1) data[key] = [...unique.values()][0]!;
     else if (unique.size > 1) {
       const ranked = (checked.length ? checked : reads).filter(read => read.data[key]).sort((a, b) => (b.confidence?.[key] ?? 50) - (a.confidence?.[key] ?? 50));
-      const best = ranked[0]!, score = best.confidence?.[key] ?? 50;
-      const competitor = ranked.find(read => read.data[key].toLocaleUpperCase("ru") !== best.data[key].toLocaleUpperCase("ru"));
       const normalized = (value: string) => value.toLocaleUpperCase("ru").replace(/[\s,.]+/g, "");
-      const extendsPartial = ["birthPlace", "address", "issuer"].includes(key) && candidates.every(value => normalized(best.data[key]).includes(normalized(value)));
+      // A shorter fragment often has higher mean confidence. Prefer an actually
+      // observed full value that contains every fragment, not a concatenated guess.
+      const complete = ["birthPlace", "address", "issuer"].includes(key) ? ranked.find(read => (read.confidence?.[key] ?? 50) >= 85 && candidates.every(value => normalized(read.data[key]).includes(normalized(value)))) : undefined;
+      const best = complete ?? ranked[0]!, score = best.confidence?.[key] ?? 50;
+      const competitor = ranked.find(read => normalized(read.data[key]) !== normalized(best.data[key]));
+      const extendsPartial = Boolean(complete);
+      const corroboratedName = ["lastName", "firstName", "middleName"].includes(key) ? ranked.find(read => (read.confidence?.[key] ?? 50) >= 80 &&
+        ranked.filter(other => normalized(other.data[key]) === normalized(read.data[key]) && (other.confidence?.[key] ?? 50) >= 75).length >= 2 &&
+        ranked.every(other => normalized(other.data[key]) === normalized(read.data[key]) || (other.confidence?.[key] ?? 50) < 75)) : undefined;
       if (score >= 85 && (extendsPartial || score - (competitor?.confidence?.[key] ?? 50) >= 15)) data[key] = best.data[key];
+      // Two usable matching name reads may resolve a lone weak fragment, but
+      // never override another usable spelling. Do not inflate OCR confidence.
+      else if (corroboratedName) data[key] = corroboratedName.data[key];
       else conflicts.push(key);
     }
   }

@@ -26,6 +26,15 @@ describe("registration components (invented addresses)", () => {
     expect(mergeRegistrations([read]).address).toBe("Г. ПРИМЕР, Д. 5, КВ. 8");
     expect(readRegistration([row("ОТДЕЛ МВД Д. 5 КВ. 8")]).parts).toEqual({});
   });
+  it("does not replace the residential city with an authority continuation", () => {
+    const read = readRegistration([row("Г. ПРИМЕР"), row("Д. 1 КВ. 2"), row("ОТДЕЛ ПО ВОПРОСАМ МИГРАЦИИ"), row("Г. ДРУГОЙ")]);
+    expect(read.parts.locality?.value).toBe("Г. ПРИМЕР");
+  });
+  it("uses physical rows when sparse OCR returns the authority before the address", () => {
+    const positioned = (text: string, y: number) => { const line = row(text); line.bbox.y0 = y; line.bbox.y1 = y + 25; line.words.forEach(word => { word.bbox.y0 = y; word.bbox.y1 = y + 25; }); return line; };
+    const read = readRegistration([positioned("ОТДЕЛ МВД", 200), positioned("Г. ПРИМЕР", 100), positioned("Г. ДРУГОЙ", 240), positioned("Д. 1", 150)]);
+    expect(mergeRegistrations([read]).address).toBe("Г. ПРИМЕР, Д. 1");
+  });
   it("keeps consistent components and omits conflicting numbers", () => {
     const a = readRegistration([row("Г. ПРИМЕР"), row("Д. 1")]);
     const b = readRegistration([row("Г. ПРИМЕР"), row("Д. 2")]);

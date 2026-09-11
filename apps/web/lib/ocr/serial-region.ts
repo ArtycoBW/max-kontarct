@@ -103,12 +103,14 @@ export async function readSerialRegion(source: HTMLCanvasElement, worker: Pick<R
         ctx.drawImage(source, box.left, box.top, box.width, box.height, 0, 0, box.width, box.height);
         if (view) { const pixels = ctx.getImageData(0, 0, crop.width, crop.height); pixels.data.set(serialContrast(pixels)); ctx.putImageData(pixels, 0, 0); }
         rotated = rotateDocument(crop, angle);
-        const scale = Math.min(3, 1800 / rotated.width);
-        padded = document.createElement("canvas"); padded.width = Math.round(rotated.width * scale) + 32; padded.height = Math.round(rotated.height * scale) + 32;
+        // Excessive enlargement makes the security grid compete with digit strokes.
+        // Keep two moderate, distinct views; deskew only the isolated contrast strip.
+        const scale = Math.min(view ? 1.5 : 2, 1800 / rotated.width);
+        padded = document.createElement("canvas"); padded.width = Math.round(rotated.width * scale) + 24; padded.height = Math.round(rotated.height * scale) + 24;
         const target = padded.getContext("2d")!;
         target.fillStyle = "white"; target.fillRect(0, 0, padded.width, padded.height);
-        target.drawImage(rotated, 16, 16, padded.width - 32, padded.height - 32);
-        const result = await worker.recognize(padded, { mode: "7", rotateAuto: false, whitelist: "0123456789 " });
+        target.drawImage(rotated, 12, 12, padded.width - 24, padded.height - 24);
+        const result = await worker.recognize(padded, { mode: "7", rotateAuto: Boolean(view), whitelist: "0123456789 " });
         const candidate = isolatedSerial(result.text, result.confidence);
         if (candidate) candidates.push(candidate);
       } finally { crop.width = crop.height = 0; if (rotated) rotated.width = rotated.height = 0; if (padded) padded.width = padded.height = 0; }
