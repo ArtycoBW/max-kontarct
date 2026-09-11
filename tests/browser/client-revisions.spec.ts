@@ -140,7 +140,14 @@ test("manual address is saved and remains visibly unverified", async ({ browser 
   await expect(page.getByText(/Адрес сохранён вручную/)).toBeVisible();
   const profile = await (await page.request.get("/api/v1/profile")).json();
   expect(profile.address).toMatchObject({ value, source: "MANUAL", fiasId: null });
-  await expect(page.getByText("Что подтверждено", { exact: true })).toBeVisible();
+  await expect(page.getByText("Что подтверждено", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Уровни доверия", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("MAX подключён", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Основные данные", exact: true })).toBeVisible();
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await noOverflow(page);
+    await page.screenshot({ path: `test-results/profile-without-trust-${width}.png`, fullPage: true });
+  }
   await context.close();
 });
