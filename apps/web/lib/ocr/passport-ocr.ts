@@ -2,10 +2,11 @@ import { emptyPassport, type PassportPage } from "./passport-parser";
 import { createLocalOcrWorker } from "./local-worker";
 import { documentRedChannel, enhanceDocument } from "./image-quality";
 import { mergePassportReads, normalizePassportText, readPassportLayout, type PassportRead, type PassportOcrLine } from "./passport-layout";
-import { buildPassportReview } from "./passport-review";
+import { buildPassportReview, pageReadComplete } from "./passport-review";
 import { mergeRegistrations, readStreetRetry } from "./registration";
 import { orientDocument, rotateDocument } from "./orientation";
 import { printedNumber } from "./printed-number";
+import { readSerialRegion, serialContrast } from "./serial-region";
 
 export type PassportPhoto = { page: PassportPage; file: File; rotation: number };
 export function validatePassportPhoto(file: Pick<File, "size" | "type">) {
@@ -99,8 +100,7 @@ export async function recognizePassport(photos: PassportPhoto[], signal: AbortSi
           else enhancedLines = lines;
           const read = readPassportLayout(photo.page, lines, result.text);
           reads.push(read);
-          const required = photo.page === "registration" ? ["address"] as const : photo.page === "issuance" ? ["issuer", "issuedAt", "divisionCode"] as const : ["firstName", "lastName", "birthDate", "series", "number"] as const;
-          if (required.every(key => read.data[key]) && (photo.page !== "registration" || /(?:Д\.?|ДОМ)\s*\d/i.test(read.data.address))) break;
+          if (pageReadComplete(photo.page, read.data, read.confidence)) break;
         }
         // Read a single uncertain surname line separately from portrait and security patterns.
         const layoutWords = (enhancedLines.length ? enhancedLines : firstLines).flatMap(line => line.words);
@@ -113,20 +113,31 @@ export async function recognizePassport(photos: PassportPhoto[], signal: AbortSi
           if (candidates.length === 1) {
             const candidate = candidates[0]!, region = document.createElement("canvas");
             try {
-              const margin = h * .3;
+              const margin = h * .65;
               const left = Math.max(0, candidate.bbox.x0 - margin), top = Math.max(0, candidate.bbox.y0 - margin);
               const width = Math.min(source.width - left, candidate.bbox.x1 - candidate.bbox.x0 + margin * 2), height = Math.min(source.height - top, candidate.bbox.y1 - candidate.bbox.y0 + margin * 2);
               const scale = Math.min(3, 2200 / Math.max(width, height));
-              region.width = Math.round(width * scale); region.height = Math.round(height * scale);
+              region.width = Math.round(width * scale) + 32; region.height = Math.round(height * scale) + 32;
               const ctx = region.getContext("2d", { willReadFrequently: true })!;
-              ctx.drawImage(source, left, top, width, height, 0, 0, region.width, region.height);
-              const pixels = ctx.getImageData(0, 0, region.width, region.height);
-              pixels.data.set(documentRedChannel(pixels)); ctx.putImageData(pixels, 0, 0);
-              const result = await worker.recognize(region, { mode: "8", rotateAuto: false });
-              const surname = result.text.trim();
-              if (result.confidence >= 70 && surname === candidate.text && /^[А-ЯЁ][А-ЯЁ-]{1,39}$/.test(surname)) {
-                const lastName = surname.toLocaleLowerCase("ru").replace(/(^|-)([а-яё])/g, (_, separator: string, letter: string) => separator + letter.toLocaleUpperCase("ru"));
-                reads.push({ data: { ...emptyPassport, lastName }, warnings: [], mrz: false, confidence: { lastName: result.confidence }, uncertainFields: result.confidence < 85 ? ["lastName"] : [] });
+              const retryReads: { text: string; confidence: number }[] = [];
+              for (let view = 0; view < 3; view++) {
+                signal.throwIfAborted();
+                ctx.fillStyle = "white"; ctx.fillRect(0, 0, region.width, region.height);
+                ctx.drawImage(source, left, top, width, height, 16, 16, region.width - 32, region.height - 32);
+                if (view) {
+                  const pixels = ctx.getImageData(0, 0, region.width, region.height);
+                  pixels.data.set(view === 1 ? documentRedChannel(pixels) : enhanceDocument(pixels)); ctx.putImageData(pixels, 0, 0);
+                }
+                const result = await worker.recognize(region, { mode: "7", rotateAuto: false });
+                const surname = normalizePassportText(result.text.trim());
+                if (result.confidence >= 85 && /^[А-ЯЁ][А-ЯЁ-]{1,39}$/.test(surname) && !/ФАМИЛИЯ|ОТЧЕСТВО|ИМЯ/.test(surname)) retryReads.push({ text: surname, confidence: result.confidence });
+              }
+              // Cropping may correct the earlier whole-page guess. Accept only a
+              // high-confidence agreement of distinct views, never an inferred name.
+              const agreed = retryReads.filter(read => retryReads.filter(other => other.text === read.text).length >= 2);
+              for (const read of agreed) {
+                const lastName = read.text.toLocaleLowerCase("ru").replace(/(^|-)([а-яё])/g, (_, separator: string, letter: string) => separator + letter.toLocaleUpperCase("ru"));
+                reads.push({ data: { ...emptyPassport, lastName }, warnings: [], mrz: false, confidence: { lastName: read.confidence } });
               }
             } finally { region.width = 0; region.height = 0; }
           }
@@ -224,6 +235,10 @@ export async function recognizePassport(photos: PassportPhoto[], signal: AbortSi
             if (reads.some(read => read.mrz)) break;
           }
         }
+        if (photo.page !== "registration" && !mergePassportReads(reads).data.number) {
+          const serial = await readSerialRegion(source, worker, signal);
+          if (serial) reads.push({ data: { ...emptyPassport, ...serial }, warnings: [], mrz: false, confidence: { series: 85, number: 85 }, uncertainFields: ["series", "number"] });
+        }
         // The red printed number is perpendicular to the main page text. Read it in
         // both directions and require two independent views of the same complete number.
         if (photo.page !== "registration" && !mergePassportReads(reads).data.number) {
@@ -233,7 +248,7 @@ export async function recognizePassport(photos: PassportPhoto[], signal: AbortSi
               signal.throwIfAborted();
               const side = rotateDocument(source, angle);
               try {
-                if (view) { const context = side.getContext("2d", { willReadFrequently: true })!; const pixels = context.getImageData(0, 0, side.width, side.height); pixels.data.set(enhanceDocument(pixels)); context.putImageData(pixels, 0, 0); }
+                if (view) { const context = side.getContext("2d", { willReadFrequently: true })!; const pixels = context.getImageData(0, 0, side.width, side.height); pixels.data.set(serialContrast(pixels)); context.putImageData(pixels, 0, 0); }
                 const result = await worker.recognize(side, { rotateAuto: true });
                 const number = printedNumber(result.blocks?.flatMap(block => block.paragraphs.flatMap(paragraph => paragraph.lines)) ?? []);
                 if (!view) { first = number; if (!first) break; }
@@ -249,7 +264,7 @@ export async function recognizePassport(photos: PassportPhoto[], signal: AbortSi
     }
     const { data, conflicts, uncertain } = mergePassportReads(reads);
     reportProgress(100);
-    return buildPassportReview(data, photos.map(photo => photo.page), conflicts, uncertain);
+    return { ...buildPassportReview(data, photos.map(photo => photo.page), conflicts, uncertain), reads };
   };
   try { return await Promise.race([run(), failure]); }
   finally { clearTimeout(timeout); signal.removeEventListener("abort", cancel); worker?.terminate(); }

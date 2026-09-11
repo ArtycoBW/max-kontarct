@@ -18,7 +18,7 @@ export function passportDate(raw: string): string {
 function normalizedLines(text: string) {
   return text.normalize("NFKC").replace(/\r/g, "").replace(/(ДАТА|МЕСТО|ПАСПОРТ|КОД)\s*\n\s*(РОЖДЕНИЯ|ВЫДАЧИ|ВЫДАН|ПОДРАЗДЕЛЕНИЯ)/gi, "$1 $2").split("\n").map(line => line.replace(/[|]/g, " ").replace(/\s+/g, " ").trim()).filter(line => Boolean(line) && !/^[A-Z0-9<]{20,}$/.test(line));
 }
-const labelBoundary = /(?:ФАМИЛИЯ|(?:^|\s)ИМЯ(?:\s|$)|ОТЧЕСТВО|ДАТА|МЕСТО|ПОЛ(?:\s|$)|КОД ПОДРАЗДЕЛЕНИЯ|ЛИЧНАЯ ПОДПИСЬ|ПОДПИСЬ СОТРУДНИКА|ПАСПОРТ ВЫДАН|СЕРИЯ|НОМЕР)/i;
+const labelBoundary = /(?:ФАМИЛИЯ|(?:^|\s)ИМЯ(?:\s|$)|ОТЧЕСТВО|ДАТА|МЕСТО|(?:^|\s)(?:РОЖДЕНИЯ|ВЫДАЧИ|ПОДРАЗДЕЛЕНИЯ)(?:\s|$)|ПОЛ(?:\s|$)|КОД ПОДРАЗДЕЛЕНИЯ|ЛИЧНАЯ ПОДПИСЬ|ПОДПИСЬ СОТРУДНИКА|ПАСПОРТ ВЫДАН|СЕРИЯ|НОМЕР)/i;
 function afterLabel(lines: string[], pattern: RegExp, maxLines = 1) {
   const index = lines.findIndex(line => pattern.test(line));
   if (index < 0) return "";

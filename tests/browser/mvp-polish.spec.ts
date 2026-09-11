@@ -113,7 +113,7 @@ test("real local passport OCR: three images, review before persistence, private 
   await dialog.getByLabel("Фото: Регистрация", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ", "ЗАРЕГИСТРИРОВАН", "Г. ПРИМЕР", "УЛ. ТЕСТОВАЯ, Д. 1, КВ. 2", "ПОДПИСЬ СОТРУДНИКА"]));
   const writes: string[] = [], external: string[] = [];
   page.on("request", req => { if (["POST", "PUT", "PATCH"].includes(req.method())) writes.push(req.url()); if (!req.url().startsWith("http://127.0.0.1:4300") && /^https?:/.test(req.url())) external.push(req.url()); });
-  await dialog.getByRole("button", { name: "Распознать данные", exact: true }).click();
+  await dialog.getByRole("button", { name: "Проверить данные", exact: true }).click({ timeout: 180_000 });
   await expect(dialog.getByRole("heading", { name: "Проверьте данные", exact: true })).toBeVisible({ timeout: 160_000 });
   expect(writes).toEqual([]); expect(external).toEqual([]);
   await expect(dialog.getByLabel("Фамилия", { exact: true })).toHaveValue("Примеров");
@@ -148,13 +148,11 @@ test("real local passport OCR: three images, review before persistence, private 
   await expect(page.getByLabel("Имя", { exact: true })).toHaveValue("Иван");
   await page.getByRole("button", { name: "Считать данные паспорта", exact: true }).click();
   await dialog.getByLabel("Фото: Фото и личные данные", { exact: true }).setInputFiles({ name: "bad.png", mimeType: "image/png", buffer: Buffer.from("not an image") });
-  await dialog.getByRole("button", { name: "Распознать данные", exact: true }).click();
   await expect(dialog.getByRole("alert")).toBeVisible({ timeout: 30_000 });
   await dialog.getByRole("button", { name: "Удалить: Фото и личные данные" }).click();
   await dialog.getByLabel("Фото: Фото и личные данные", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ"]));
-  await dialog.getByRole("button", { name: "Распознать данные", exact: true }).click();
   await dialog.getByRole("button", { name: "Отменить распознавание", exact: true }).click();
-  await expect(dialog.getByRole("button", { name: "Распознать данные", exact: true })).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "Продолжить проверку", exact: true })).toBeEnabled();
   await dialog.getByRole("button", { name: "Закрыть окно" }).click();
   const anonymous = await browser.newContext();
   expect((await anonymous.request.get("http://127.0.0.1:4300/api/v1/profile")).status()).toBe(401);
@@ -187,7 +185,7 @@ test("real local OCR handles 90/180/270 degree photos after four-point editing",
   await dialog.getByRole("button", { name: "Использовать фото", exact: true }).click();
   await dialog.getByLabel("Фото: Кем выдан паспорт", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ", "ПАСПОРТ ВЫДАН", "ТЕСТОВЫМ ОТДЕЛОМ", "ДАТА ВЫДАЧИ 02.03.2010", "КОД ПОДРАЗДЕЛЕНИЯ 000-000"], 270));
   await dialog.getByLabel("Фото: Регистрация", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ", "ЗАРЕГИСТРИРОВАН", "Г. ПРИМЕР", "УЛ. ТЕСТОВАЯ, Д. 1, КВ. 2", "ПОДПИСЬ СОТРУДНИКА"], 180));
-  await dialog.getByRole("button", { name: "Распознать данные", exact: true }).click();
+  await dialog.getByRole("button", { name: "Проверить данные", exact: true }).click({ timeout: 180_000 });
   await expect(dialog.getByRole("heading", { name: "Проверьте данные", exact: true })).toBeVisible({ timeout: 160_000 });
   await expect(dialog.getByLabel("Фамилия", { exact: true })).toHaveValue("Примеров");
   await expect(dialog.getByLabel("Имя", { exact: true })).toHaveValue("Иван");
@@ -207,22 +205,22 @@ test("OCR releases the worker on a model failure and on cancellation during load
   await page.getByRole("button", { name: "Профиль", exact: true }).click();
   await page.getByRole("button", { name: "Считать данные паспорта", exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByLabel("Фото: Фото и личные данные", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ"]));
-  // Native Worker fetches are also routed by the context.
+  // Install failure routes before upload, since photo checking is now automatic.
   await context.route("**/ocr/lang/*.traineddata.gz", route => route.fulfill({ status: 503, body: "model unavailable" }));
   let closed = 0;
   page.on("worker", worker => worker.on("close", () => closed++));
-  await dialog.getByRole("button", { name: "Распознать данные", exact: true }).click();
+  await dialog.getByLabel("Фото: Фото и личные данные", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ"]));
   await expect(dialog.getByRole("alert")).toContainText("Не удалось загрузить модуль", { timeout: 30_000 });
   await expect.poll(() => closed).toBe(1);
   await context.unroute("**/ocr/lang/*.traineddata.gz");
   let unblock: () => void = () => {};
   const gate = new Promise<void>(resolve => { unblock = resolve; });
   await context.route("**/ocr/core/**", async route => { await gate; await route.abort().catch(() => {}); });
-  await dialog.getByRole("button", { name: "Распознать данные", exact: true }).click();
+  await dialog.getByRole("button", { name: "Повторить проверку", exact: true }).click();
+  await expect.poll(() => page.workers().length).toBe(1);
   await dialog.getByRole("button", { name: "Отменить распознавание", exact: true }).click();
   await expect.poll(() => closed).toBe(2);
-  await expect(dialog.getByRole("button", { name: "Распознать данные", exact: true })).toBeEnabled();
+  await expect(dialog.getByRole("button", { name: "Продолжить проверку", exact: true })).toBeEnabled();
   unblock();
   await context.close();
 });
@@ -238,7 +236,7 @@ test("passport OCR review groups inline issues and clears them after manual corr
   await dialog.getByLabel("Фото: Регистрация", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ", "ЗАРЕГИСТРИРОВАН", "Г. ПРИМЕР"]));
   const writes: string[] = [];
   page.on("request", request => { if (["POST", "PATCH", "PUT"].includes(request.method())) writes.push(request.url()); });
-  await dialog.getByRole("button", { name: "Распознать данные", exact: true }).click();
+  await dialog.getByRole("button", { name: "Проверить данные", exact: true }).click({ timeout: 180_000 });
   await expect(dialog.getByRole("heading", { name: "Проверьте данные" })).toBeVisible({ timeout: 160_000 });
   await expect(dialog.getByRole("status")).toHaveCount(1);
   await expect(dialog.getByRole("status")).toContainText(/Заполнено \d+ из \d+ полей/);

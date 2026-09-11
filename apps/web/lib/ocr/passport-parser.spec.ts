@@ -12,6 +12,7 @@ describe("passport OCR extraction (synthetic data only)", () => {
   });
   it("does not substitute labels or noise for missing names", () => {
     expect(parsePassportPages({ identity: "ФАМИЛИЯ\nИМЯ\nОТЧЕСТВО\nДАТА РОЖДЕНИЯ\nnoise 42" }).data).toEqual(emptyPassport);
+    expect(parsePassportPages({ identity: "ФАМИЛИЯ\nИМЯ\nОТЧЕСТВО\nРОЖДЕНИЯ" }).data).toEqual(emptyPassport);
   });
   it("does not guess among multiple passport numbers or registration stamps", () => {
     const result = parsePassportPages({ identity: "00 00 000000\n11 11 111111", registration: "ЗАРЕГИСТРИРОВАН\nГ. ПРИМЕР\nЗАРЕГИСТРИРОВАН\nГ. ДРУГОЙ" });

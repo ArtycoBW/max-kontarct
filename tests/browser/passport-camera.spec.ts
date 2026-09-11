@@ -4,7 +4,7 @@ import { actor, noOverflow, onboarding } from "./helpers";
 type CameraState = {
   calls: MediaStreamConstraints[]; stopped: number; mode: "dark" | "glare" | "sharp" | "document";
   deny: boolean; pending: boolean; release?: () => void;
-  workerStopped: number; reads: number; ocrDelay: number; weak: boolean;
+  workerStopped: number; reads: number; ocrDelay: number; weak: boolean; activeWorkers: number; maxWorkers: number;
 };
 type TestWindow = Window & { cameraTest: CameraState };
 test.beforeEach(async ({ page }, info) => {
@@ -13,11 +13,12 @@ test.beforeEach(async ({ page }, info) => {
 });
 async function cameraMock(context: BrowserContext, stubOcr = true) {
   await context.addInitScript((stubOcr: boolean) => {
-    const state = (window as unknown as TestWindow).cameraTest = { calls: [], stopped: 0, mode: "dark", deny: false, pending: false, workerStopped: 0, reads: 0, ocrDelay: 80, weak: false };
-    // Deterministic OCR for camera lifecycle/overlay tests. Real WASM is covered separately.
+    const state = (window as unknown as TestWindow).cameraTest = { calls: [], stopped: 0, mode: "dark", deny: false, pending: false, workerStopped: 0, reads: 0, ocrDelay: 80, weak: false, activeWorkers: 0, maxWorkers: 0 };
+    // Deterministic OCR for camera lifecycle/post-capture tests. Real WASM is covered separately.
     if (stubOcr) Object.defineProperty(window, "Worker", { configurable: true, value: class {
       onmessage?: (message: { data: unknown }) => void;
       ended = false;
+      constructor() { state.activeWorkers++; state.maxWorkers = Math.max(state.maxWorkers, state.activeWorkers); }
       postMessage(message: { action: string; jobId: string; payload: { image?: Uint8Array } }) {
         const recognizing = message.action === "recognize";
         if (recognizing) state.reads++;
@@ -29,9 +30,9 @@ async function cameraMock(context: BrowserContext, stubOcr = true) {
           const words = text.split(" ").map((text, j) => ({ text, confidence: state.weak ? 30 : 95, bbox: { x0: width * (.08 + j * .23), x1: width * (.08 + j * .23 + .2), y0: height * (.15 + i * .18), y1: height * (.21 + i * .18) } }));
           return { text, confidence: 95, words, bbox: { x0: words[0].bbox.x0, x1: words.at(-1)!.bbox.x1, y0: words[0].bbox.y0, y1: words[0].bbox.y1 } };
         });
-        setTimeout(() => { if (!this.ended) this.onmessage?.({ data: { jobId: message.jobId, status: "resolve", data: recognizing ? { text: rows.join("\n"), blocks: [{ paragraphs: [{ lines }] }] } : {} } }); }, recognizing ? state.ocrDelay : 0);
+        setTimeout(() => { if (!this.ended) this.onmessage?.({ data: { jobId: message.jobId, status: "resolve", data: recognizing ? { text: rows.join("\n"), confidence: 95, blocks: [{ paragraphs: [{ lines }] }] } : {} } }); }, recognizing ? state.ocrDelay : 0);
       }
-      terminate() { if (!this.ended) state.workerStopped++; this.ended = true; }
+      terminate() { if (!this.ended) { state.workerStopped++; state.activeWorkers--; } this.ended = true; }
     } });
     if (!navigator.mediaDevices) Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: {} });
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", { configurable: true, value: async (constraints: MediaStreamConstraints) => {
@@ -87,11 +88,9 @@ test("passport camera is opt-in, checks light locally, crops a preview and never
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("button", { name: "Сделать снимок", exact: true })).toBeEnabled();
   expect(await page.evaluate(() => (window as unknown as TestWindow).cameraTest.calls[0])).toMatchObject({ audio: false, video: { facingMode: { ideal: "environment" } } });
-  await expect(dialog.getByRole("status")).toContainText("Темно:");
-  await page.evaluate(() => { (window as unknown as TestWindow).cameraTest.mode = "glare"; });
-  await expect(dialog.getByRole("status")).toContainText("Возможен блик:");
-  await page.evaluate(() => { (window as unknown as TestWindow).cameraTest.mode = "sharp"; });
-  await expect(dialog.getByRole("status")).toContainText("Света достаточно");
+  await expect(dialog.locator(".passport-live-panel, .passport-live-zone, .passport-camera-quality")).toHaveCount(0);
+  await expect(dialog.getByRole("switch", { name: "Автоснимок" })).toHaveCount(0);
+  expect(await page.evaluate(() => (window as unknown as TestWindow).cameraTest.reads)).toBe(0);
   for (const width of [320, 390, 1440]) {
     await page.setViewportSize({ width, height: 740 }); await noOverflow(page);
     // Read both rectangles in the same frame; separate calls can straddle a resize.
@@ -115,7 +114,11 @@ test("passport camera is opt-in, checks light locally, crops a preview and never
   await expect(preview).toHaveAttribute("src", /^blob:/);
   expect(await preview.evaluate(element => (element as HTMLImageElement).naturalWidth > (element as HTMLImageElement).naturalHeight)).toBe(true);
   expect(await counters(page)).toEqual({ calls: 1, stopped: 1 });
-  expect(await page.evaluate(() => (window as unknown as TestWindow).cameraTest.workerStopped)).toBe(1);
+  const result = dialog.getByRole("region", { name: "Результат фото: Фото и личные данные", exact: true });
+  await expect(result).toContainText("мало света");
+  await expect(result).toContainText("Прочитано 4 из 8 полей", { timeout: 30_000 });
+  await expect(result).toContainText("после обрезки");
+  await expect.poll(() => page.evaluate(() => (window as unknown as TestWindow).cameraTest.workerStopped)).toBe(1);
   expect(writes).toEqual([]); expect(external).toEqual([]);
   expect(await (await page.request.get("/api/v1/profile")).json()).toEqual(before);
   await dialog.getByRole("button", { name: "Закрыть окно" }).click();
@@ -124,74 +127,86 @@ test("passport camera is opt-in, checks light locally, crops a preview and never
   await context.close();
 });
 
-test("live fields need corroboration, clear on motion/poor light and do not persist pixels", async ({ browser }) => {
+test("camera stays quiet and usable without loading OCR even when recognition would hang", async ({ browser }) => {
   const context = await actor(browser, 76004, "+79997006004"); await cameraMock(context);
   const page = await context.newPage(); await openScanner(page);
-  const writes: string[] = [];
-  page.on("request", request => { if (["POST", "PUT", "PATCH"].includes(request.method())) writes.push(request.url()); });
-  await page.evaluate(() => { (window as unknown as TestWindow).cameraTest.mode = "sharp"; });
+  await page.evaluate(() => { (window as unknown as TestWindow).cameraTest.ocrDelay = 30_000; });
   await page.getByRole("button", { name: "Снять: Фото и личные данные", exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByText("Основные поля читаются — можно снимать", { exact: true })).toBeVisible();
-  expect(await page.evaluate(() => (window as unknown as TestWindow).cameraTest.reads)).toBeGreaterThanOrEqual(2);
-  await expect(dialog.locator(".passport-live-zone.is-stable")).toHaveCount(4);
-  await page.screenshot({ path: "test-results/passport-live-fields.png" });
-  await page.evaluate(() => { (window as unknown as TestWindow).cameraTest.mode = "dark"; });
-  await expect(dialog.locator(".passport-live-zone")).toHaveCount(0);
-  await expect(dialog.getByText("Основные поля читаются — можно снимать", { exact: true })).toHaveCount(0);
-  await page.evaluate(() => { const state = (window as unknown as TestWindow).cameraTest; state.mode = "sharp"; state.weak = true; });
-  await expect(dialog.getByRole("status")).toContainText("Света достаточно");
-  const previousReads = await page.evaluate(() => (window as unknown as TestWindow).cameraTest.reads);
-  await expect.poll(() => page.evaluate(() => (window as unknown as TestWindow).cameraTest.reads)).toBeGreaterThan(previousReads + 1);
-  await expect(dialog.locator(".passport-live-zone")).toHaveCount(0);
-  await expect(dialog.getByRole("button", { name: "Сделать снимок", exact: true })).toBeEnabled();
-  await dialog.getByRole("button", { name: "Закрыть окно" }).click();
-  expect(await counters(page)).toEqual({ calls: 1, stopped: 1 });
-  expect(await page.evaluate(() => (window as unknown as TestWindow).cameraTest.workerStopped)).toBe(1);
-  expect(writes).toEqual([]);
-  await context.close();
-});
-
-test("camera remains usable when the local OCR worker hangs and terminates on close", async ({ browser }) => {
-  const context = await actor(browser, 76005, "+79997006005"); await cameraMock(context);
-  const page = await context.newPage(); await openScanner(page);
-  await page.evaluate(() => { const state = (window as unknown as TestWindow).cameraTest; state.mode = "sharp"; state.ocrDelay = 30_000; });
-  await page.getByRole("button", { name: "Снять: Фото и личные данные", exact: true }).click();
-  const dialog = page.getByRole("dialog");
-  await expect(dialog.getByText("Подсветка пока недоступна", { exact: true })).toBeVisible({ timeout: 20_000 });
-  await expect(dialog.getByRole("button", { name: "Сделать снимок", exact: true })).toBeEnabled();
-  expect(await page.evaluate(() => (window as unknown as TestWindow).cameraTest.workerStopped)).toBe(1);
-  await dialog.getByRole("button", { name: "Отменить съёмку", exact: true }).click();
-  expect(await counters(page)).toEqual({ calls: 1, stopped: 1 });
-  await context.close();
-});
-
-test("opt-in auto capture freezes a corroborated frame and stops camera without saving profile", async ({ browser }) => {
-  const context = await actor(browser, 76007, "+79997006007"); await cameraMock(context);
-  const page = await context.newPage(); await openScanner(page);
-  const writes: string[] = [];
-  page.on("request", request => { if (["POST", "PUT", "PATCH"].includes(request.method())) writes.push(request.url()); });
-  await page.getByRole("button", { name: "Снять: Фото и личные данные", exact: true }).click();
-  const dialog = page.getByRole("dialog"), auto = dialog.getByRole("switch", { name: "Автоснимок" });
-  await expect(auto).not.toBeChecked();
-  await auto.check();
-  await expect(dialog.getByRole("status")).toContainText("Темно:");
-  await expect(dialog.getByRole("heading", { name: "Обрезка и выравнивание", exact: true })).toHaveCount(0);
-  await page.evaluate(() => { (window as unknown as TestWindow).cameraTest.mode = "sharp"; });
-  await expect(dialog.getByRole("heading", { name: "Обрезка и выравнивание", exact: true })).toBeVisible();
-  expect(await page.evaluate(() => (window as unknown as TestWindow).cameraTest.reads)).toBeGreaterThanOrEqual(2);
-  expect(await counters(page)).toEqual({ calls: 1, stopped: 1 });
-  const workersStopped = await page.evaluate(() => (window as unknown as TestWindow).cameraTest.workerStopped);
-  expect(workersStopped).toBeGreaterThanOrEqual(1);
-  await expect(dialog.locator(".passport-crop-handle")).toHaveCount(4);
-  await page.screenshot({ path: "test-results/passport-auto-frozen.png" });
+  for (const mode of ["dark", "glare", "sharp"] as const) {
+    await page.evaluate(mode => { (window as unknown as TestWindow).cameraTest.mode = mode; }, mode);
+    await expect(dialog.getByRole("button", { name: "Сделать снимок", exact: true })).toBeEnabled();
+    await expect(dialog).not.toContainText(/задержите|Темно:|Возможен блик:|Наведите камеру|Читается|Не найдено/);
+    expect(await page.evaluate(() => (window as unknown as TestWindow).cameraTest.reads)).toBe(0);
+  }
+  await dialog.getByRole("button", { name: "Сделать снимок", exact: true }).click();
   await dialog.getByRole("button", { name: "Посмотреть результат", exact: true }).click();
   await dialog.getByRole("button", { name: "Использовать фото", exact: true }).click();
-  expect(writes).toEqual([]);
+  await expect.poll(() => page.evaluate(() => (window as unknown as TestWindow).cameraTest.reads)).toBeGreaterThan(0);
+  await dialog.getByRole("button", { name: "Отменить распознавание", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "Продолжить проверку", exact: true })).toBeEnabled();
+  await expect.poll(() => page.evaluate(() => (window as unknown as TestWindow).cameraTest.workerStopped)).toBe(1);
+  await dialog.getByRole("button", { name: "Снять: Фото и личные данные", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "Сделать снимок", exact: true })).toBeEnabled();
+  await dialog.getByRole("button", { name: "Закрыть окно" }).click();
+  expect(await counters(page)).toEqual({ calls: 2, stopped: 2 });
   await context.close();
 });
 
-test("real WASM live OCR recognizes invented camera text locally and closes its worker", async ({ browser }) => {
+test("photo checks queue one worker, retain other results and invalidate replaced or cropped photos", async ({ browser }) => {
+  const context = await actor(browser, 76007, "+79997006007"); await cameraMock(context);
+  const page = await context.newPage(); await openScanner(page);
+  const dialog = page.getByRole("dialog");
+  const base64 = await page.evaluate(() => {
+    const canvas = document.createElement("canvas"); canvas.width = 800; canvas.height = 600;
+    const ctx = canvas.getContext("2d")!; ctx.fillStyle = "#ddd"; ctx.fillRect(0, 0, 800, 600);
+    return canvas.toDataURL("image/png").split(",")[1]!;
+  });
+  const file = { name: "invented-only.png", mimeType: "image/png", buffer: Buffer.from(base64, "base64") };
+  const identity = dialog.getByRole("region", { name: "Результат фото: Фото и личные данные", exact: true });
+  const issuance = dialog.getByRole("region", { name: "Результат фото: Кем выдан паспорт", exact: true });
+  await page.evaluate(() => { (window as unknown as TestWindow).cameraTest.ocrDelay = 500; });
+  await dialog.getByLabel("Фото: Кем выдан паспорт", { exact: true }).setInputFiles(file);
+  await dialog.getByLabel("Фото: Фото и личные данные", { exact: true }).setInputFiles(file);
+  await expect(issuance).toContainText("Прочитано 1 из 5 полей");
+  await expect(identity).toContainText("Прочитано 4 из 8 полей");
+  const completed = await page.evaluate(() => (window as unknown as TestWindow).cameraTest.workerStopped);
+  expect(await page.evaluate(() => (window as unknown as TestWindow).cameraTest.maxWorkers)).toBe(1);
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 844 }); await noOverflow(page);
+    await identity.evaluate(element => element.scrollIntoView({ block: "start" }));
+    await page.screenshot({ path: `test-results/passport-photo-feedback-${width}.png` });
+  }
+  // Opening and cancelling an editor must keep the completed check, not rerun it.
+  await dialog.getByRole("button", { name: "Редактировать: Фото и личные данные", exact: true }).click();
+  await dialog.getByRole("button", { name: "Отменить редактирование", exact: true }).click();
+  await expect(identity).toContainText("Прочитано 4 из 8 полей");
+  expect(await page.evaluate(() => (window as unknown as TestWindow).cameraTest.workerStopped)).toBe(completed);
+  // Applying a crop creates new pixels and requires a new check only for that page.
+  await dialog.getByRole("button", { name: "Редактировать: Фото и личные данные", exact: true }).click();
+  await dialog.getByRole("button", { name: "Посмотреть результат", exact: true }).click();
+  await dialog.getByRole("button", { name: "Использовать фото", exact: true }).click();
+  await expect(identity).not.toContainText("Прочитано 4 из 8 полей");
+  await expect(issuance).toContainText("Прочитано 1 из 5 полей");
+  await expect(identity).toContainText("Прочитано 4 из 8 полей");
+  expect(await page.evaluate(() => (window as unknown as TestWindow).cameraTest.workerStopped)).toBe(completed + 1);
+  // A replacement with unreadable OCR must not retain earlier filled fields.
+  await page.evaluate(() => { (window as unknown as TestWindow).cameraTest.weak = true; });
+  await dialog.getByLabel("Фото: Фото и личные данные", { exact: true }).setInputFiles({ ...file, name: "replacement.png" });
+  await expect(identity).not.toContainText("Прочитано 4 из 8 полей");
+  await expect(identity).toContainText("Прочитано 0 из 8 полей");
+  await dialog.getByRole("button", { name: "Проверить данные", exact: true }).click();
+  await expect(dialog.getByLabel("Фамилия", { exact: true })).toBeEmpty();
+  await expect(dialog.getByLabel("Имя", { exact: true })).toBeEmpty();
+  await dialog.getByRole("button", { name: "Выбрать другие фотографии", exact: true }).click();
+  await dialog.getByRole("button", { name: "Удалить: Фото и личные данные", exact: true }).click();
+  await expect(identity).toHaveCount(0); await expect(issuance).toContainText("Прочитано 1 из 5 полей");
+  await dialog.getByRole("button", { name: "Закрыть окно" }).click();
+  expect(await page.evaluate(() => (window as unknown as TestWindow).cameraTest.activeWorkers)).toBe(0);
+  await context.close();
+});
+
+test("real WASM checks the captured photo locally and closes its worker", async ({ browser }) => {
   const context = await actor(browser, 76006, "+79997006006"); await cameraMock(context, false);
   const page = await context.newPage(); await openScanner(page);
   const writes: string[] = [], external: string[] = []; let terminated = 0;
@@ -200,14 +215,39 @@ test("real WASM live OCR recognizes invented camera text locally and closes its 
   await page.evaluate(() => { (window as unknown as TestWindow).cameraTest.mode = "document"; });
   await page.getByRole("button", { name: "Снять: Фото и личные данные", exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByText("Основные поля читаются — можно снимать", { exact: true })).toBeVisible({ timeout: 60_000 });
-  await expect(dialog.locator(".passport-live-zone.is-stable")).toHaveCount(4);
-  await page.screenshot({ path: "test-results/passport-live-real-ocr.png" });
+  await dialog.getByRole("button", { name: "Сделать снимок", exact: true }).click();
+  await dialog.getByRole("button", { name: "Посмотреть результат", exact: true }).click();
+  await dialog.getByRole("button", { name: "Использовать фото", exact: true }).click();
+  await expect(dialog.locator(".passport-photo-result")).toContainText(/Прочитано [4-8] из 8 полей/, { timeout: 160_000 });
+  await dialog.getByRole("button", { name: "Проверить данные", exact: true }).click();
+  await expect(dialog.getByLabel("Фамилия", { exact: true })).toHaveValue("Примеров");
+  await expect(dialog.getByLabel("Имя", { exact: true })).toHaveValue("Иван");
+  await page.screenshot({ path: "test-results/passport-captured-real-ocr.png" });
   await dialog.getByRole("button", { name: "Закрыть окно" }).click();
   await expect.poll(() => terminated).toBe(1);
   expect(writes).toEqual([]); expect(external).toEqual([]);
   expect(await counters(page)).toEqual({ calls: 1, stopped: 1 });
   await context.close();
+});
+
+test("real WASM reads a complete perpendicular red number from an invented page", async ({ browser }) => {
+  const context = await actor(browser, 76008, "+79997006008");
+  const page = await context.newPage(); await openScanner(page);
+  const base64 = await page.evaluate(() => {
+    const canvas = document.createElement("canvas"); canvas.width = 1500; canvas.height = 1100;
+    const ctx = canvas.getContext("2d")!; ctx.fillStyle = "#ebe1d5"; ctx.fillRect(0, 0, 1500, 1100);
+    ctx.fillStyle = "#111"; ctx.font = "bold 40px Arial";
+    ["ФАМИЛИЯ ПРИМЕРОВ", "ИМЯ ИВАН", "ОТЧЕСТВО ИВАНОВИЧ", "ДАТА РОЖДЕНИЯ 01.02.1990", "МУЖ.", "МЕСТО РОЖДЕНИЯ Г. ПРИМЕР"].forEach((row, i) => ctx.fillText(row, 120, 170 + i * 110));
+    ctx.save(); ctx.translate(1350, 160); ctx.rotate(Math.PI / 2);
+    ctx.fillStyle = "#90364c"; ctx.font = "bold 40px monospace"; ctx.fillText("00 00 123456", 0, 0); ctx.restore();
+    return canvas.toDataURL("image/png").split(",")[1]!;
+  });
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Фото: Фото и личные данные", { exact: true }).setInputFiles({ name: "invented-number.png", mimeType: "image/png", buffer: Buffer.from(base64, "base64") });
+  await dialog.getByRole("button", { name: "Проверить данные", exact: true }).click({ timeout: 180_000 });
+  await expect(dialog.getByLabel("Серия паспорта", { exact: true })).toHaveValue("0000");
+  await expect(dialog.getByLabel("Номер паспорта", { exact: true })).toHaveValue("123456");
+  await dialog.getByRole("button", { name: "Закрыть окно" }).click(); await context.close();
 });
 
 test("passport camera stops on cancel, modal close, hidden page and late permission grant", async ({ browser }) => {

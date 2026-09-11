@@ -21,6 +21,17 @@ describe("passport layout and checksums (invented fixtures only)", () => {
     const row = { ...value, confidence: 40, text: "ФАМИЛИЯ ПРИМЕРОВ", words: [{ ...caption.words[0]!, confidence: 10 }, value.words[0]!] };
     expect(readPassportLayout("identity", [row], row.text).data.lastName).toBe("Примеров");
   });
+  it("preserves OCR confidence when dates and gender are normalized", () => {
+    const read = readPassportLayout("identity", [line("ДАТА РОЖДЕНИЯ", 0, 0), line("01.02.1990", 100, 30), line("МУЖ.", 0, 60)], "");
+    expect(read.confidence?.birthDate).toBe(95); expect(read.confidence?.gender).toBe(95);
+  });
+  it("does not turn a surviving fragment of a caption into a missing patronymic", () => {
+    const rows = ["ФАМИЛИЯ ПРИМЕРОВ", "ИМЯ ИВАН", "ОТЧЕСТВО ИВАНОВИЧ", "ДАТА РОЖДЕНИЯ 01.02.1990"].map((text, i) => {
+      const row = line(text, 0, i * 40);
+      return { ...row, confidence: 30, words: text.split(" ").map(text => ({ ...row.words[0]!, text, confidence: 30 })) };
+    });
+    expect(readPassportLayout("identity", rows, "").data).toEqual(emptyPassport);
+  });
   it("does not infer personal names from a partial identity page beside issuance", () => {
     const rows = [line("ПРИМЕРОВ", 600, 700), line("ИВАН", 624, 755), line("ИВАНОВИЧ", 600, 790)];
     const read = readPassportLayout("issuance", rows, "");
@@ -49,6 +60,10 @@ describe("passport layout and checksums (invented fixtures only)", () => {
     const read = (lastName: string) => ({ data: { ...emptyPassport, lastName }, warnings: [], mrz: false });
     expect(mergePassportReads([read("Примеров"), read("Другое")])).toMatchObject({ data: { lastName: "" }, conflicts: ["lastName"] });
     expect(mergePassportReads([read("Примеров"), read("ПРИМЕРОВ")]).conflicts).toEqual([]);
+  });
+  it("flags a low-confidence filled value rather than calling the page fully read", () => {
+    const result = mergePassportReads([{ data: { ...emptyPassport, lastName: "Ли" }, warnings: [], mrz: false, confidence: { lastName: 71 } }]);
+    expect(result.data.lastName).toBe("Ли"); expect(result.uncertain).toContain("lastName");
   });
   it("uses a confident complete place over the same truncated fragment but not a different place", () => {
     const read = (birthPlace: string, confidence: number) => ({ data: { ...emptyPassport, birthPlace }, warnings: [], mrz: false, confidence: { birthPlace: confidence } });

@@ -7,11 +7,20 @@ export const reviewGroups: { title: string; fields: PassportField[] }[] = [
   { title: "Реквизиты паспорта", fields: ["series", "number", "issuedAt", "issuer", "divisionCode"] },
   { title: "Регистрация", fields: ["address"] },
 ];
-const pageFields: Record<PassportPage, PassportField[]> = {
+export const pageFields: Record<PassportPage, PassportField[]> = {
   identity: [...reviewGroups[0]!.fields, "series", "number"],
   issuance: ["issuer", "issuedAt", "divisionCode", "series", "number"],
   registration: ["address"],
 };
+
+/** A full-page pass is not finished merely because the first few fields were found. */
+export function pageReadComplete(page: PassportPage, data: PassportData, confidence?: Partial<Record<PassportField, number>>) {
+  // Perpendicular series/number have their own isolated retry after the page pass.
+  // An absent patronymic is allowed in the form, but still merits a retry here:
+  // OCR cannot tell whether the person has none or the first pass missed it.
+  return pageFields[page].filter(field => !["series", "number"].includes(field)).every(field => validReviewValue(field, data[field]) && (!confidence || (confidence[field] ?? 0) >= 85))
+    && (page !== "registration" || /(?:Д\.?|ДОМ)\s*\d/i.test(data.address));
+}
 export function validReviewValue(field: PassportField, value: string) {
   if (!value.trim()) return false;
   if (field === "series") return /^\d{4}$/.test(value);

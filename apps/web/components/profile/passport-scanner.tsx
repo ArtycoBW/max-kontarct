@@ -7,14 +7,16 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogClose, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Progress } from "@/components/ui/progress";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { passportFieldLabels, type PassportData, type PassportField, type PassportPage } from "@/lib/ocr/passport-parser";
-import { recognizePassport, validatePassportPhoto } from "@/lib/ocr/passport-ocr";
+import { validatePassportPhoto } from "@/lib/ocr/passport-ocr";
 import { PassportCamera } from "./passport-camera";
 import { PassportPhotoEditor, type PhotoEdit } from "./passport-photo-editor";
 import { fullPhoto } from "@/lib/ocr/perspective";
-import { activeReviewIssues, issueDescription, reviewGroups, type PassportReview } from "@/lib/ocr/passport-review";
+import { activeReviewIssues, buildPassportReview, issueDescription, reviewGroups, type PassportReview } from "@/lib/ocr/passport-review";
+import { mergePassportReads } from "@/lib/ocr/passport-layout";
+import { usePassportPhotoChecks } from "./use-passport-photo-checks";
+import { PassportPhotoResult } from "./passport-photo-result";
 
 const pages: { key: PassportPage; title: string; hint: string }[] = [
   { key: "issuance", title: "Кем выдан паспорт", hint: "Страница с органом выдачи, датой и кодом подразделения" },
@@ -35,9 +37,6 @@ export function PassportScanner({ onApply }: { onApply: (data: PassportData) => 
 function PassportScanDialog({ onApply }: { onApply: (data: PassportData) => void }) {
   const [photos, setPhotos] = useState<Partial<Record<PassportPage, Photo>>>({});
   const resources = useRef(new Set<string>());
-  const task = useRef<AbortController | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [data, setData] = useState<PassportData | null>(null);
   const [review, setReview] = useState<Pick<PassportReview, "issues" | "expected">>({ issues: [], expected: [] });
@@ -45,9 +44,10 @@ function PassportScanDialog({ onApply }: { onApply: (data: PassportData) => void
   const [confirmed, setConfirmed] = useState(false);
   const [cameraPage, setCameraPage] = useState<PassportPage | null>(null);
   const [editingPage, setEditingPage] = useState<PassportPage | null>(null);
+  const photoChecks = usePassportPhotoChecks(photos, Boolean(cameraPage || editingPage || data));
   useEffect(() => {
     const urls = resources.current;
-    return () => { task.current?.abort(); urls.forEach(url => URL.revokeObjectURL(url)); urls.clear(); };
+    return () => { urls.forEach(url => URL.revokeObjectURL(url)); urls.clear(); };
   }, []);
   const replace = (key: PassportPage, file?: File, edit?: PhotoEdit) => {
     try {
@@ -57,21 +57,16 @@ function PassportScanDialog({ onApply }: { onApply: (data: PassportData) => void
       const url = file ? URL.createObjectURL(file) : "";
       if (url) resources.current.add(url);
       setPhotos(current => ({ ...current, [key]: file ? { file, url, rotation: 0, edit } : undefined }));
+      photoChecks.resume();
       setError(""); setData(null); setConfirmed(false); setEdited([]);
       return true;
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось открыть фотографию."); return false; }
   };
-  const scan = async () => {
-    const controller = new AbortController();
-    task.current = controller;
-    setBusy(true); setError(""); setProgress(0); setConfirmed(false); setData(null);
-    try {
-      const result = await recognizePassport(pages.flatMap(({ key }) => photos[key] ? [{ ...photos[key]!, page: key }] : []), controller.signal, setProgress);
-      if (controller.signal.aborted) return;
-      setData(result.data); setReview({ issues: result.issues, expected: result.expected }); setEdited([]);
-    } catch (cause) {
-      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Не удалось распознать страницы.");
-    } finally { if (task.current === controller) { task.current = null; setBusy(false); } }
+  const showReview = () => {
+    const reads = Object.values(photoChecks.checks).flatMap(check => check.result?.reads ?? []);
+    const merged = mergePassportReads(reads);
+    const result = buildPassportReview(merged.data, pages.filter(({ key }) => photos[key]).map(({ key }) => key), merged.conflicts, merged.uncertain);
+    setData(result.data); setReview(result); setEdited([]); setConfirmed(false); setError("");
   };
   const issues = data ? activeReviewIssues(data, review, edited) : [];
   const filledCount = data ? review.expected.filter(key => data[key].trim()).length : 0;
@@ -94,20 +89,21 @@ function PassportScanDialog({ onApply }: { onApply: (data: PassportData) => void
       : cameraPage ? <PassportCamera key={cameraPage} page={cameraPage} onCancel={() => setCameraPage(null)} onCapture={(file, corners) => { if (replace(cameraPage, file, { source: file, rotation: 0, corners: corners ?? fullPhoto() })) setEditingPage(cameraPage); setCameraPage(null); }} /> : <div className="app-modal-body">
     <p className="ocr-privacy"><ShieldCheck size={16} aria-hidden="true" /> Фото обрабатываются только на вашем устройстве. Данные сохранятся после отдельного нажатия «Сохранить профиль».</p>
     {!data ? <>
-      <p>Лучше снять каждую страницу отдельно, ровно и без бликов. Разворот с выдачей и личными данными можно загрузить в «Фото и личные данные». До трёх фотографий; регистрация может находиться дальше в паспорте.</p>
+      <p>Добавьте до трёх фотографий. Каждый готовый снимок проверится автоматически; результат появится под ним. Разворот с выдачей и личными данными можно загрузить в «Фото и личные данные».</p>
       <div className="passport-photo-list">{pages.map(({ key, title, hint }) => <section className="passport-photo" key={key}>
         <div><strong>{title}</strong><small>{hint}</small></div>
         {photos[key] ? <>
           <div className="passport-photo-preview">{/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={photos[key]!.url} alt={title} style={{ transform: `rotate(${photos[key]!.rotation}deg)` }} />
           </div>
-          <div className="passport-photo-actions"><Button type="button" variant="ghost" disabled={busy} aria-label={`Редактировать: ${title}`} onClick={() => setEditingPage(key)}><Crop size={16} /> Редактировать</Button>
-            <Button type="button" variant="ghost" disabled={busy} aria-label={`Удалить: ${title}`} onClick={() => replace(key)}><Trash2 size={16} /></Button></div>
+          <div className="passport-photo-actions"><Button type="button" variant="ghost" aria-label={`Редактировать: ${title}`} onClick={() => setEditingPage(key)}><Crop size={16} /> Редактировать</Button>
+            <Button type="button" variant="ghost" aria-label={`Удалить: ${title}`} onClick={() => replace(key)}><Trash2 size={16} /></Button></div>
+          <PassportPhotoResult check={photoChecks.checks[key]} title={title} stopped={photoChecks.stopped} onRetry={() => photoChecks.retry(key)} />
         </> : null}
         <div className="passport-photo-source-actions"><label className="passport-photo-upload"><Upload size={18} /> {photos[key] ? "Заменить фото" : "Загрузить фото"}
-          <Input form="passport-ocr-review" type="file" accept="image/jpeg,image/png,image/webp" aria-label={`Фото: ${title}`} disabled={busy}
+          <Input form="passport-ocr-review" type="file" accept="image/jpeg,image/png,image/webp" aria-label={`Фото: ${title}`}
             onChange={event => { const file = event.target.files?.[0]; if (file) replace(key, file); event.target.value = ""; }} />
-        </label><Button type="button" variant="outline" disabled={busy} onClick={() => { setError(""); setCameraPage(key); }} aria-label={`Снять: ${title}`}><Camera size={18} /> Снять</Button></div>
+        </label><Button type="button" variant="outline" onClick={() => { setError(""); setCameraPage(key); }} aria-label={`Снять: ${title}`}><Camera size={18} /> Снять</Button></div>
       </section>)}</div>
     </> : <>
       <Alert role="status" className={`ocr-review-summary ${issues.length ? "has-issues" : ""}`}>
@@ -132,11 +128,11 @@ function PassportScanDialog({ onApply }: { onApply: (data: PassportData) => void
       <label className="ocr-confirm"><Checkbox form="passport-ocr-review" checked={confirmed} onCheckedChange={value => setConfirmed(value === true)} /> Я проверил данные по паспорту</label>
       <Button type="button" variant="ghost" onClick={() => { setData(null); setConfirmed(false); }}>Выбрать другие фотографии</Button>
     </>}
-    {busy ? <div className="ocr-progress" role="status"><Progress value={progress} aria-label="Распознавание паспорта" /><span>{progress < 15 ? "Загружаем локальный модуль распознавания…" : `Распознаём страницы: ${progress}%`}</span></div> : null}
     {error ? <Alert variant="destructive" className="ocr-failure"><CircleAlert size={20} aria-hidden="true" /><div><AlertTitle>Не получилось прочитать фото</AlertTitle><AlertDescription>{error}</AlertDescription></div></Alert> : null}
     </div>}
     {!cameraPage && !editingPage ? <DialogFooter className="app-modal-footer">{data ? <Button type="button" className="full-width" disabled={!confirmed || !Object.values(data).some(Boolean)} onClick={() => onApply(data)}>Перенести в профиль</Button>
-      : busy ? <Button type="button" variant="outline" className="full-width" onClick={() => { task.current?.abort(); setBusy(false); }}>Отменить распознавание</Button>
-        : <Button type="button" className="full-width" disabled={!Object.values(photos).some(Boolean)} onClick={() => void scan()}>Распознать данные</Button>}</DialogFooter> : null}
+      : photoChecks.busy ? <Button type="button" variant="outline" className="full-width" onClick={photoChecks.stop}>Отменить распознавание</Button>
+        : photoChecks.stopped ? <Button type="button" className="full-width" onClick={() => photoChecks.retry()}>Продолжить проверку</Button>
+          : <Button type="button" className="full-width" disabled={!Object.values(photoChecks.checks).some(check => check.result)} onClick={showReview}>Проверить данные</Button>}</DialogFooter> : null}
   </DialogContent>;
 }

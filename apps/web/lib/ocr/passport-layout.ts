@@ -56,7 +56,9 @@ export function readPassportLayout(page: PassportPage, input: PassportOcrLine[],
   const confidence: Partial<Record<PassportField, number>> = {};
   for (const field of Object.keys(data) as PassportField[]) {
     const parts = data[field].toLocaleUpperCase("ru").split(/\s+/).filter(Boolean);
-    const matches = words.filter(word => parts.includes(word.text.toLocaleUpperCase("ru")));
+    const matches = words.filter(word => (field === "birthDate" || field === "issuedAt") ? Boolean(data[field]) && passportDate(word.text) === data[field]
+      : field === "gender" ? (data[field] === "М" ? /^МУЖ\.?$/i : /^ЖЕН\.?$/i).test(word.text)
+        : parts.includes(word.text.toLocaleUpperCase("ru")));
     confidence[field] = mrz?.[field] ? 100 : matches.length ? matches.reduce((sum, word) => sum + word.confidence, 0) / matches.length : 50;
   }
   return { data, warnings: parsed.warnings, mrz: Boolean(mrz), checkedFields: Object.keys(mrz ?? {}) as PassportField[], confidence, ...(page === "registration" ? { registration: readRegistration(lines) } : {}) };
@@ -112,5 +114,10 @@ export function mergePassportReads(reads: PassportRead[]) {
     else if (result.uncertain && result.address) uncertain.push("address");
   }
   for (const read of reads) for (const field of read.uncertainFields ?? []) if (data[field] && !uncertain.includes(field)) uncertain.push(field);
+  for (const field of Object.keys(data) as PassportField[]) {
+    if (!data[field] || field === "address" || uncertain.includes(field)) continue;
+    const corroborating = reads.filter(read => read.data[field].toLocaleUpperCase("ru").replace(/[\s,.]+/g, "") === data[field].toLocaleUpperCase("ru").replace(/[\s,.]+/g, ""));
+    if (corroborating.length && Math.max(...corroborating.map(read => read.confidence?.[field] ?? 50)) < 85) uncertain.push(field);
+  }
   return { data, conflicts, uncertain };
 }

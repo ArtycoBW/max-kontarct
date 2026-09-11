@@ -4223,6 +4223,15 @@ button.service-status {
 .field-meta.field-meta-flow { position: static; padding: 0 4px; }
 .app-modal-body > p { font-size: 14px; line-height: 1.6; margin: 0 0 14px; }
 .passport-photo-list, .passport-review-fields { display: grid; gap: 16px; }
+.passport-photo-result { display: grid; gap: 12px; margin-top: 4px; }
+.passport-photo-quality { margin: 0; color: var(--muted-foreground); font-size: 13px; line-height: 1.5; }
+.passport-photo-checking { display: grid; gap: 8px; font-size: 13px; }
+.passport-photo-field-results { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.passport-photo-field-results li { padding: 12px 0; border-top: 1px solid var(--border); }
+.passport-photo-field-results li > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 12px; }
+.passport-photo-field-results li span { color: var(--muted-foreground); }
+.passport-photo-field-results li.needs-attention span { color: #8a5900; }
+.passport-photo-field-results li p { margin: 6px 0 0; color: var(--muted-foreground); font-size: 12px; line-height: 1.5; }
 .passport-photo { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 16px; }
 .passport-photo strong { display: block; font-size: 14px; }
 .passport-photo small { display: block; margin-top: 5px; font-size: 12px; line-height: 1.5; color: var(--muted); }

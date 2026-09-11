@@ -1,7 +1,14 @@
 import { emptyPassport } from "./passport-parser";
-import { activeReviewIssues, buildPassportReview, issueDescription } from "./passport-review";
+import { activeReviewIssues, buildPassportReview, issueDescription, pageReadComplete } from "./passport-review";
 
 describe("structured passport review", () => {
+  it("keeps retrying when only the headline fields have been recognized", () => {
+    const data = { ...emptyPassport, firstName: "Иван", lastName: "Примеров", birthDate: "1990-02-01", series: "0000", number: "123456" };
+    expect(pageReadComplete("identity", data)).toBe(false);
+    expect(pageReadComplete("identity", { ...data, birthPlace: "Г. ПРИМЕР", gender: "М" })).toBe(false);
+    expect(pageReadComplete("identity", { ...data, middleName: "Иванович", birthPlace: "Г. ПРИМЕР", gender: "М" })).toBe(true);
+    expect(pageReadComplete("identity", { ...data, middleName: "Иванович", birthPlace: "Г. ПРИМЕР", gender: "М" }, { lastName: 71 })).toBe(false);
+  });
   it("reports one issue per field, scoped to supplied pages", () => {
     const review = buildPassportReview({ ...emptyPassport }, ["registration"], ["address"], ["address"]);
     expect(review.expected).toEqual(["address"]);
