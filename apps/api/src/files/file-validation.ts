@@ -13,7 +13,7 @@ export function validateUploadedFile(
 ): { mimeType: string; originalName: string } {
   if (!file.buffer?.length) throw invalidFile("Выберите непустой файл");
   if (file.buffer.length > maxBytes) {
-    throw invalidFile(`Размер файла превышает ${formatMegabytes(maxBytes)}`);
+    throw invalidFile("Файл слишком большой. Уменьшите его размер или разделите на несколько файлов.");
   }
   const mimeType = detectMimeType(file.buffer);
   const declared = file.mimetype === "image/jpg" ? "image/jpeg" : file.mimetype;
@@ -69,8 +69,4 @@ function countCyrillic(value: string): number {
 
 function invalidFile(message: string): BadRequestException {
   return new BadRequestException({ code: "FILE_INVALID", message });
-}
-
-function formatMegabytes(bytes: number): string {
-  return `${Math.ceil(bytes / 1024 / 1024)} МБ`;
 }

@@ -18,6 +18,7 @@ Object.assign(process.env, {
   AUTH_REDIS_PREFIX: databaseName, CONTRACT_GENERATION_QUEUE_PREFIX: databaseName,
   CONSENT_ELECTRONIC_SIGNATURE_VERSION: "browser-pep-v1", LOG_LEVEL: "error",
   THROTTLE_LIMIT: "2000",
+  FILE_UPLOAD_MAX_BYTES: "104857600", FILE_EVIDENCE_MAX_BYTES: "262144000",
 });
 require("reflect-metadata");
 const { PrismaClient } = require("@prisma/client");

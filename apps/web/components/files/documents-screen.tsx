@@ -20,7 +20,7 @@ import {
   ShieldCheck,
   UploadCloud,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,7 @@ import {
 } from "@/lib/api/files";
 import { queryKeys } from "@/lib/api/query-keys";
 import { dealRefreshInterval } from "@/lib/api/deal-refresh";
+import { runUploadQueue, type UploadFailure } from "@/lib/api/upload-queue";
 
 export function DocumentsScreen({
   dealId,
@@ -48,7 +49,7 @@ export function DocumentsScreen({
   onSelectDeal: (dealId: string) => void;
 }) {
   if (!dealId) return <DealDocumentPicker onSelectDeal={onSelectDeal} />;
-  return <DealDocuments dealId={dealId} onBack={onBack} />;
+  return <DealDocuments key={dealId} dealId={dealId} onBack={onBack} />;
 }
 
 function DealDocumentPicker({ onSelectDeal }: { onSelectDeal: (dealId: string) => void }) {
@@ -80,6 +81,10 @@ function DealDocuments({ dealId, onBack }: { dealId: string; onBack: () => void 
   const queryClient = useQueryClient();
   const [upload, setUpload] = useState<{ label: string; progress: number } | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const activeQueue = useRef<AbortController | null>(null);
+  const [failures, setFailures] = useState<UploadFailure<File>[]>([]);
+  const retryContext = useRef<{ category: DealFileCategory; requirement?: DealDocumentRequirementResponse } | null>(null);
+  useEffect(() => () => activeQueue.current?.abort(), [dealId]);
   const workspace = useQuery({
     queryFn: () => getDealDocuments(dealId),
     queryKey: queryKeys.files.workspace(dealId),
@@ -91,35 +96,38 @@ function DealDocuments({ dealId, onBack }: { dealId: string; onBack: () => void 
   });
 
   const handleUpload = async (
-    file: File,
+    files: File[],
     category: DealFileCategory,
     requirement?: DealDocumentRequirementResponse,
   ) => {
-    const candidateIssue = workspace.data
-      ? validateUploadCandidate(file, workspace.data.maxUploadBytes, workspace.data.allowedMimeTypes)
-      : null;
-    if (candidateIssue) {
-      toast.error(candidateIssue.title, { description: candidateIssue.description });
-      return;
-    }
+    if (activeQueue.current || !files.length || !workspace.data) return;
+    const controller = new AbortController();
+    activeQueue.current = controller;
+    retryContext.current = { category, requirement };
     setSuccess(null);
-    setUpload({ label: requirement?.title ?? "Материал сделки", progress: 0 });
-    try {
-      await uploadDealFile(dealId, file, {
-        category,
-        requirementId: requirement?.id,
-      }, (progress) => setUpload((current) => current ? { ...current, progress } : null));
-      setSuccess(file.name);
-      toast.success("Файл сохранён в защищённом хранилище");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.files.workspace(dealId) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.trust.current() }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.deals.workspace(dealId) }),
-      ]);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Не удалось загрузить файл");
-    } finally {
-      setUpload(null);
+    setFailures([]);
+    const data = workspace.data;
+    const result = await runUploadQueue(files, async (file, index) => {
+      setUpload({ label: `${index + 1} из ${files.length} · ${file.name}`, progress: 0 });
+      const maxBytes = category === "EVIDENCE" ? data.maxEvidenceUploadBytes ?? data.maxUploadBytes : data.maxUploadBytes;
+      const issue = validateUploadCandidate(file, maxBytes, data.allowedMimeTypes);
+      if (issue) throw new Error(`${issue.title}. ${issue.description}`);
+      await uploadDealFile(dealId, file, { category, requirementId: requirement?.id },
+        progress => setUpload(current => current ? { ...current, progress } : null), controller.signal);
+    }, controller.signal);
+    // Refresh data even if the user left after an earlier file succeeded.
+    if (result.succeeded.length) await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.files.workspace(dealId) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.trust.current() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.deals.workspace(dealId) }),
+    ]);
+    activeQueue.current = null;
+    if (controller.signal.aborted) return;
+    setUpload(null);
+    setFailures(result.failed);
+    if (result.succeeded.length) {
+      setSuccess(result.succeeded.map(file => file.name).join(", "));
+      toast.success(`Загружено файлов: ${result.succeeded.length}`);
     }
   };
 
@@ -146,8 +154,16 @@ function DealDocuments({ dealId, onBack }: { dealId: string; onBack: () => void 
         <Card className="upload-success-card" role="status"><Check size={19} /><span><strong>Файл загружен</strong><small title={success}>{success}</small></span></Card>
       ) : null}
 
+      {failures.length ? <Card className="form-message is-error upload-failures" role="alert">
+        <strong>Не удалось загрузить: {failures.length}</strong>
+        <ul>{failures.map(({ item, message }, index) => <li key={`${item.name}-${index}`}><strong>{item.name}</strong> — {message}</li>)}</ul>
+        <Button disabled={Boolean(upload)} variant="outline" onClick={() => {
+          if (retryContext.current) void handleUpload(failures.map(({ item }) => item), retryContext.current.category, retryContext.current.requirement);
+        }}>Повторить неудавшиеся</Button>
+      </Card> : null}
+
       <section className="documents-section">
-        <header><span><Files size={18} /><strong>Обязательные документы</strong></span><small>PDF, JPEG, PNG, WebP · до {formatMegabytes(data.maxUploadBytes)}</small></header>
+        <header><span><Files size={18} /><strong>Обязательные документы</strong></span><small>PDF, JPEG, PNG, WebP</small></header>
         <div className="requirement-list">
           {data.requirements.map((requirement) => (
             <RequirementCard
@@ -167,7 +183,7 @@ function DealDocuments({ dealId, onBack }: { dealId: string; onBack: () => void 
         <UploadButton
           accept={data.allowedMimeTypes.join(",")}
           disabled={Boolean(upload)}
-          label="Добавить материал"
+          label="Добавить материалы"
           onSelect={(file) => void handleUpload(file, "EVIDENCE")}
         />
         <FileList dealId={dealId} files={data.evidenceFiles} />
@@ -187,7 +203,7 @@ function RequirementCard({
   accept: string;
   dealId: string;
   disabled: boolean;
-  onUpload: (file: File) => void;
+  onUpload: (files: File[]) => void;
   requirement: DealDocumentRequirementResponse;
 }) {
   return (
@@ -199,18 +215,19 @@ function RequirementCard({
   );
 }
 
-function UploadButton({ accept, disabled, label, onSelect }: { accept: string; disabled: boolean; label: string; onSelect: (file: File) => void }) {
+function UploadButton({ accept, disabled, label, onSelect }: { accept: string; disabled: boolean; label: string; onSelect: (files: File[]) => void }) {
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
       <Input
         accept={accept}
+        multiple
         aria-label="Загрузить файл"
         tabIndex={-1}
         className="is-visually-hidden"
         onChange={(event) => {
-          const file = event.target.files?.[0];
-          if (file) onSelect(file);
+          const files = Array.from(event.target.files ?? []);
+          if (files.length) onSelect(files);
           event.target.value = "";
         }}
         ref={input}
@@ -254,6 +271,5 @@ function DocumentsLoading({ onBack }: { onBack: () => void }) {
   return <div className="screen-content documents-screen"><BackTitle onBack={onBack} title="Документы" /><div className="documents-loading"><Skeleton /><Skeleton /><Skeleton /></div></div>;
 }
 
-function formatMegabytes(bytes: number): string { return `${Math.ceil(bytes / 1024 / 1024)} МБ`; }
 function formatBytes(bytes: number): string { return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} МБ` : `${Math.ceil(bytes / 1024)} КБ`; }
 function fileReviewLabel(status: DealFileResponse["reviewStatus"]): string { return { ACCEPTED: "принят", PENDING: "на проверке", REJECTED: "нужно исправить" }[status]; }

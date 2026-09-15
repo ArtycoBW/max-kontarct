@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   devIndicators: false,
   reactStrictMode: true,
+  experimental: { proxyClientMaxBodySize: "251mb" },
   async rewrites() {
     const target =
       process.env.API_PROXY_TARGET ??

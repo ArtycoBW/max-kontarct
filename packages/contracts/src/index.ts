@@ -471,6 +471,7 @@ export interface DealDocumentsWorkspaceResponse {
   dealTitle: string;
   evidenceFiles: DealFileResponse[];
   maxUploadBytes: number;
+  maxEvidenceUploadBytes?: number;
   requirements: DealDocumentRequirementResponse[];
 }
 

@@ -31,7 +31,13 @@ describe("file validation", () => {
       mimetype: "application/pdf",
       originalname: "document.pdf",
       size: 8,
-    } as Express.Multer.File, 4)).toThrow("Размер файла превышает");
+    } as Express.Multer.File, 4)).toThrow("Файл слишком большой");
+  });
+
+  it("accepts the exact byte boundary and checks actual content size", () => {
+    const file = { buffer: Buffer.from("%PDF-1.7"), mimetype: "application/pdf", originalname: "act.pdf", size: 0 } as Express.Multer.File;
+    expect(validateUploadedFile(file, 8).mimeType).toBe("application/pdf");
+    expect(() => validateUploadedFile(file, 7)).toThrow("Файл слишком большой");
   });
 
   it("restores a UTF-8 Cyrillic filename decoded as latin1 by multipart", () => {

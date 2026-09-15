@@ -45,6 +45,7 @@ const PRIVATE_REQUIREMENT_PATTERN = /(passport|identity|personal|удостов�
 export class FilesService {
   private readonly bucket: string;
   private readonly maxUploadBytes: number;
+  private readonly maxEvidenceUploadBytes: number;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -53,6 +54,7 @@ export class FilesService {
   ) {
     this.bucket = config.getOrThrow<string>("S3_BUCKET");
     this.maxUploadBytes = config.getOrThrow<number>("FILE_UPLOAD_MAX_BYTES");
+    this.maxEvidenceUploadBytes = config.get<number>("FILE_EVIDENCE_MAX_BYTES") ?? this.maxUploadBytes;
   }
 
   async getWorkspace(userId: string, dealId: string): Promise<DealDocumentsWorkspaceResponse> {
@@ -78,6 +80,7 @@ export class FilesService {
       dealTitle: deal.title,
       evidenceFiles: files.filter(({ category }) => category === DealFileCategory.EVIDENCE).map(format),
       maxUploadBytes: this.maxUploadBytes,
+      maxEvidenceUploadBytes: this.maxEvidenceUploadBytes,
       requirements: deal.templateVersion.documentRequirements.map((requirement) => ({
         description: requirement.description,
         id: requirement.id,
@@ -111,7 +114,7 @@ export class FilesService {
         message: "Для материала сделки не выбирают обязательный документ",
       });
     }
-    const validated = validateUploadedFile(file, this.maxUploadBytes);
+    const validated = validateUploadedFile(file, input.category === "EVIDENCE" ? this.maxEvidenceUploadBytes : this.maxUploadBytes);
     const sha256 = calculateSha256(file.buffer);
     const objectKey = createPrivateObjectKey(dealId);
     const visibility = resolveFileVisibility(requirement ?? null);

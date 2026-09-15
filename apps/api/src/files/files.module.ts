@@ -6,6 +6,7 @@ import { memoryStorage } from "multer";
 import { AuthModule } from "../auth/auth.module";
 import { FilesController } from "./files.controller";
 import { FilesService } from "./files.service";
+import { FileUploadCapacityInterceptor } from "./upload-capacity.interceptor";
 
 @Module({
   controllers: [FilesController],
@@ -15,11 +16,11 @@ import { FilesService } from "./files.service";
     MulterModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        limits: { fileSize: config.getOrThrow<number>("FILE_UPLOAD_MAX_BYTES") },
+        limits: { fileSize: Math.max(config.getOrThrow<number>("FILE_UPLOAD_MAX_BYTES"), config.getOrThrow<number>("FILE_EVIDENCE_MAX_BYTES")), files: 1, fields: 2, parts: 3 },
         storage: memoryStorage(),
       }),
     }),
   ],
-  providers: [FilesService],
+  providers: [FilesService, FileUploadCapacityInterceptor],
 })
 export class FilesModule {}

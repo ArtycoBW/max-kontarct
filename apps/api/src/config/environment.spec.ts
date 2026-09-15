@@ -1,6 +1,12 @@
 import { validateEnvironment } from "./environment";
 
 describe("validateEnvironment AI settings", () => {
+  it("uses separate document and evidence upload limits with an upper safety bound", () => {
+    expect(validateEnvironment({ NODE_ENV: "development" })).toMatchObject({
+      FILE_UPLOAD_MAX_BYTES: 104857600, FILE_EVIDENCE_MAX_BYTES: 262144000,
+    });
+    expect(() => validateEnvironment({ NODE_ENV: "development", FILE_EVIDENCE_MAX_BYTES: 262144001 })).toThrow("FILE_EVIDENCE_MAX_BYTES");
+  });
   it("uses FakeAiProvider defaults in development", () => {
     expect(validateEnvironment({ NODE_ENV: "development" })).toMatchObject({
       AI_PROVIDER: "fake",

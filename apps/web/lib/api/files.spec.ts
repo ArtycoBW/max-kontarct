@@ -4,12 +4,12 @@ const allowed = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 const maxBytes = 20 * 1024 * 1024;
 
 describe("validateUploadCandidate", () => {
-  it("describes the configured size limit precisely", () => {
+  it("explains an oversized file without a permanent numeric limit label", () => {
     expect(validateUploadCandidate(
       { name: "large.pdf", size: maxBytes + 1, type: "application/pdf" },
       maxBytes,
       allowed,
-    )).toMatchObject({ title: "Файл больше 20 МБ" });
+    )).toMatchObject({ title: "Файл слишком большой" });
   });
 
   it("explains supported formats", () => {

@@ -27,7 +27,7 @@ export function validateUploadCandidate(
   if (file.size > maxBytes) {
     return {
       description: `Размер «${file.name}» — ${formatMegabytes(file.size)}. Выберите файл меньшего размера.`,
-      title: `Файл больше ${formatMegabytes(maxBytes)}`,
+      title: "Файл слишком большой",
     };
   }
   const declaredType = file.type === "image/jpg" ? "image/jpeg" : file.type;
@@ -53,9 +53,17 @@ export function uploadDealFile(
   file: File,
   input: { category: DealFileCategory; requirementId?: string },
   onProgress: (progress: number) => void,
+  signal?: AbortSignal,
 ): Promise<DealFileResponse> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
+    const abort = () => request.abort();
+    if (signal?.aborted) { reject(new DOMException("Загрузка отменена", "AbortError")); return; }
+    signal?.addEventListener("abort", abort, { once: true });
+    request.onloadend = () => signal?.removeEventListener("abort", abort);
+    request.onabort = () => reject(new DOMException("Загрузка отменена", "AbortError"));
+    request.timeout = 15 * 60 * 1000;
+    request.ontimeout = () => reject(new ApiError(0, { code: "UPLOAD_TIMEOUT", message: "Загрузка заняла слишком много времени. Проверьте соединение и повторите." }));
     request.open(
       "POST",
       `${API_BASE_URL.replace(/\/$/, "")}/deals/${encodeURIComponent(dealId)}/files`,
@@ -94,7 +102,7 @@ function normalizeUploadError(
   if (status === 413) {
     return {
       code: "FILE_TOO_LARGE",
-      message: "Файл превышает допустимый размер 20 МБ",
+      message: "Файл слишком большой. Уменьшите его размер или разделите на несколько файлов.",
     };
   }
   return body;

@@ -20,6 +20,7 @@ import type { AuthenticatedRequest } from "../auth/auth.types";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { UploadDealFileDto } from "./dto/upload-deal-file.dto";
 import { FilesService } from "./files.service";
+import { FileUploadCapacityInterceptor } from "./upload-capacity.interceptor";
 
 @Controller("deals/:dealId/files")
 @UseGuards(SessionAuthGuard)
@@ -38,7 +39,7 @@ export class FilesController {
   }
 
   @Post()
-  @UseInterceptors(FileInterceptor("file"))
+  @UseInterceptors(FileUploadCapacityInterceptor, FileInterceptor("file"))
   @ApiConsumes("multipart/form-data")
   @ApiOperation({ summary: "Загрузить частный документ сделки" })
   upload(

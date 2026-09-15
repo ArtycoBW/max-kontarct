@@ -53,6 +53,21 @@ describe("FilesService ACL", () => {
     expect(prisma.dealFile.findMany).not.toHaveBeenCalled();
   });
 
+  it("applies the larger capacity only to evidence, before storage", async () => {
+    service = new FilesService(prisma, storage, new ConfigService({
+      FILE_UPLOAD_MAX_BYTES: 8, FILE_EVIDENCE_MAX_BYTES: 16, S3_BUCKET: "private",
+    }));
+    const requirement = { id: "requirement", title: "Document", key: "property_document", required: true };
+    prisma.deal.findUnique.mockResolvedValue({ ...deal([USER_ID]), templateVersion: { documentRequirements: [requirement] } });
+    const file = { buffer: Buffer.from("%PDF-123456789"), mimetype: "application/pdf", originalname: "act.pdf" } as Express.Multer.File;
+    await expect(service.upload(USER_ID, DEAL_ID, { category: "REQUIREMENT", requirementId: requirement.id }, file)).rejects.toThrow("Файл слишком большой");
+    expect(storage.putObject).not.toHaveBeenCalled();
+    storage.putObject.mockRejectedValueOnce(new Error("storage boundary reached"));
+    await expect(service.upload(USER_ID, DEAL_ID, { category: "EVIDENCE" }, file)).rejects.toThrow("storage boundary reached");
+    expect(storage.putObject).toHaveBeenCalledTimes(1);
+    expect(await service.getWorkspace(USER_ID, DEAL_ID)).toMatchObject({ maxUploadBytes: 8, maxEvidenceUploadBytes: 16 });
+  });
+
   it("scopes a file lookup to the requested deal to prevent IDOR", async () => {
     prisma.dealFile.findFirst.mockResolvedValue(null);
     await expect(service.download(USER_ID, DEAL_ID, FILE_ID)).rejects.toBeInstanceOf(NotFoundException);

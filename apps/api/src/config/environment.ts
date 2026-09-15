@@ -13,7 +13,8 @@ const DEVELOPMENT_DEFAULTS = {
   DADATA_SECRET_KEY: "",
   DADATA_TIMEOUT_MS: 5_000,
   DATA_NORMALIZATION_PROVIDER: "mock",
-  FILE_UPLOAD_MAX_BYTES: 20 * 1024 * 1024,
+  FILE_UPLOAD_MAX_BYTES: 100 * 1024 * 1024,
+  FILE_EVIDENCE_MAX_BYTES: 250 * 1024 * 1024,
   DEAL_INVITATION_TTL_SECONDS: 3 * 24 * 60 * 60,
   CORS_ORIGINS: "http://localhost:3000,http://localhost:3002",
   DATABASE_URL:
@@ -308,7 +309,14 @@ export function validateEnvironment(input: EnvironmentInput): EnvironmentInput {
       DEVELOPMENT_DEFAULTS.FILE_UPLOAD_MAX_BYTES,
       "FILE_UPLOAD_MAX_BYTES",
       1024,
-      50 * 1024 * 1024,
+      250 * 1024 * 1024,
+    ),
+    FILE_EVIDENCE_MAX_BYTES: parseBoundedInteger(
+      input.FILE_EVIDENCE_MAX_BYTES,
+      DEVELOPMENT_DEFAULTS.FILE_EVIDENCE_MAX_BYTES,
+      "FILE_EVIDENCE_MAX_BYTES",
+      1024,
+      250 * 1024 * 1024,
     ),
     DEV_MAX_FIRST_NAME: readString(
       input.DEV_MAX_FIRST_NAME,

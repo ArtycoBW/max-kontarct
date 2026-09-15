@@ -2034,6 +2034,9 @@ button.service-status {
 .upload-progress-card i { display: block; overflow: hidden; height: 5px; border-radius: 999px; background: var(--muted); }
 .upload-progress-card i b { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .18s ease; }
 .upload-success-card { color: #087c55; border-color: #bce8d7; background: #ebf8f2; }
+.upload-failures { min-width: 0; overflow-wrap: anywhere; }
+.upload-failures ul { margin: 8px 0; padding-left: 20px; }
+.upload-failures li + li { margin-top: 8px; }
 
 .uploaded-file-list i em {
   display: block;
