@@ -865,6 +865,7 @@ describe("users/auth database foundation (integration)", () => {
     const validator = new TemplateSchemaValidator();
 
     expect(templates.map(({ slug }) => slug)).toEqual([
+      "individual-agreement",
       "movable-property-sale",
       "paid-services",
       "personal-loan",

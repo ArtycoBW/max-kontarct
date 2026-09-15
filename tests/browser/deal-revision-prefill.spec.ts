@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { actor, onboarding } from "./helpers";
 
 test("a new revision offers earlier clarification answers for explicit review without submitting them automatically", async ({ browser }) => {
-  const context = await actor(browser, 72431, "+79997002431");
+  const context = await actor(browser, 72441, "+79997002441");
   const page = await context.newPage();
   await page.goto("/"); await onboarding(page);
   const template = await (await page.request.get("/api/v1/templates/paid-services")).json();
