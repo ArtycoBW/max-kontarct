@@ -12,10 +12,13 @@ import { DealStateMachineService } from "./deal-state-machine.service";
 import { DealsController } from "./deals.controller";
 import { DealsRepository } from "./deals.repository";
 import { DealsService } from "./deals.service";
+import { DealMessagesController } from "./deal-messages.controller";
+import { DealMessagesService } from "./deal-messages.service";
 
 @Module({
   controllers: [
     DealsController,
+    DealMessagesController,
     DealInvitationsController,
     JoinDealInvitationsController,
     PublicDealInvitationsController,
@@ -27,6 +30,7 @@ import { DealsService } from "./deals.service";
     DealStateMachineService,
     DealsRepository,
     DealsService,
+    DealMessagesService,
   ],
 })
 export class DealsModule {}

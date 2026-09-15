@@ -772,6 +772,8 @@ export interface ContractStructuredDraft {
 }
 
 export interface ContractGenerationResponse {
+  /** Confirmed answers belonging to this user's generation, for explicit revision review. */
+  clarificationAnswers?: Record<string, unknown>;
   createdAt: string;
   draft: ContractStructuredDraft | null;
   errorMessage: string | null;

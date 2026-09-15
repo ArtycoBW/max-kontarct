@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import JSZip from "jszip";
 import { actor, futureDate, maxProof, noOverflow, onboarding, selectSupplierRole } from "./helpers";
@@ -86,6 +86,9 @@ test("two participants create, review, approve, sign and verify a deal", async (
   expect((await outsider.request.get(privateFileUrl!)).status()).toBe(404);
   const workspaceUrl = privateFileUrl!.split("/files/")[0] + "/workspace";
   expect((await outsider.request.get(workspaceUrl)).status()).toBe(404);
+  const dealApi = workspaceUrl.replace(/\/workspace$/, "");
+  expect((await outsider.request.get(`${dealApi}/messages`)).status()).toBe(404);
+  expect((await outsider.request.post(`${dealApi}/messages`, { data: { body: "Чужое сообщение", kind: "MESSAGE", clientId: randomUUID() } })).status()).toBe(404);
   await outsider.close();
   await first.locator(".documents-section").filter({ hasText: "Материалы и доказательства" }).locator('input[type="file"]').setInputFiles({ name: "Общий-акт.png", mimeType: "image/png", buffer: png });
   await expect(first.getByText("Общий-акт.png", { exact: true }).first()).toBeVisible();
@@ -121,7 +124,76 @@ test("two participants create, review, approve, sign and verify a deal", async (
   for (const page of [first, second]) {
     await page.getByRole("button", { name: "Сделки", exact: true }).click();
     await page.getByRole("button", { name: /Браузерная проверка аренды/ }).click();
-    await page.getByRole("button", { name: "Согласовать версию 1", exact: true }).click();
+    await expect(page.locator(".shared-deal-attachments").getByRole("link", { name: "Общий-акт.png" })).toBeVisible();
+    await expect(page.locator(".shared-deal-attachments")).not.toContainText("Личный-документ");
+  }
+  await first.getByRole("button", { name: "Согласовать версию 1", exact: true }).click();
+  await expect(first.getByRole("button", { name: "Версия согласована", exact: true })).toBeDisabled();
+  const original = await (await first.request.get(workspaceUrl)).json();
+  expect(original.approvals.totalApproved).toBe(1);
+  await second.getByRole("combobox", { name: "Тип сообщения" }).click();
+  await second.getByRole("option", { name: "Предложить изменения", exact: true }).click();
+  const proposal = "Предлагаю изменить платёж на 3000 рублей в день.";
+  await second.getByRole("textbox", { name: "Сообщение участнику сделки" }).fill(proposal);
+  // Simulate a lost response after the server has already accepted the message.
+  await second.route("**/messages", async route => {
+    if (route.request().method() !== "POST") return route.continue();
+    await route.fetch();
+    await route.fulfill({ status: 503, json: { message: "Связь прервана, повторите отправку" } });
+  });
+  await second.getByRole("button", { name: "Отправить сообщение", exact: true }).click();
+  await expect(second.locator(".deal-chat .field-error")).toContainText("Связь прервана");
+  await expect(second.getByRole("textbox", { name: "Сообщение участнику сделки" })).toHaveValue(proposal);
+  await second.unroute("**/messages");
+  await second.getByRole("button", { name: "Отправить сообщение", exact: true }).click();
+  await expect(first.getByRole("log").getByText(proposal, { exact: true })).toBeVisible();
+  const messages = await (await first.request.get(`${dealApi}/messages`)).json();
+  expect(messages.items.filter((item: { body: string }) => item.body === proposal)).toHaveLength(1);
+  expect((await (await first.request.get(workspaceUrl)).json()).approvals.totalApproved).toBe(1);
+  expect((await first.request.post(`${dealApi}/messages`, { data: { body: "   ", kind: "MESSAGE", clientId: randomUUID() } })).status()).toBe(400);
+  expect((await first.request.post(`${dealApi}/messages`, { data: { body: "x".repeat(4001), kind: "MESSAGE", clientId: randomUUID() } })).status()).toBe(400);
+  await first.getByRole("textbox", { name: "Сообщение участнику сделки" }).fill('<img src=x onerror="window.__chatXss=true"> Подготовлю новую редакцию.');
+  await first.getByRole("button", { name: "Отправить сообщение", exact: true }).click();
+  await expect(second.getByRole("log")).toContainText("Подготовлю новую редакцию.");
+  expect(await second.evaluate(() => (window as Window & { __chatXss?: boolean }).__chatXss)).toBeUndefined();
+  await expect(second.getByRole("button", { name: "Изменить условия договора" })).toHaveCount(0);
+  await first.getByRole("button", { name: "Изменить условия договора" }).click();
+  const editor = first.getByRole("dialog", { name: "Новая редакция договора" });
+  await editor.getByRole("textbox", { name: "Что меняется", exact: true }).fill("Изменён суточный платёж по предложению арендатора");
+  await editor.getByRole("textbox", { name: "Описание сделки для новой редакции" }).fill("Аренда комнаты на десять дней с мебелью, стоимость 3000 рублей в день.");
+  await editor.getByRole("textbox", { name: "Размер платежа, ₽", exact: true }).fill("3000");
+  await editor.getByRole("button", { name: "Подготовить новую редакцию" }).click();
+  await expect(editor.getByRole("button", { name: "Сохранить новую редакцию" })).toBeVisible();
+  for (const width of [320, 390, 1440]) {
+    await first.setViewportSize({ width, height: 900 }); await noOverflow(first);
+    const title = await editor.getByRole("heading", { name: "Новая редакция договора", exact: true }).boundingBox();
+    const descriptionBox = await editor.locator(".dialog-description").boundingBox();
+    expect(title!.y + title!.height).toBeLessThanOrEqual(descriptionBox!.y);
+  }
+  await first.setViewportSize({ width: 390, height: 844 });
+  await first.screenshot({ path: "test-results/deal-revision-preview.png", fullPage: true });
+  const revisionResponse = first.waitForResponse(response => response.url().endsWith("/versions") && response.request().method() === "POST");
+  await editor.getByRole("button", { name: "Сохранить новую редакцию" }).click();
+  const revisionResult = await revisionResponse;
+  expect(revisionResult.ok()).toBe(true);
+  const revisionPayload = revisionResult.request().postDataJSON();
+  await expect(editor).toHaveCount(0);
+  await expect(second.getByText("Редакция условий № 2", { exact: true })).toBeVisible();
+  const revised = await (await first.request.get(workspaceUrl)).json();
+  expect(revised.versionNumber).toBe(2);
+  expect(revised.approvals.totalApproved).toBe(0);
+  expect(revised.draft.answers.paymentAmount).toBe(3000);
+  expect((await first.request.post(`${dealApi}/versions/${original.versionId}/approve`, { data: { expectedDealUpdatedAt: revised.updatedAt } })).status()).toBe(409);
+  expect((await second.request.post(`${dealApi}/versions`, { data: revisionPayload })).status()).toBe(403);
+  expect((await first.request.post(`${dealApi}/versions`, { data: revisionPayload })).status()).toBe(409);
+  const history = await (await second.request.get(`${dealApi}/versions`)).json();
+  expect(history.items.map((item: { versionNumber: number }) => item.versionNumber)).toEqual([2, 1]);
+  expect(history.items[1].approvals.revoked + history.items[1].approvals.superseded).toBe(1);
+  await second.getByRole("button", { name: "История редакций" }).click();
+  await expect(second.getByText("Изменён суточный платёж по предложению арендатора", { exact: true })).toBeVisible();
+  for (const page of [first, second]) {
+    await expect(page.locator(".shared-deal-attachments").getByRole("link", { name: "Общий-акт.png" })).toBeVisible();
+    await page.getByRole("button", { name: "Согласовать версию 2", exact: true }).click();
   }
   for (const [page, phone] of [[first, "+79997001001"], [second, "+79997001002"]] as const) {
     await expect(page.getByRole("checkbox")).toBeVisible({ timeout: 45_000 });
@@ -143,6 +215,11 @@ test("two participants create, review, approve, sign and verify a deal", async (
     await noOverflow(page);
   }
   await first.screenshot({ path: "test-results/completed-mobile.png", fullPage: true });
+  await expect(first.getByRole("button", { name: "Изменить условия договора" })).toHaveCount(0);
+  expect((await first.request.post(`${dealApi}/versions`, { data: { ...revisionPayload, expectedVersionId: revised.versionId } })).status()).toBe(409);
+  expect((await second.request.post(`${dealApi}/messages`, { data: { body: "Изменить подписанную версию", kind: "CHANGE_REQUEST", clientId: randomUUID() } })).status()).toBe(409);
+  expect((await second.request.post(`${dealApi}/messages`, { data: { body: "Договор получил, спасибо", kind: "MESSAGE", clientId: randomUUID() } })).ok()).toBe(true);
+  await expect(first.getByRole("log")).toContainText("Договор получил, спасибо");
   await first.locator(".mini-app-scroll").evaluate(element => { element.scrollTop = element.scrollHeight; });
   const bottomGap = await first.getByRole("button", { name: "Документы сделки", exact: true }).evaluate(element => {
     const scroll = element.closest(".mini-app-scroll")!;

@@ -2048,6 +2048,9 @@ button.service-status {
 .deal-chat-message header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; font-size: 12px; }
 .deal-chat-message time, .deal-chat-message small { color: var(--muted); font-size: 11px; }
 .deal-chat-message p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 0; font-size: 14px; line-height: 1.5; }
+.shared-deal-attachments a { height: auto; white-space: normal; overflow-wrap: anywhere; justify-content: flex-start; text-align: left; }
+.revision-form { display: grid; gap: 18px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.revision-question { padding: 16px; display: grid; gap: 10px; }
 .app-modal-body .profile-screen, .app-modal-body .documents-screen { padding: 0; }
 
 .uploaded-file-list i em {
@@ -4232,6 +4235,8 @@ button.service-status {
 .dialog-close { position: absolute; right: 16px; top: 16px; }
 .app-modal { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
 .app-modal-header { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; border-bottom: 1px solid var(--border); }
+.app-modal-header.is-stacked { display: grid; justify-content: stretch; gap: 8px; padding-right: 56px; }
+.app-modal-header.is-stacked .dialog-description { margin: 0; line-height: 1.5; }
 .app-modal-header h2 { margin: 0; font-size: 20px; line-height: 1.25; letter-spacing: -.03em; }
 .app-modal-close { display: grid; flex: none; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--surface-muted, #f6f2ef); cursor: pointer; }
 .app-modal-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 24px; scrollbar-gutter: stable; }
@@ -4864,9 +4869,10 @@ button.service-status {
   padding: 16px 16px 24px;
   scroll-padding-bottom: 24px;
 }
-.deal-contract-preview > strong { display: block; margin-bottom: 10px; font-size: 14px; }
-.deal-contract-preview h3 { margin: 14px 0 6px; font-size: 12px; }
-.deal-contract-preview p { margin: 0 0 7px; color: var(--app-muted); font-size: 10px; line-height: 1.5; }
+.deal-contract-preview > strong { display: block; margin-bottom: 10px; font-size: 16px; }
+.deal-contract-preview h3, .deal-contract-preview h4 { margin: 14px 0 6px; font-size: 16px; }
+.deal-contract-preview p { margin: 0 0 10px; color: var(--app-muted); font-size: 14px; line-height: 1.6; }
+.revision-form .deal-contract-preview { max-height: none; overflow: visible; }
 
 .signing-flow { display: grid; gap: 15px; padding-bottom: 4px; }
 .signing-state-icon { display: grid; width: 68px; height: 68px; margin: 5px auto 0; place-items: center; border-radius: 50%; color: var(--app-accent); background: var(--app-accent-soft); }

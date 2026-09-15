@@ -113,6 +113,8 @@ function toResponse(
 ): ContractGenerationResponse {
   const status = toContractStatus(record.status);
   return {
+    clarificationAnswers: record.clarificationAnswers && typeof record.clarificationAnswers === "object" && !Array.isArray(record.clarificationAnswers)
+      ? record.clarificationAnswers : {},
     createdAt: record.createdAt.toISOString(),
     draft: record.structuredDraft
       ? parseStoredDraft(record.structuredDraft)

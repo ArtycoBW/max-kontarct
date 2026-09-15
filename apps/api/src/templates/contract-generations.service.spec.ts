@@ -93,6 +93,13 @@ describe("ContractGenerationsService", () => {
     await expect(service.start("work-contract", generationId, userId)).resolves.toMatchObject({ status: "COMPLETED" });
     expect(markQueued).not.toHaveBeenCalled();
   });
+
+  it("returns the owner's confirmed answers for review without reopening a completed session", async () => {
+    findOwned.mockResolvedValue(record(AiGenerationStatus.COMPLETED, { clarificationAnswers: { termsAcceptance: "Проверка и подтверждение в чате" } }));
+    await expect(service.get("property-rental", generationId, userId)).resolves.toMatchObject({ status: "COMPLETED", clarificationAnswers: { termsAcceptance: "Проверка и подтверждение в чате" } });
+    expect(markQueued).not.toHaveBeenCalled();
+    expect(findOwned).toHaveBeenCalledWith(generationId, "property-rental", userId);
+  });
 });
 
 function record(

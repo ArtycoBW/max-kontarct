@@ -32,6 +32,10 @@ import {
 import { queryKeys } from "@/lib/api/query-keys";
 import { shareInMax } from "@/lib/max/bridge";
 import { participantRoleLabel } from "@/lib/deals/party-responsibility";
+import { DealChat } from "./deal-chat";
+import { SharedDealAttachments } from "./shared-deal-attachments";
+import { DealRevisionEditor } from "./deal-revision-editor";
+import { DealVersionHistory } from "./deal-version-history";
 
 export function DealWorkspaceScreen({
   dealId,
@@ -266,6 +270,8 @@ export function DealWorkspaceScreen({
         </Card>
       ) : null}
 
+      {deal.contractDraft && !signingVisible ? <SharedDealAttachments dealId={dealId} /> : null}
+
       {canApprove && !profileRequired ? (
         <Button
           className="full-width"
@@ -294,6 +300,9 @@ export function DealWorkspaceScreen({
           <FileCheck2 size={18} /> Документы сделки
         </Button>
       ) : null}
+      {deal.counterparty ? <DealChat key={dealId} dealId={dealId} status={deal.status} /> : null}
+      {deal.currentUserRole === "INITIATOR" && !["DRAFT", "SIGNED_BY_ONE", "SIGNED", "COMPLETED", "CANCELED"].includes(deal.status) ? <DealRevisionEditor deal={deal} onSaved={() => { void refreshWorkspace(queryClient, dealId); }} /> : null}
+      {deal.versionNumber > 1 ? <DealVersionHistory dealId={dealId} versionId={deal.versionId} /> : null}
 
       {issueInvitation.error ? (
         <Card className="form-message is-error" role="alert">

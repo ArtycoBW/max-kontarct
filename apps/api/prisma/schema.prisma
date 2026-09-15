@@ -173,6 +173,7 @@ model User {
   dealFiles      DealFile[]       @relation("DealFileOwner")
   reviewedDealFiles DealFile[]    @relation("DealFileReviewer")
   dealSignatures    DealSignature[]
+  dealMessages      DealMessage[]
 
   @@index([role], map: "users_role_idx")
   @@map("users")
@@ -400,11 +401,28 @@ model Deal {
   files           DealFile[]
   signatures      DealSignature[]
   artifacts       DealArtifact[]
+  messages        DealMessage[]
 
   @@index([initiatorUserId, status, updatedAt], map: "deals_initiator_status_updated_idx")
   @@index([status, updatedAt], map: "deals_status_updated_idx")
   @@index([templateVersionId], map: "deals_template_version_id_idx")
   @@map("deals")
+}
+
+model DealMessage {
+  id String @id @default(uuid()) @db.Uuid
+  dealId String @map("deal_id") @db.Uuid
+  authorId String @map("author_id") @db.Uuid
+  clientId String @map("client_id") @db.Uuid
+  body String @db.VarChar(4000)
+  kind String @default("MESSAGE") @db.VarChar(20)
+  versionNumber Int @map("version_number")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  deal Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  @@unique([dealId, authorId, clientId], map: "deal_messages_idempotency_key")
+  @@index([dealId, createdAt, id], map: "deal_messages_timeline_idx")
+  @@map("deal_messages")
 }
 
 model DealInvitation {

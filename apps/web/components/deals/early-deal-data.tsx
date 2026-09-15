@@ -23,7 +23,7 @@ export function EarlyDealData({ dealId, beforeOpen, onProfileSaved, roleChosen }
       {error ? <p role="alert" className="field-error">{error}</p> : null}
     </Card>
     <Dialog open={section !== null} onOpenChange={next => { if (!next) setSection(null); }}><DialogContent className="app-modal">
-      <DialogHeader className="app-modal-header"><DialogTitle>{section === "profile" ? "Мои реквизиты для договора" : "Фото и материалы предмета"}</DialogTitle><DialogDescription>{section === "profile" ? "Это ваши данные профиля. Изменения сохраняются только по кнопке в форме." : "Не добавляйте сюда паспорт и другие личные документы."}</DialogDescription></DialogHeader>
+      <DialogHeader className="app-modal-header is-stacked"><DialogTitle>{section === "profile" ? "Мои реквизиты для договора" : "Фото и материалы предмета"}</DialogTitle><DialogDescription>{section === "profile" ? "Это ваши данные профиля. Изменения сохраняются только по кнопке в форме." : "Не добавляйте сюда паспорт и другие личные документы."}</DialogDescription></DialogHeader>
       <div className="app-modal-body">
         {section === "profile" ? <ProfileScreen embedded onSaved={() => { setSection(null); onProfileSaved(); }} /> : section === "materials" ? <DocumentsScreen materialsOnly dealId={dealId} onBack={() => setSection(null)} onSelectDeal={() => undefined} /> : null}
       </div>
