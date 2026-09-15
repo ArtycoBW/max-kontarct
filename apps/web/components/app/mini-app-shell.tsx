@@ -1,5 +1,7 @@
 "use client";
 
+import { fieldExample, prefillDescriptionLocation } from "@/lib/validation/field-examples";
+
 import type {
   AiClarificationQuestion,
   AiClarificationSessionResponse,
@@ -785,12 +787,15 @@ function CreateDealScreen({
     setDescriptionError("");
     setTitle(normalizedTitle);
     setDescription(normalizedDescription);
+    const nextAnswers = prefillDescriptionLocation(normalizedDescription, answers, definition?.fields.map(field => field.key) ?? []);
     try {
       await enqueueDraftSave({
+        answers: nextAnswers,
         currentStep: "questionnaire",
         description: normalizedDescription,
         title: normalizedTitle,
       });
+      setAnswers(nextAnswers);
       setStep("questionnaire");
     } catch {
       // Ошибка сохранения уже показана рядом с формой.
@@ -1806,7 +1811,7 @@ function AiQuestionControl({
       id={question.id}
       maxLength={1_000}
       onChange={(event) => onAnswer(event.target.value)}
-      placeholder="Введите ответ"
+      placeholder={fieldExample(question.id) ?? "Введите ответ"}
       value={typeof answer === "string" ? answer : ""}
     />
     <VoiceInput inputId={question.id} value={typeof answer === "string" ? answer : ""} maxLength={1000} onChange={onAnswer} /></div>

@@ -553,7 +553,7 @@ function questionTopic(value: string): string | null {
   if (/(termsloantransfer)/.test(text)) return "loan_transfer";
   if (/(termsloanrepayment)/.test(text)) return "loan_repayment";
   if (/(termsinterest)/.test(text)) return "interest_payment";
-  if (/(address|location|адрес|местонахожд)/.test(text))
+  if (/(address|location|адрес|местонахожд|где.*(услуг|работ|сделк|имуществ|переда|исполн)|место.*(работ|услуг|исполн|переда)|куда.*(при[её]х|достав))/u.test(text))
     return "property_address";
   if (/(room.*area|area.*room|area.*sqm|площад)/.test(text))
     return "property_area";

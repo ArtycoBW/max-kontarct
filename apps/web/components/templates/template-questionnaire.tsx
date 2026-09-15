@@ -15,6 +15,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { VoiceInput } from "@/components/ui/voice-input";
+import { fieldExample } from "@/lib/validation/field-examples";
 import type {
   QuestionnaireDefinition,
   QuestionnaireField,
@@ -155,6 +156,7 @@ function QuestionnaireFieldControl({
           aria-invalid={Boolean(error)}
           id={field.key}
           maxLength={field.maxLength}
+          placeholder={fieldExample(field.key)}
           onChange={(event) => onChange(field.key, event.target.value)}
           value={stringValue}
         />
@@ -164,6 +166,7 @@ function QuestionnaireFieldControl({
           </span>
         ) : null}
         <VoiceInput inputId={field.key} value={stringValue} maxLength={field.maxLength ?? 1000} onChange={text => onChange(field.key, text)} />
+        {fieldExample(field.key) ? <FieldDescription text={`Пример: ${fieldExample(field.key)}. Введите адрес вашей сделки; квартиру или офис — если они есть.`} /> : null}
         <FieldDescription text={field.description} />
         <FieldError id={errorId} message={error} />
       </div>
@@ -184,6 +187,7 @@ function QuestionnaireFieldControl({
         }
         maxLength={field.maxLength}
         minLength={field.minLength}
+        placeholder={fieldExample(field.key)}
         onChange={(event) => onChange(field.key, event.target.value)}
         type={field.format === "email" ? "email" : "text"}
         value={

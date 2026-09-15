@@ -1,0 +1,35 @@
+import { expect, test } from "@playwright/test";
+import { actor, futureDate, noOverflow, onboarding } from "./helpers";
+
+test("incomplete address explains the missing part and corrected address is not asked again", async ({ browser }) => {
+  const context = await actor(browser, 72411, "+79997002411");
+  const page = await context.newPage();
+  await page.goto("/"); await onboarding(page);
+  await page.getByRole("button", { name: "Создать", exact: true }).click();
+  await page.getByRole("tab", { name: "Готовые шаблоны" }).click();
+  await page.getByRole("button", { name: /Выполнение работ/ }).click();
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  await page.getByRole("textbox", { name: /^Краткое описание/ }).fill("Ремонт по адресу г. Казань, ул. Примерная, д. 10. Оплата после приёмки, передача по акту.");
+  await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
+  const location = page.getByLabel("Место выполнения работ", { exact: false });
+  await expect(location).toHaveValue("г. Казань, ул. Примерная, д. 10");
+  await location.fill("У заказчика");
+  await page.getByRole("textbox", { name: "Описание работ", exact: false }).fill("Ремонт ванной комнаты. Оплата после приёмки. Передача по акту.");
+  await futureDate(page, "Дата начала", 10);
+  await futureDate(page, "Дата окончания", 20);
+  await page.getByRole("textbox", { name: /Стоимость работ/ }).fill("20000");
+  await page.getByRole("switch", { name: /Материалы/ }).check();
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  const answer = page.getByRole("textbox", { name: "Где именно будут выполняться работы?", exact: true });
+  await expect(answer).toHaveAttribute("placeholder", /г\. Казань/);
+  await answer.fill("ул. Примерная, д. 10");
+  await page.getByRole("button", { name: "Завершить", exact: true }).click();
+  await expect(page.locator(".field-error")).toContainText("Не указан населённый пункт");
+  await expect(answer).toHaveValue("ул. Примерная, д. 10");
+  await noOverflow(page);
+  await page.screenshot({ path: "test-results/address-specific-error.png", fullPage: true });
+  await answer.fill("Казань Примерная 10");
+  await page.getByRole("button", { name: "Завершить", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Условия собраны" })).toBeVisible();
+  await context.close();
+});

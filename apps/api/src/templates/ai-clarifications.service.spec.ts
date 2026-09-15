@@ -12,7 +12,7 @@ import type { AiClarificationRecord } from "./ai-clarifications.repository";
 import { AiClarificationsRepository } from "./ai-clarifications.repository";
 import { AiClarificationsService } from "./ai-clarifications.service";
 import { TemplatesService } from "./templates.service";
-import { missingContractTerms } from "./contract-completeness";
+import { COMPLETENESS_VERSION, missingContractTerms } from "./contract-completeness";
 
 const userId = "00000000-0000-4000-8000-000000000001";
 const sessionId = "10000000-0000-4000-8000-000000000001";
@@ -306,7 +306,7 @@ describe("AiClarificationsService", () => {
     expect(create).toHaveBeenCalledWith(expect.objectContaining({
       status: "NEED_MORE_INFO", questions: [expect.objectContaining({ id: "termsLocation" }), expect.objectContaining({ id: "termsPayment" }), expect.objectContaining({ id: "termsAcceptance" })],
     }));
-    expect((create.mock.calls[0]?.[0] as { metadata: unknown }).metadata).toMatchObject({ completenessVersion: "1.0.0" });
+    expect((create.mock.calls[0]?.[0] as { metadata: unknown }).metadata).toMatchObject({ completenessVersion: COMPLETENESS_VERSION });
   });
 
   it("keeps a complete free-form description ready even when AI repeats address/payment questions", async () => {
@@ -335,7 +335,7 @@ describe("AiClarificationsService", () => {
     const answers = { termsLocation: "Онлайн", termsPayment: "После приёмки", termsAcceptance: "Приёмка по акту" };
     await service.answer("work-contract", sessionId, userId, { answers });
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ answers, status: "READY_TO_GENERATE", questions: [], expectedUpdatedAt: createdAt }));
-    expect((update.mock.calls[0]?.[0] as { metadata: unknown }).metadata).toMatchObject({ completenessVersion: "1.0.0" });
+    expect((update.mock.calls[0]?.[0] as { metadata: unknown }).metadata).toMatchObject({ completenessVersion: COMPLETENESS_VERSION });
   });
 });
 

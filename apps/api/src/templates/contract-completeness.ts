@@ -1,13 +1,14 @@
 import type { AiClarificationQuestion } from "@max-contract/contracts";
+import { contractLocationIssue, LOCATION_EXAMPLE } from "./contract-location";
 
-export const COMPLETENESS_VERSION = "1.0.0";
+export const COMPLETENESS_VERSION = "1.1.0";
 type Answers = Record<string, unknown>;
 type Rule = {
   id: string;
   label: string;
   description: string;
   keys: string[];
-  valid: (text: string) => boolean;
+  valid: (text: string, direct?: boolean) => boolean;
 };
 const meaningful = (text: string) =>
   text.length >= 5 &&
@@ -21,25 +22,8 @@ export function normalizeTerm(value: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
-function location(text: string, remote = true): boolean {
-  if (!meaningful(text)) return false;
-  if (
-    remote &&
-    /(онлайн|online|дистанционно|удаленно|по видеосвязи|доставк.*(пункт|курьер)|пункт.*выдачи)/u.test(
-      text,
-    )
-  )
-    return true;
-  return (
-    /[а-яa-z]{3}/u.test(text) &&
-    /\d/u.test(text) &&
-    (/(улиц|ул\.|проспект|пр-т|переул|шоссе|набереж|площадь\s+[а-я-]{3,}\s*\d|дом\s*\d|д\.\s*\d)/u.test(
-      text,
-    ) ||
-      /(?:москва|санкт-петербург|ростов-на-дону|г\.\s*[а-я-]+)[, ]+[а-я -]{3,}\s+\d/u.test(
-        text,
-      ))
-  );
+function location(text: string, remote = true, shorthand = false): boolean {
+  return contractLocationIssue(text, remote, shorthand) === null;
 }
 function payment(text: string): boolean {
   if (
@@ -74,7 +58,7 @@ const rule = (
 const place = rule(
   "termsLocation",
   "Где именно выполняется сделка?",
-  "Укажите конкретное место: город, улицу, дом и помещение. Для удалённого исполнения можно написать «онлайн» и способ передачи результата.",
+  `${LOCATION_EXAMPLE} Для удалённого исполнения: «Онлайн, результат отправляю по электронной почте».`,
   [
     "workLocation",
     "serviceLocation",
@@ -83,7 +67,7 @@ const place = rule(
     "address",
     "location",
   ],
-  location,
+  (text, direct) => location(text, true, direct),
 );
 const pay = rule(
   "termsPayment",
@@ -138,10 +122,10 @@ function rulesFor(slug: string, input: Answers): Rule[] {
         rule(
           "termsProperty",
           "Уточните имущество или его местонахождение",
-          "Для помещения укажите адрес. Для автомобиля или другой вещи — модель и идентификатор либо отличительные характеристики.",
+          `Для помещения: «г. Казань, ул. Примерная, д. 10». Для вещи: «Ноутбук модели А, серийный номер 12345». Указывайте данные своего предмета договора, не копируйте пример.`,
           ["propertyDescription", "propertyIdentifier", "propertyAddress"],
-          (text) =>
-            location(text, false) ||
+          (text, direct) =>
+            location(text, false, direct) ||
             (meaningful(text) &&
               /(vin|серийн|госномер|регистрационн.*номер|модель|инвентарн|идентификатор)/u.test(
                 text,
@@ -262,7 +246,7 @@ export function missingContractTerms(
       const direct = answerText(answers[item.id]);
       if (
         direct &&
-        item.valid((item.id === "termsPayment" ? "оплата " : "") + direct)
+        item.valid((item.id === "termsPayment" ? "оплата " : "") + direct, true)
       )
         return false;
       if (
@@ -270,6 +254,7 @@ export function missingContractTerms(
           item.valid(
             (item.id === "termsPayment" ? "оплата " : "") +
               answerText(all[key]),
+            /Location|Address|^address$|^location$/u.test(key),
           ),
         )
       )
@@ -306,9 +291,17 @@ export function invalidRequiredTermAnswers(
         !item.valid(
           (item.id === "termsPayment" ? "оплата " : "") +
             answerText(answers[item.id]),
+          true,
         ),
     )
-    .map((item) => ({ path: item.id, message: item.description }));
+    .map((item) => ({
+      path: item.id,
+      message: item.id === "termsLocation"
+        ? `${contractLocationIssue(answerText(answers[item.id]))} ${LOCATION_EXAMPLE}`
+        : item.id === "termsProperty"
+          ? `Не удалось определить конкретный объект. Для помещения укажите населённый пункт, улицу и дом; для вещи — модель и идентификатор. ${item.description}`
+          : item.description,
+    }));
 }
 
 export function knownContractTerms(
