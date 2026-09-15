@@ -31,6 +31,7 @@ import {
 import { PrismaService } from "../database/prisma.service";
 import { MaxBotService } from "../max-bot/max-bot.service";
 import { DealStateMachineService } from "./deal-state-machine.service";
+import { invitationMessage, invitationPrice } from "./invitation-copy";
 import {
   createContractNumber,
   hashFrozenSnapshot,
@@ -258,10 +259,11 @@ export class DealInvitationsService {
     }
 
     const shareUrl = `${this.publicWebUrl}/invite/${publicCode}#${rawToken}`;
+    const sender = record.parties.find(party => party.role === DealPartyRole.INITIATOR)!.user;
     return {
       ...toInvitationResponse(invitation),
       maxDeeplink,
-      shareText: `${displayName(record.parties.find(party => party.role === DealPartyRole.INITIATOR)!.user)} приглашает обсудить сделку «${record.templateVersion.template.title}» в Макс-Контракт. Описание доступно по защищённой ссылке. Это приглашение, не подписание.`,
+      shareText: invitationMessage({ firstName: (sender.profile ?? sender.maxAccount)?.firstName ?? "", title: record.title, templateTitle: record.templateVersion.template.title, slug: record.templateVersion.template.slug, answers: parseDealDraft(version.terms).answers }),
       shareUrl,
     };
   }
@@ -417,7 +419,7 @@ export class DealInvitationsService {
       select: {
         acceptedAt: true, expiresAt: true, revokedAt: true, tokenHash: true,
         createdBy: { select: { profile: { select: { firstName: true, lastName: true } }, maxAccount: { select: { firstName: true, lastName: true } } } },
-        deal: { select: { versions: { orderBy: { versionNumber: "desc" }, take: 1, select: { terms: true } } } },
+        deal: { select: { title: true, templateVersion: { select: { template: { select: { slug: true } } } }, versions: { orderBy: { versionNumber: "desc" }, take: 1, select: { terms: true } } } },
       },
     });
     if (!invitation || !matchesToken(input.token, invitation.tokenHash)) throw invitationNotFound();
@@ -425,10 +427,19 @@ export class DealInvitationsService {
     const version = invitation.deal.versions[0];
     if (!version) throw invitationNotFound();
     const person = invitation.createdBy.profile ?? invitation.createdBy.maxAccount;
+    const draft = parseDealDraft(version.terms);
+    const preview = await this.publicPreview(input.publicCode);
+    const price = invitationPrice(invitation.deal.templateVersion.template.slug, draft.answers);
+    const formattedAmount = price.replace(/^(Стоимость|Сумма займа): /, "");
     return {
-      ...await this.publicPreview(input.publicCode),
+      ...preview,
       initiatorMaskedName: [person?.firstName, person?.lastName].filter(Boolean).join(" ") || "Участник сделки",
-      offerDescription: parseDealDraft(version.terms).description,
+      offerDescription: draft.description,
+      terms: [
+        { label: "Предмет сделки", value: invitation.deal.title },
+        { label: "Стоимость / сумма", value: price },
+        ...preview.terms.filter(term => term.label !== "Предмет сделки" && term.value !== formattedAmount),
+      ],
     };
   }
 

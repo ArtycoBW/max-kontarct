@@ -3,7 +3,6 @@
 import type { MaxStartPayload } from "@/lib/max/bridge";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Check, FileCheck2, ShieldCheck } from "lucide-react";
-import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -16,7 +15,6 @@ export function InvitationEntryScreen({
   onContinue: () => void;
   payload: Extract<MaxStartPayload, { kind: "invitation" }>;
 }) {
-  const [acknowledged, setAcknowledged] = useState(false);
   const invitation = useQuery({
     queryFn: () => getProtectedInvitation({ publicCode: payload.publicCode, token: payload.token }),
     queryKey: ["protected-invitation", payload.publicCode],
@@ -62,11 +60,11 @@ export function InvitationEntryScreen({
             <div className="create-flow-action invitation-entry-action">
               <Button
                 className="full-width"
-                onClick={() => acknowledged ? onContinue() : setAcknowledged(true)}
+                onClick={onContinue}
               >
-                {acknowledged ? <>Продолжить оформление <ArrowRight size={18} /></> : <>Я ознакомился <Check size={18} /></>}
+                Продолжить оформление <ArrowRight size={18} />
               </Button>
-              <small>{acknowledged ? "Далее — вход через MAX и подтверждение телефона." : "Нажатие не означает подписание договора."}</small>
+              <small>Далее — безопасный вход и оформление. Нажатие не означает согласие с условиями или подписание договора.</small>
             </div>
           </div>
         </div>

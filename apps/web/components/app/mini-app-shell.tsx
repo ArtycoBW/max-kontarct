@@ -2141,7 +2141,7 @@ export function MiniAppShell({
   const [startPayload] = useState<MaxStartPayload | null>(() =>
     getMaxStartPayload(),
   );
-  const [started, setStarted] = useState(startPayload?.kind === "deal");
+  const [started, setStarted] = useState(startPayload?.kind === "deal" || (startPayload?.kind === "invitation" && Boolean(startPayload.previewSeen)));
 
   if (startPayload?.kind === "invitation" && !started) {
     return (

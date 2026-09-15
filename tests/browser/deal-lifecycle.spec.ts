@@ -44,12 +44,10 @@ test("two participants create, review, approve, sign and verify a deal", async (
   await first.getByRole("button", { name: "Создать приглашение" }).click();
   const invitation = await (await invitationResponse).json();
   await second.goto(invitation.shareUrl);
-  await expect(second.getByRole("button", { name: "Я ознакомился" })).toBeVisible();
+  await expect(second.getByRole("link", { name: "Продолжить оформление" })).toBeVisible();
   await noOverflow(second);
-  await second.getByRole("button", { name: "Я ознакомился" }).click();
   await second.getByRole("link", { name: "Продолжить оформление" }).click();
-  await second.getByRole("button", { name: "Я ознакомился" }).click();
-  await second.getByRole("button", { name: "Продолжить оформление" }).click();
+  await expect(second.getByRole("heading", { name: "Основные условия" })).toHaveCount(0);
   await onboarding(second, false);
   await expect(second.getByRole("button", { name: "Документы сделки" })).toBeVisible();
   await second.getByRole("button", { name: "Заполнить профиль" }).click();

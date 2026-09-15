@@ -108,6 +108,11 @@ describe("MAX Bridge startup", () => {
     expect(ready).toHaveBeenCalledTimes(2);
   });
 
+  it("parses a reviewed invitation as a UI hint, retaining its secret for server validation", () => {
+    Object.defineProperty(global, "window", { configurable: true, value: { WebApp: { initDataUnsafe: { start_param: "invite_AbCdEfGhIjKl_0123456789abcdefghijklmnopqrstuv_reviewed" } } } });
+    expect(getMaxStartPayload()).toEqual({ kind: "invitation", publicCode: "AbCdEfGhIjKl", token: "0123456789abcdefghijklmnopqrstuv", previewSeen: true });
+  });
+
   it("parses an opaque invitation payload without exposing personal data", () => {
     setWindow({
       WebApp: {

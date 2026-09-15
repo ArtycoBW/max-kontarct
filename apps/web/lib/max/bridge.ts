@@ -85,7 +85,7 @@ export function getMaxInitData(): string {
 
 export type MaxStartPayload =
   | { dealId: string; kind: "deal" }
-  | { kind: "invitation"; publicCode: string; token: string };
+  | { kind: "invitation"; publicCode: string; token: string; previewSeen?: boolean };
 
 export function getMaxStartPayload(): MaxStartPayload | null {
   if (typeof window === "undefined") return null;
@@ -93,9 +93,11 @@ export function getMaxStartPayload(): MaxStartPayload | null {
     window.WebApp?.initDataUnsafe?.start_param ??
     new URLSearchParams(window.location.search).get("WebAppStartParam") ??
     "";
-  const invitation = /^invite_([A-Za-z0-9_-]{12})_([A-Za-z0-9_-]{32})$/.exec(value);
+  const invitation = /^invite_([A-Za-z0-9_-]{12})_([A-Za-z0-9_-]{32})(_reviewed)?$/.exec(value);
   if (invitation?.[1] && invitation[2]) {
-    return { kind: "invitation", publicCode: invitation[1], token: invitation[2] };
+    // This flag only skips duplicate copy. The server still validates the secret,
+    // expiry, signed MAX account and registration before joining the deal.
+    return { kind: "invitation", publicCode: invitation[1], token: invitation[2], ...(invitation[3] ? { previewSeen: true } : {}) };
   }
   const deal = /^deal_([0-9a-f]{32})$/i.exec(value);
   if (deal?.[1]) {

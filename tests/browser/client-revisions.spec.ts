@@ -6,7 +6,7 @@ test("legal documents are available only during registration and reading does no
   const page = await context.newPage();
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Опишите свою сделку" })).toBeVisible();
-  await page.getByRole("button", { name: "Подпишите и сохраните", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Подпишите и сохраните", exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Подпишите и сохраните" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Документы и согласия", exact: true })).toHaveCount(0);
   await expect(page.locator(".legal-document-link")).toHaveCount(0);
@@ -81,7 +81,6 @@ test("early invite protects the offer and allows parallel profile entry without 
   await publicPage.close();
   await second.goto(`/?WebAppStartParam=${encodeURIComponent(`invite_${invitation.publicCode}_${token}`)}`);
   await expect(second.getByText(description, { exact: true })).toBeVisible();
-  await second.getByRole("button", { name: "Я ознакомился", exact: true }).click();
   await second.getByRole("button", { name: "Продолжить оформление", exact: true }).click();
   await onboarding(second, false);
   await expect(second.getByText("Условия ещё готовятся", { exact: true })).toBeVisible();

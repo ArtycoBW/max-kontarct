@@ -23,7 +23,6 @@ export function PublicInvitationPage({
 }: {
   invitation: PublicDealInvitationResponse;
 }) {
-  const [acknowledged, setAcknowledged] = useState(false);
   const [token, setToken] = useState("");
 
   useEffect(() => {
@@ -37,7 +36,7 @@ export function PublicInvitationPage({
   const deeplink = useMemo(
     () =>
       token
-        ? `https://max.ru/${encodeURIComponent(invitation.botUsername)}?startapp=${encodeURIComponent(`invite_${invitation.publicCode}_${token}`)}`
+        ? `https://max.ru/${encodeURIComponent(invitation.botUsername)}?startapp=${encodeURIComponent(`invite_${invitation.publicCode}_${token}_reviewed`)}`
         : "",
     [invitation.botUsername, invitation.publicCode, token],
   );
@@ -74,7 +73,7 @@ export function PublicInvitationPage({
 
         {active ? (
           <>
-            {protectedOffer.data ? <Card className="invitation-offer"><strong>Предложение</strong><p>{protectedOffer.data.offerDescription}</p><small>Условия могут уточняться. Нажатие «Я ознакомился» не означает подписание.</small></Card> : null}
+            {protectedOffer.data ? <Card className="invitation-offer"><strong>Предложение</strong><p>{protectedOffer.data.offerDescription}</p><small>Условия могут уточняться. Окончательная редакция согласовывается обеими сторонами.</small></Card> : null}
             {protectedOffer.error ? <Card className="form-message is-error" role="alert"><p>Не удалось открыть предложение по этой ссылке.</p><Button onClick={() => void protectedOffer.refetch()}>Повторить</Button></Card> : null}
             <section className="public-invite-section">
               <div className="public-invite-section-title">
@@ -82,7 +81,7 @@ export function PublicInvitationPage({
                 <h2>Основные условия · версия {invitation.versionNumber}</h2>
               </div>
               <div className="public-invite-terms">
-                {invitation.terms.length ? invitation.terms.map((term) => (
+                {(protectedOffer.data?.terms ?? invitation.terms).length ? (protectedOffer.data?.terms ?? invitation.terms).map((term) => (
                   <div key={term.label}>
                     <span>{term.label}</span>
                     <strong>{term.value}</strong>
@@ -114,7 +113,7 @@ export function PublicInvitationPage({
             ) : null}
 
             <div className="public-invite-actions">
-              {acknowledged && deeplink ? (
+              {protectedOffer.data && deeplink ? (
                 <Button asChild className="full-width">
                   <a href={deeplink}>
                     Продолжить оформление <ArrowRight size={18} />
@@ -123,16 +122,13 @@ export function PublicInvitationPage({
               ) : (
                 <Button
                   className="full-width"
-                  disabled={!token}
-                  onClick={() => setAcknowledged(true)}
+                  disabled
                   type="button"
                 >
-                  <>Я ознакомился <Check size={18} /></>
+                  {protectedOffer.isFetching ? "Проверяем приглашение…" : "Продолжить оформление"}
                 </Button>
               )}
-              {acknowledged ? (
-                <p><ExternalLink size={14} /> Оформление продолжится внутри MAX.</p>
-              ) : null}
+              <p><ExternalLink size={14} /> Оформление продолжится внутри MAX. Переход не означает согласие с условиями или подписание договора.</p>
             </div>
           </>
         ) : (
