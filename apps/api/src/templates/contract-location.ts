@@ -17,7 +17,7 @@ export function contractLocationIssue(value: string, allowRemote = true, allowSh
     !/^\d+\s*(?:кв\.|м(?:етр)?(?:\s|$))/u.test(text.slice(match.index + match[0].length)));
   const hasHouse = HOUSE.test(text);
   if (street) {
-    const prefix = text.slice(0, street.index).split(/(?:\.\s+|;\s*)/u).at(-1)!.replace(/[\s,;]+$/u, "");
+    const prefix = text.slice(0, street.index).split(/(?:\.\s+|;\s*)/u).at(-1)!.replace(/[\s,;]+$/u, "").split(",").at(-1)!.trim();
     const hasCity = SETTLEMENT.test(text) || (/[а-яa-z]{2,}/u.test(prefix) && !NOT_ADDRESS.test(prefix) && !/^(на|по адресу|адрес|работы)$/u.test(prefix));
     if (!hasCity) return "Не указан населённый пункт. Добавьте город, посёлок или село перед улицей.";
     if (!hasHouse) return "Не найден номер дома. Допишите его после улицы; корпус и помещение — если они есть.";

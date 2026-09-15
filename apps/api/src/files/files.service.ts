@@ -9,6 +9,7 @@ import type {
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -39,7 +40,7 @@ import {
   validateUploadedFile,
 } from "./file-validation";
 
-const PRIVATE_REQUIREMENT_PATTERN = /(passport|identity|personal|удостовер|паспорт)/i;
+import { canUploadRequirement, canUploadSubject, isPersonalRequirement, requiredForParty } from "./document-policy";
 
 @Injectable()
 export class FilesService {
@@ -81,7 +82,9 @@ export class FilesService {
       evidenceFiles: files.filter(({ category }) => category === DealFileCategory.EVIDENCE).map(format),
       maxUploadBytes: this.maxUploadBytes,
       maxEvidenceUploadBytes: this.maxEvidenceUploadBytes,
+      canUploadEvidence: canUploadSubject(deal, userId),
       requirements: deal.templateVersion.documentRequirements.map((requirement) => ({
+        canUpload: canUploadRequirement(deal, userId, requirement),
         description: requirement.description,
         id: requirement.id,
         required: requirement.required,
@@ -113,6 +116,9 @@ export class FilesService {
         code: "FILE_CATEGORY_INVALID",
         message: "Для материала сделки не выбирают обязательный документ",
       });
+    }
+    if (requirement ? !canUploadRequirement(deal, userId, requirement) : !canUploadSubject(deal, userId)) {
+      throw new ForbiddenException({ code: "FILE_PARTY_FORBIDDEN", message: "Эти материалы загружает сторона, передающая предмет сделки. Вам доступен просмотр." });
     }
     const validated = validateUploadedFile(file, input.category === "EVIDENCE" ? this.maxEvidenceUploadBytes : this.maxUploadBytes);
     const sha256 = calculateSha256(file.buffer);
@@ -159,7 +165,7 @@ export class FilesService {
             requestId,
           },
         });
-        await syncRequiredFilesTrust(transaction, userId, dealId, deal.templateVersion.documentRequirements);
+        await syncRequiredFilesTrust(transaction, userId, dealId, deal.templateVersion.documentRequirements.filter(item => requiredForParty(deal, userId).includes(item.id)));
         await syncDealDocumentsStatus(transaction, dealId, userId);
         return record;
       });
@@ -280,6 +286,7 @@ export class FilesService {
     const deal = await this.prisma.deal.findUnique({
       include: {
         parties: { select: { userId: true } },
+        versions: { orderBy: { versionNumber: "desc" }, take: 1, select: { terms: true } },
         templateVersion: {
           include: { documentRequirements: { orderBy: [{ sortOrder: "asc" }, { title: "asc" }] } },
         },
@@ -302,16 +309,16 @@ async function syncInternalReviewTrust(
 ): Promise<void> {
   const deal = await transaction.deal.findUnique({
     select: {
+      initiatorUserId: true,
+      versions: { orderBy: { versionNumber: "desc" }, take: 1, select: { terms: true } },
       templateVersion: {
-        select: { documentRequirements: { select: { id: true, required: true } } },
+        select: { documentRequirements: { select: { id: true, required: true, key: true, title: true } } },
       },
     },
     where: { id: dealId },
   });
   if (!deal) return;
-  const requiredIds = deal.templateVersion.documentRequirements
-    .filter(({ required }) => required)
-    .map(({ id }) => id);
+  const requiredIds = requiredForParty(deal, userId);
   const accepted = requiredIds.length
     ? await transaction.dealFile.findMany({
         distinct: ["requirementId"],
@@ -353,10 +360,12 @@ async function syncDealDocumentsStatus(
 ): Promise<void> {
   const deal = await transaction.deal.findUnique({
     select: {
+      initiatorUserId: true,
+      versions: { orderBy: { versionNumber: "desc" }, take: 1, select: { terms: true } },
       parties: { select: { userId: true } },
       status: true,
       templateVersion: {
-        select: { documentRequirements: { select: { id: true, required: true } } },
+        select: { documentRequirements: { select: { id: true, required: true, key: true, title: true } } },
       },
     },
     where: { id: dealId },
@@ -374,7 +383,7 @@ async function syncDealDocumentsStatus(
     },
   });
   const complete = deal.parties.every((party) =>
-    requiredIds.every((requirementId) =>
+    requiredForParty(deal, party.userId).every((requirementId) =>
       uploads.some((file) =>
         file.ownerUserId === party.userId && file.requirementId === requirementId,
       ),
@@ -404,14 +413,15 @@ async function syncDealReviewStatus(
 ): Promise<void> {
   const deal = await transaction.deal.findUnique({
     select: {
+      initiatorUserId: true,
       parties: { select: { userId: true } },
       status: true,
       templateVersion: {
-        select: { documentRequirements: { select: { id: true, required: true } } },
+        select: { documentRequirements: { select: { id: true, required: true, key: true, title: true } } },
       },
       versions: {
         orderBy: { versionNumber: "desc" },
-        select: { id: true },
+        select: { id: true, terms: true },
         take: 1,
       },
     },
@@ -436,7 +446,7 @@ async function syncDealReviewStatus(
     },
   });
   const complete = deal.parties.every((party) =>
-    requiredIds.every((requirementId) =>
+    requiredForParty(deal, party.userId).every((requirementId) =>
       accepted.some((file) =>
         file.ownerUserId === party.userId && file.requirementId === requirementId,
       ),
@@ -474,7 +484,7 @@ export function resolveFileVisibility(
   requirement: { key: string; title: string } | null,
 ): DealFileVisibility {
   if (!requirement) return DealFileVisibility.DEAL_PARTICIPANTS;
-  return PRIVATE_REQUIREMENT_PATTERN.test(`${requirement.key} ${requirement.title}`)
+  return isPersonalRequirement(requirement)
     ? DealFileVisibility.OWNER_ONLY
     : DealFileVisibility.DEAL_PARTICIPANTS;
 }

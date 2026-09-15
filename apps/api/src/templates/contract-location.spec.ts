@@ -26,4 +26,7 @@ describe("contract location syntax", () => {
   it("does not require an apartment and keeps a supplied clarification", () => {
     expect(missingContractTerms("work-contract", { workLocation: "У заказчика" }, { termsLocation: "Казань Примерная 10" }).map(q => q.id)).not.toContain("termsLocation");
   });
+  it("finds the address after a property description in the same sentence", () => {
+    expect(missingContractTerms("property-rental", { propertyDescription: "Комната с мебелью, Москва, улица Примерная, дом 10, квартира 2. Оплата ежедневно утром." }).map(q => q.id)).not.toContain("termsProperty");
+  });
 });

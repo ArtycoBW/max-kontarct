@@ -20,6 +20,7 @@ import { AiService } from "../ai/ai.service";
 import type { AiClarificationRecord } from "./ai-clarifications.repository";
 import { AiClarificationsRepository } from "./ai-clarifications.repository";
 import { TemplatesService } from "./templates.service";
+import { readSubjectDocumentsParty } from "../deals/declared-party-roles";
 import {
   COMPLETENESS_VERSION,
   invalidRequiredTermAnswers,
@@ -84,7 +85,7 @@ export class AiClarificationsService {
     const record = await this.clarifications.create({
       inputAnswers: toPrismaObject(validated.answers),
       metadata: withQuestionHistory(
-        { ...output.metadata, completenessVersion: COMPLETENESS_VERSION, sourceDescription: request.description?.trim() ?? "" },
+        { ...output.metadata, completenessVersion: COMPLETENESS_VERSION, sourceDescription: request.description?.trim() ?? "", subjectDocumentsParty: request.subjectDocumentsParty ?? null },
         data.questions,
       ),
       promptId: PROMPT_ID,
@@ -235,6 +236,7 @@ export class AiClarificationsService {
         {
           ...output.metadata,
           sourceDescription: sourceDescription(session.providerMetadata),
+          subjectDocumentsParty: readSubjectDocumentsParty(session.providerMetadata),
           ...(completenessEnabled
             ? { completenessVersion: COMPLETENESS_VERSION }
             : {}),

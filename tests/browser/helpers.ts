@@ -38,6 +38,11 @@ export async function noOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 }
 
+export async function selectSupplierRole(page: Page) {
+  await page.getByRole("combobox", { name: "Ваша роль в сделке" }).click();
+  await page.getByRole("option").first().click();
+}
+
 export async function futureDate(page: Page, label: string, day: number) {
   await page.getByRole("button", { name: label, exact: true }).click();
   await page.getByRole("combobox", { name: "Год", exact: true }).click();

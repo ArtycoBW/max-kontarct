@@ -37,6 +37,7 @@ import {
   hashFrozenSnapshot,
   type FrozenDealSnapshot,
 } from "./deal-version-freeze";
+import { requiredForParty } from "../files/document-policy";
 
 const invitationSelect = {
   acceptedAt: true,
@@ -86,7 +87,7 @@ const workspaceSelect = {
   status: true,
   templateVersion: {
     select: {
-      documentRequirements: { select: { id: true, required: true } },
+      documentRequirements: { select: { id: true, required: true, key: true, title: true } },
       id: true,
       template: { select: { slug: true, title: true } },
       versionNumber: true,
@@ -657,7 +658,7 @@ export class DealInvitationsService {
         where: { dealId, requirementId: { in: requiredIds }, reviewStatus: DealFileReviewStatus.ACCEPTED },
       });
       const documentsAccepted = record.parties.length === 2 && record.parties.every((item) =>
-        requiredIds.every((requirementId) => accepted.some((file) =>
+        requiredForParty(record, item.userId).every((requirementId) => accepted.some((file) =>
           file.ownerUserId === item.userId && file.requirementId === requirementId,
         )),
       );

@@ -1,0 +1,37 @@
+import { expect, test } from "@playwright/test";
+import { actor, noOverflow, onboarding, selectSupplierRole } from "./helpers";
+
+test("early details import stays local until saving and subject files stay separate", async ({ browser }) => {
+  const context = await actor(browser, 72431, "+79997002431");
+  const page = await context.newPage();
+  await page.goto("/"); await onboarding(page);
+  await page.getByRole("button", { name: "Создать", exact: true }).click();
+  await page.getByRole("tab", { name: "Готовые шаблоны" }).click();
+  await page.getByRole("button", { name: /Оказание услуг/ }).click();
+  const creating = page.waitForResponse(r => r.url().endsWith("/deals") && r.request().method() === "POST");
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  const deal = await (await creating).json();
+  await page.getByRole("textbox", { name: /^Краткое описание/ }).fill("Нарисовать иллюстрации для сайта.");
+  await page.getByRole("button", { name: "Мои реквизиты", exact: true }).click();
+  await page.getByRole("button", { name: "Вставить данные из MAX" }).click();
+  let writes = 0;
+  page.on("request", request => { if (request.url().endsWith("/profile") && request.method() !== "GET") writes++; });
+  await page.getByLabel("Текст с подписями полей").fill("Фамилия: Примерова\nИмя: Мария\nДата рождения: 12.04.1995");
+  await page.getByRole("button", { name: "Перенести в форму" }).click();
+  await expect(page.getByLabel("Фамилия", { exact: true })).toHaveValue("Примерова");
+  expect(writes).toBe(0);
+  await page.getByLabel("Имя", { exact: true }).fill("Анна");
+  await noOverflow(page);
+  await page.getByRole("button", { name: "Сохранить профиль" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(writes).toBe(1);
+  await expect.poll(async () => (await (await page.request.get(`/api/v1/deals/${deal.id}`)).json()).draft.initiator.firstName).toBe("Анна");
+  await selectSupplierRole(page);
+  await page.getByRole("button", { name: "Фото и материалы предмета" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("Не добавляйте сюда паспорт");
+  await expect(dialog.getByRole("button", { name: "Добавить материалы" })).toBeVisible();
+  await expect(dialog.locator(".requirement-upload-card")).toHaveCount(0);
+  await noOverflow(page);
+  await context.close();
+});

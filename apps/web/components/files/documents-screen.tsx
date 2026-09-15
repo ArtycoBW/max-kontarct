@@ -43,13 +43,15 @@ export function DocumentsScreen({
   dealId,
   onBack,
   onSelectDeal,
+  materialsOnly = false,
 }: {
   dealId: string | null;
   onBack: () => void;
   onSelectDeal: (dealId: string) => void;
+  materialsOnly?: boolean;
 }) {
   if (!dealId) return <DealDocumentPicker onSelectDeal={onSelectDeal} />;
-  return <DealDocuments key={dealId} dealId={dealId} onBack={onBack} />;
+  return <DealDocuments key={dealId} dealId={dealId} onBack={onBack} materialsOnly={materialsOnly} />;
 }
 
 function DealDocumentPicker({ onSelectDeal }: { onSelectDeal: (dealId: string) => void }) {
@@ -77,7 +79,7 @@ function DealDocumentPicker({ onSelectDeal }: { onSelectDeal: (dealId: string) =
   );
 }
 
-function DealDocuments({ dealId, onBack }: { dealId: string; onBack: () => void }) {
+function DealDocuments({ dealId, onBack, materialsOnly }: { dealId: string; onBack: () => void; materialsOnly: boolean }) {
   const queryClient = useQueryClient();
   const [upload, setUpload] = useState<{ label: string; progress: number } | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -162,7 +164,7 @@ function DealDocuments({ dealId, onBack }: { dealId: string; onBack: () => void 
         }}>Повторить неудавшиеся</Button>
       </Card> : null}
 
-      <section className="documents-section">
+      {!materialsOnly ? <section className="documents-section">
         <header><span><Files size={18} /><strong>Обязательные документы</strong></span><small>PDF, JPEG, PNG, WebP</small></header>
         <div className="requirement-list">
           {data.requirements.map((requirement) => (
@@ -176,19 +178,19 @@ function DealDocuments({ dealId, onBack }: { dealId: string; onBack: () => void 
             />
           ))}
         </div>
-      </section>
+      </section> : null}
 
       <section className="documents-section">
         <header><span><FileImage size={18} /><strong>Материалы и доказательства</strong></span><small>Фото, акты и дополнительные файлы</small></header>
-        <UploadButton
+        {data.canUploadEvidence !== false ? <UploadButton
           accept={data.allowedMimeTypes.join(",")}
           disabled={Boolean(upload)}
           label="Добавить материалы"
           onSelect={(file) => void handleUpload(file, "EVIDENCE")}
-        />
+        /> : <p className="screen-copy">Материалы загружает сторона, передающая предмет сделки. Здесь вы можете их просмотреть.</p>}
         <FileList dealId={dealId} files={data.evidenceFiles} />
       </section>
-      <PrivacyNote />
+      {!materialsOnly ? <PrivacyNote /> : null}
     </div>
   );
 }
@@ -210,7 +212,7 @@ function RequirementCard({
     <Card className="requirement-upload-card">
       <header><span><FileCheck2 size={17} /></span><i><strong>{requirement.title}</strong><small>{requirement.description ?? "Документ по условиям сделки"}</small></i><em>{requirement.required ? "Обязательно" : "Дополнительно"}</em></header>
       <FileList dealId={dealId} files={requirement.uploads} />
-      <UploadButton accept={accept} disabled={disabled} label={requirement.uploads.length ? "Загрузить ещё" : "Выбрать файл"} onSelect={onUpload} />
+      {requirement.canUpload !== false ? <UploadButton accept={accept} disabled={disabled} label={requirement.uploads.length ? "Загрузить ещё" : "Выбрать файл"} onSelect={onUpload} /> : <p className="field-description">Загружает другая сторона. От вас этот документ не требуется.</p>}
     </Card>
   );
 }

@@ -31,6 +31,7 @@ import {
 } from "@/lib/api/invitations";
 import { queryKeys } from "@/lib/api/query-keys";
 import { shareInMax } from "@/lib/max/bridge";
+import { participantRoleLabel } from "@/lib/deals/party-responsibility";
 
 export function DealWorkspaceScreen({
   dealId,
@@ -179,6 +180,7 @@ export function DealWorkspaceScreen({
         <ShieldCheck size={19} />
       </Card>
 
+      {deal.draft.subjectDocumentsParty ? <p className="screen-copy">Ваша роль: {participantRoleLabel(deal.template.slug, deal.draft.subjectDocumentsParty, deal.currentUserRole)}. Материалы предмета сделки: {deal.draft.subjectDocumentsParty === deal.currentUserRole ? "загружаете вы" : "загружает другая сторона"}.</p> : null}
       {notice ? <p className="deal-workspace-notice" role="status"><Check size={15} />{notice}</p> : null}
       {!notice && deal.approvals.currentUserApproved ? <p className="deal-workspace-notice" role="status"><Check size={15} />Версия согласована · {deal.approvals.totalApproved} из {deal.approvals.required}</p> : null}
 

@@ -1,5 +1,6 @@
 import type {
   DealCreationPath,
+  DealPartyRole,
   DealDraftStep,
   UpdateDealDraftRequest,
 } from "@max-contract/contracts";
@@ -25,6 +26,11 @@ const draftSteps: DealDraftStep[] = [
 ];
 
 export class UpdateDealDraftDto implements UpdateDealDraftRequest {
+  @ApiPropertyOptional({ enum: ["INITIATOR", "COUNTERPARTY"], nullable: true })
+  @IsOptional()
+  @IsIn(["INITIATOR", "COUNTERPARTY"])
+  subjectDocumentsParty?: DealPartyRole | null;
+
   @ApiPropertyOptional({ additionalProperties: true, type: "object" })
   @IsOptional()
   @IsObject()

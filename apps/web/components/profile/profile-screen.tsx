@@ -37,6 +37,8 @@ import { getProfile, updateProfile } from "@/lib/api/profile";
 import { getAddressSuggestions, normalizeAddress } from "@/lib/api/data-normalization";
 import { queryKeys } from "@/lib/api/query-keys";
 import { PassportScanner } from "./passport-scanner";
+import { PasteProfileDetails } from "./paste-profile-details";
+import type { PassportData } from "@/lib/ocr/passport-parser";
 import { passportFieldLabels } from "@/lib/ocr/passport-parser";
 
 const PERSON_NAME = /^[\p{L}][\p{L}\p{M}' -]*$/u;
@@ -91,8 +93,12 @@ const emptyProfile: ProfileFormValues = {
 
 export function ProfileScreen({
   fallbackPhone,
+  embedded = false,
+  onSaved,
 }: {
-  fallbackPhone: VerifiedPhone;
+  fallbackPhone?: VerifiedPhone;
+  embedded?: boolean;
+  onSaved?: () => void;
 }) {
   const auth = useAuth();
   const queryClient = useQueryClient();
@@ -133,6 +139,7 @@ export function ProfileScreen({
       setSaved(true);
       setScanned(false);
       void queryClient.invalidateQueries({ queryKey: queryKeys.trust.current() });
+      onSaved?.();
     },
   });
 
@@ -181,15 +188,24 @@ export function ProfileScreen({
     ? `@${data.maxUsername}`
     : "Аккаунт MAX";
   const phone = data.phone ?? fallbackPhone;
+  const applyDetails = (result: Partial<PassportData>) => {
+    for (const key of ["firstName", "lastName", "middleName", "birthDate", "address"] as const) {
+      if (result[key]) form.setValue(key, result[key], { shouldDirty: true, shouldValidate: true });
+    }
+    for (const key of passportKeys) {
+      if (result[key]) form.setValue(`passport.${key}`, result[key], { shouldDirty: true, shouldValidate: true });
+    }
+    setScanned(true); setPassportOpen(true); setSaved(false);
+  };
 
   return (
     <div className="screen-content profile-screen">
-      <header className="screen-header">
+      {!embedded ? <header className="screen-header">
         <div>
           <p className="screen-eyebrow">Личные данные</p>
           <h1>Профиль</h1>
         </div>
-      </header>
+      </header> : null}
 
       <Card className="profile-card">
         <span className="profile-avatar"><UserRound size={27} /></span>
@@ -200,7 +216,7 @@ export function ProfileScreen({
         </div>
       </Card>
 
-      {auth.user?.role === "ADMIN" || auth.user?.role === "SUPPORT" ? (
+      {!embedded && (auth.user?.role === "ADMIN" || auth.user?.role === "SUPPORT") ? (
         <Button asChild className="profile-admin-link" variant="outline">
           <Link href="/admin">
             <ShieldCheck size={19} />
@@ -230,15 +246,8 @@ export function ProfileScreen({
           <ShieldCheck size={20} />
         </div>
 
-        <PassportScanner onApply={result => {
-          for (const key of ["firstName", "lastName", "middleName", "birthDate", "address"] as const) {
-            if (result[key]) form.setValue(key, result[key], { shouldDirty: true, shouldValidate: true });
-          }
-          for (const key of passportKeys) {
-            if (result[key]) form.setValue(`passport.${key}`, result[key], { shouldDirty: true, shouldValidate: true });
-          }
-          setScanned(true); setPassportOpen(true); setSaved(false);
-        }} />
+        <PasteProfileDetails onApply={applyDetails} />
+        <PassportScanner onApply={applyDetails} />
         {scanned ? <p className="validation-success" role="status">Данные перенесены в форму. Проверьте их и нажмите «Сохранить профиль».</p> : null}
 
         <ProfileField error={form.formState.errors.lastName?.message} inputId="profile-last-name" label="Фамилия">
@@ -325,7 +334,7 @@ export function ProfileScreen({
           </ProfileField>)}</CollapsibleContent>
         </Collapsible>
 
-        <Card className="verified-contact-card">
+        {phone ? <Card className="verified-contact-card">
           <LockKeyhole size={18} />
           <span>
             <strong>{formatPhone(phone.e164)}</strong>
@@ -335,7 +344,7 @@ export function ProfileScreen({
                 : "Номер подтверждён"}
             </small>
           </span>
-        </Card>
+        </Card> : null}
 
         {mutation.error ? (
           <p className="profile-submit-error" role="alert">

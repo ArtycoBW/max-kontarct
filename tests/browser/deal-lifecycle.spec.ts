@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import JSZip from "jszip";
-import { actor, futureDate, maxProof, noOverflow, onboarding } from "./helpers";
+import { actor, futureDate, maxProof, noOverflow, onboarding, selectSupplierRole } from "./helpers";
 
 test("two participants create, review, approve, sign and verify a deal", async ({ browser }) => {
   const initiator = await actor(browser, 71001, "+79997001001");
@@ -22,6 +22,7 @@ test("two participants create, review, approve, sign and verify a deal", async (
   await first.getByRole("button", { name: "Продолжить", exact: true }).click();
   await first.getByLabel("Название сделки", { exact: true }).fill("Браузерная проверка аренды");
   await first.getByRole("textbox", { name: /^Краткое описание/ }).fill("Аренда комнаты на десять дней с мебелью, стоимость 2000 рублей в день.");
+  await selectSupplierRole(first);
   await first.getByRole("button", { name: "Сохранить и продолжить" }).click();
   await noOverflow(first);
   await expect(first.getByRole("heading", { name: "Параметры сделки" })).toBeVisible();

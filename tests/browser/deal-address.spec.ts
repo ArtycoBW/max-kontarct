@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { actor, futureDate, noOverflow, onboarding } from "./helpers";
+import { actor, futureDate, noOverflow, onboarding, selectSupplierRole } from "./helpers";
 
 test("incomplete address explains the missing part and corrected address is not asked again", async ({ browser }) => {
   const context = await actor(browser, 72411, "+79997002411");
@@ -10,6 +10,7 @@ test("incomplete address explains the missing part and corrected address is not 
   await page.getByRole("button", { name: /Выполнение работ/ }).click();
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
   await page.getByRole("textbox", { name: /^Краткое описание/ }).fill("Ремонт по адресу г. Казань, ул. Примерная, д. 10. Оплата после приёмки, передача по акту.");
+  await selectSupplierRole(page);
   await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
   const location = page.getByLabel("Место выполнения работ", { exact: false });
   await expect(location).toHaveValue("г. Казань, ул. Примерная, д. 10");

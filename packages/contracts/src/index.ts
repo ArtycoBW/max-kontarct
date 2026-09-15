@@ -18,6 +18,18 @@ export type DealStatus =
 
 export type DealPartyRole = "INITIATOR" | "COUNTERPARTY";
 
+export interface DealMessageResponse {
+  id: string;
+  body: string;
+  kind: "MESSAGE" | "CHANGE_REQUEST";
+  authorName: string;
+  isCurrentUser: boolean;
+  createdAt: string;
+  versionNumber: number;
+}
+export interface DealMessagesResponse { items: DealMessageResponse[]; nextCursor: string | null }
+export interface SendDealMessageRequest { body: string; clientId: string; kind: "MESSAGE" | "CHANGE_REQUEST" }
+
 export type DealApprovalStatus = "APPROVED" | "SUPERSEDED" | "REVOKED";
 
 export type DealCreationPath = "TEMPLATE" | "AI_ASSISTED";
@@ -38,6 +50,7 @@ export interface DealInitiatorSnapshot {
 }
 
 export interface DealDraftData {
+  subjectDocumentsParty?: DealPartyRole | null;
   answers: Record<string, unknown>;
   clarificationSessionId: string | null;
   creationPath: DealCreationPath;
@@ -54,6 +67,7 @@ export interface CreateDealDraftRequest {
 }
 
 export interface UpdateDealDraftRequest {
+  subjectDocumentsParty?: DealPartyRole | null;
   answers?: Record<string, unknown>;
   clarificationSessionId?: string | null;
   creationPath?: DealCreationPath;
@@ -457,6 +471,7 @@ export interface DealFileResponse {
 }
 
 export interface DealDocumentRequirementResponse {
+  canUpload?: boolean;
   description: string | null;
   id: string;
   required: boolean;
@@ -465,6 +480,7 @@ export interface DealDocumentRequirementResponse {
 }
 
 export interface DealDocumentsWorkspaceResponse {
+  canUploadEvidence?: boolean;
   allowedMimeTypes: string[];
   dealId: string;
   dealStatus: DealStatus;
@@ -704,6 +720,7 @@ export interface AiClarificationQuestion {
 }
 
 export interface StartAiClarificationRequest {
+  subjectDocumentsParty?: DealPartyRole | null;
   answers: Record<string, unknown>;
   templateVersionId: string;
   description?: string;

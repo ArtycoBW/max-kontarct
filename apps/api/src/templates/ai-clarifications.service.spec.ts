@@ -76,10 +76,11 @@ describe("AiClarificationsService", () => {
     generateStructured.mockResolvedValue(aiResult(needMoreInfo()));
     create.mockResolvedValue(record());
     const description = "Первоначально обсуждали 100000 рублей, условия уточняются в анкете";
-    await service.start("property-rental", userId, { answers: { paymentAmount: 120_000 }, templateVersionId: versionId, description });
+    await service.start("property-rental", userId, { answers: { paymentAmount: 120_000 }, templateVersionId: versionId, description, subjectDocumentsParty: "COUNTERPARTY" });
     expect(generateStructured.mock.calls[0]?.[0].userData.description).toBe(description);
     const saved = create.mock.calls[0]?.[0] as { metadata: { sourceDescription: string } };
     expect(saved.metadata.sourceDescription).toBe(description);
+    expect(create.mock.calls[0]?.[0]).toMatchObject({ metadata: { subjectDocumentsParty: "COUNTERPARTY" } });
   });
 
   it("keeps answers from earlier rounds and marks the session ready", async () => {

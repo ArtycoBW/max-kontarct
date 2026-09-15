@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { actor, noOverflow, onboarding } from "./helpers";
+import { actor, noOverflow, onboarding, selectSupplierRole } from "./helpers";
 
 test("legal documents are available only during registration and reading does not accept them", async ({ browser }) => {
   const context = await actor(browser, 72011, "+79997002011");
@@ -96,6 +96,7 @@ test("early invite protects the offer and allows parallel profile entry without 
   await second.getByRole("button", { name: "Сохранить профиль", exact: true }).click();
   await expect(second.getByText("Изменения сохранены", { exact: true })).toBeVisible();
   await first.getByRole("textbox", { name: /^Краткое описание/ }).fill(`${description}. Результат в PDF.`);
+  await selectSupplierRole(first);
   await first.getByRole("button", { name: "Сохранить и продолжить", exact: true }).click();
   await expect(first.getByRole("heading", { name: "Параметры сделки" })).toBeVisible();
   await first.screenshot({ path: "test-results/early-invitation-questionnaire.png", fullPage: true });
@@ -108,7 +109,7 @@ test("early invite protects the offer and allows parallel profile entry without 
     serviceLocation: "Онлайн", completionDate: "2099-09-20", paymentAmount: 15000,
     paymentProcedure: "После оказания услуги",
   };
-  const clarification = await first.request.post("/api/v1/templates/paid-services/clarifications", { data: { templateVersionId: current.template.versionId, answers, description } });
+  const clarification = await first.request.post("/api/v1/templates/paid-services/clarifications", { data: { templateVersionId: current.template.versionId, answers, description, subjectDocumentsParty: current.draft.subjectDocumentsParty } });
   expect(clarification.ok()).toBe(true);
   const session = await clarification.json();
   expect(session.status).toBe("READY_TO_GENERATE");

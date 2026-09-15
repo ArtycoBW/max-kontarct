@@ -188,7 +188,7 @@ export class DealsRepository {
     userId: string;
   }) {
     return this.prisma.aiGeneration.findFirst({
-      select: { id: true, inputAnswers: true, structuredDraft: true },
+      select: { id: true, inputAnswers: true, structuredDraft: true, providerMetadata: true },
       where: {
         id: input.id,
         status: AiGenerationStatus.COMPLETED,

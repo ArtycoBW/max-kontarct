@@ -16,7 +16,7 @@ import { FileUploadCapacityInterceptor } from "./upload-capacity.interceptor";
     MulterModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        limits: { fileSize: Math.max(config.getOrThrow<number>("FILE_UPLOAD_MAX_BYTES"), config.getOrThrow<number>("FILE_EVIDENCE_MAX_BYTES")), files: 1, fields: 2, parts: 3 },
+        limits: { fileSize: Math.max(config.getOrThrow<number>("FILE_UPLOAD_MAX_BYTES"), config.getOrThrow<number>("FILE_EVIDENCE_MAX_BYTES")), files: 1, fields: 2, parts: 4 },
         storage: memoryStorage(),
       }),
     }),

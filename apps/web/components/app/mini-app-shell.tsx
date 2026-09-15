@@ -9,6 +9,7 @@ import type {
   ContractGenerationResponse,
   ContractTemplateListItem,
   DealStatus,
+  DealPartyRole,
   DealDraftStep,
   OnboardingStateResponse,
   TemplateAnswerValidationError,
@@ -58,6 +59,8 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { ProfileScreen } from "@/components/profile/profile-screen";
 import { DealWorkspaceScreen } from "@/components/deals/deal-workspace-screen";
+import { PartyResponsibility } from "@/components/deals/party-responsibility";
+import { EarlyDealData } from "@/components/deals/early-deal-data";
 import { DocumentsScreen } from "@/components/files/documents-screen";
 import { InvitationEntryScreen } from "@/components/invitations/invitation-entry-screen";
 import { EarlyInvitationPanel } from "@/components/invitations/early-invitation-panel";
@@ -366,13 +369,14 @@ function restoreCreateStep(step: DealDraftStep): CreateDealStep {
 }
 
 function draftFingerprint(input: {
+  subjectDocumentsParty?: DealPartyRole | null;
   answers: Record<string, unknown>;
   clarificationSessionId: string | null;
   currentStep: CreateDealStep;
   description: string;
   title: string;
 }): string {
-  return JSON.stringify(input);
+  return JSON.stringify({ ...input, subjectDocumentsParty: input.subjectDocumentsParty ?? null });
 }
 
 function DraftSaveStatus({ state }: { state: DraftSaveState }) {
@@ -442,6 +446,7 @@ function CreateDealScreen({
   const queryClient = useQueryClient();
   const [activeDraftId, setActiveDraftId] = useState(draftId ?? "");
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
+  const [subjectDocumentsParty, setSubjectDocumentsParty] = useState<DealPartyRole | null>(null);
   const [clarificationAnswers, setClarificationAnswers] = useState<
     Record<string, unknown>
   >({});
@@ -540,6 +545,7 @@ function CreateDealScreen({
       versionId: string;
     }) =>
       startAiClarification(effectiveSelectedSlug, {
+        subjectDocumentsParty,
         answers: payload.answers,
         templateVersionId: payload.versionId,
         description,
@@ -598,6 +604,7 @@ function CreateDealScreen({
     updatedAt.current = draft.data.updatedAt;
     setActiveDraftId(draft.data.id);
     setAnswers(draft.data.draft.answers);
+    setSubjectDocumentsParty(draft.data.draft.subjectDocumentsParty ?? null);
     setClarificationSessionId(draft.data.draft.clarificationSessionId);
     setDescription(draft.data.draft.description);
     setSelectedSlug(draft.data.template.slug);
@@ -605,6 +612,7 @@ function CreateDealScreen({
     const restoredStep = restoreCreateStep(draft.data.draft.currentStep);
     setStep(restoredStep);
     lastSavedFingerprint.current = draftFingerprint({
+      subjectDocumentsParty: draft.data.draft.subjectDocumentsParty,
       answers: draft.data.draft.answers,
       clarificationSessionId: draft.data.draft.clarificationSessionId,
       currentStep: restoredStep,
@@ -631,6 +639,7 @@ function CreateDealScreen({
     }
     if (!activeDraftId || !updatedAt.current) return Promise.resolve();
     const snapshot = {
+      subjectDocumentsParty,
       answers: overrides.answers ?? answers,
       clarificationSessionId:
         overrides.clarificationSessionId !== undefined
@@ -647,6 +656,7 @@ function CreateDealScreen({
         const response = await saveDraftMutation({
           dealId: activeDraftId,
           request: {
+            subjectDocumentsParty: snapshot.subjectDocumentsParty,
             answers: snapshot.answers,
             clarificationSessionId: snapshot.clarificationSessionId,
             creationPath: "AI_ASSISTED",
@@ -677,11 +687,13 @@ function CreateDealScreen({
     description,
     queryClient,
     saveDraftMutation,
+    subjectDocumentsParty,
     step,
     title,
   ]);
 
   const localFingerprint = draftFingerprint({
+    subjectDocumentsParty,
     answers,
     clarificationSessionId,
     currentStep: step,
@@ -752,6 +764,7 @@ function CreateDealScreen({
       });
       setActiveDraftId(created.id);
       setAnswers(proposal?.answers ?? created.draft.answers);
+      setSubjectDocumentsParty(created.draft.subjectDocumentsParty ?? null);
       setClarificationSessionId(null);
       setDescription(created.draft.description);
       setSelectedSlug(created.template.slug);
@@ -782,6 +795,10 @@ function CreateDealScreen({
     }
     if (normalizedDescription.length < 10) {
       setDescriptionError("Опишите сделку хотя бы в нескольких словах");
+      return;
+    }
+    if (!subjectDocumentsParty) {
+      setDescriptionError("Выберите свою роль, чтобы распределить документы между сторонами");
       return;
     }
     setDescriptionError("");
@@ -1151,6 +1168,8 @@ function CreateDealScreen({
             <small className="field-meta">{description.length}/500</small>
           </label>
           <VoiceInput inputId="deal-description" value={description} onChange={value => { setDescription(value); setDescriptionError(""); }} />
+          <PartyResponsibility slug={effectiveSelectedSlug} value={subjectDocumentsParty} onChange={value => { setSubjectDocumentsParty(value); setDescriptionError(""); }} />
+          {activeDraftId ? <EarlyDealData dealId={activeDraftId} roleChosen={Boolean(subjectDocumentsParty)} beforeOpen={() => enqueueDraftSave()} onProfileSaved={() => { void enqueueDraftSave().catch(() => undefined); }} /> : null}
           {descriptionError ? (
             <span className="field-error" role="alert">
               <CircleAlert size={13} /> {descriptionError}

@@ -24,6 +24,7 @@ import { DealApprovalStatus, DealStatus, Prisma } from "@prisma/client";
 import type { DealDraftRecord } from "./deals.repository";
 import { DealsRepository } from "./deals.repository";
 import { DealStateMachineService } from "./deal-state-machine.service";
+import { readSubjectDocumentsParty } from "./declared-party-roles";
 
 const MAX_ANSWERS_BYTES = 64 * 1024;
 
@@ -152,7 +153,8 @@ export class DealsService {
     if (
       !generation?.structuredDraft ||
       !isDeepStrictEqual(generation.inputAnswers, draft.answers) ||
-      !isDeepStrictEqual(generation.structuredDraft, version.contractDraft)
+      !isDeepStrictEqual(generation.structuredDraft, version.contractDraft) ||
+      readSubjectDocumentsParty(generation.providerMetadata) !== (draft.subjectDocumentsParty ?? null)
     ) {
       throw new ConflictException({
         code: "DEAL_DRAFT_GENERATION_STALE",
@@ -213,8 +215,12 @@ export class DealsService {
     }
 
     const current = parseDraft(currentVersion.terms);
+    if (readSubjectDocumentsParty(generation.providerMetadata) !== (current.subjectDocumentsParty ?? null)) {
+      throw new ConflictException({ code: "DEAL_GENERATION_ROLE_MISMATCH", message: "Подготовьте договор с выбранными ролями сторон" });
+    }
     const description = normalizeDescription(input.description);
     const nextDraft: DealDraftData = {
+      ...(current.subjectDocumentsParty !== undefined ? { subjectDocumentsParty: current.subjectDocumentsParty } : {}),
       answers: input.answers,
       clarificationSessionId:
         input.clarificationSessionId !== undefined
@@ -276,6 +282,8 @@ export class DealsService {
     const current = parseDraft(version.terms);
     const draft: DealDraftData = {
       answers: input.answers ?? current.answers,
+      ...(input.subjectDocumentsParty !== undefined || current.subjectDocumentsParty !== undefined
+        ? { subjectDocumentsParty: input.subjectDocumentsParty !== undefined ? input.subjectDocumentsParty : current.subjectDocumentsParty } : {}),
       clarificationSessionId:
         input.clarificationSessionId !== undefined
           ? input.clarificationSessionId
@@ -286,7 +294,7 @@ export class DealsService {
         input.description !== undefined
           ? input.description.trim()
           : current.description,
-      initiator: current.initiator,
+      initiator: toInitiatorSnapshot(await this.deals.findInitiator(userId)),
     };
     assertAnswersSize(draft.answers);
 

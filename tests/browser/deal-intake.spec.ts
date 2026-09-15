@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { actor, noOverflow, onboarding } from "./helpers";
+import { actor, noOverflow, onboarding, selectSupplierRole } from "./helpers";
 
 test("free description prefills a matching template and survives draft reload", async ({ browser }) => {
   const context = await actor(browser, 71900, "+79997001900");
@@ -50,6 +50,7 @@ test("free description prefills a matching template and survives draft reload", 
   await expect(proposal).toContainText("15000");
   await page.unroute("**/api/v1/deals");
   await page.getByRole("button", { name: "Проверить и продолжить" }).click();
+  await selectSupplierRole(page);
   await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
   await expect(page.getByRole("textbox", { name: "Стоимость услуги, ₽", exact: true })).toHaveValue("15000");
   await expect(page.getByRole("textbox", { name: "Описание услуги", exact: true })).toHaveValue(/Подготовить презентацию/);
@@ -77,6 +78,7 @@ test("no catalog match leads to an individual project and generation", async ({ 
   await page.getByRole("button", { name: "Подобрать договор с ИИ" }).click();
   await expect(page.getByRole("region", { name: "Предложение ИИ" })).toContainText("Индивидуальный проект");
   await page.getByRole("button", { name: "Проверить и продолжить" }).click();
+  await selectSupplierRole(page);
   await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
   await page.getByRole("textbox", { name: "Обязанности инициатора", exact: true }).fill("Передать свой фотоаппарат в исправном состоянии");
   await page.getByRole("textbox", { name: "Обязанности второй стороны", exact: true }).fill("Передать свой велосипед в исправном состоянии");

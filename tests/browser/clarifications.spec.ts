@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { actor, futureDate, noOverflow, onboarding } from "./helpers";
+import { actor, futureDate, noOverflow, onboarding, selectSupplierRole } from "./helpers";
 
 test("bathroom repair asks for missing terms, retains answers after validation, and reaches ready", async ({ browser }) => {
   const context = await actor(browser, 71200, "+79997001200");
@@ -12,6 +12,7 @@ test("bathroom repair asks for missing terms, retains answers after validation, 
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
   await page.getByLabel("Название сделки", { exact: true }).fill("QA этап 8: уточнение ремонта");
   await page.getByRole("textbox", { name: /^Краткое описание/ }).fill("Проверка: ремонт ванной комнаты под ключ");
+  await selectSupplierRole(page);
   await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
   await page.getByRole("textbox", { name: "Описание работ", exact: true }).fill("Ремонт ванной комнаты под ключ");
   await page.getByRole("textbox", { name: "Место выполнения работ", exact: true }).fill("Квартира собственника");

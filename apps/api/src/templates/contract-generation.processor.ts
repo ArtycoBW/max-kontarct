@@ -18,6 +18,7 @@ import {
 } from "./contract-confirmed-terms";
 import { normalizeContractDraft } from "./contract-draft-presentation";
 import { INDIVIDUAL_TEMPLATE_SLUG, INDIVIDUAL_WARNING } from "./deal-intake.service";
+import { declaredRoleTerm, readSubjectDocumentsParty } from "../deals/declared-party-roles";
 
 const PROMPT_ID = "contract-draft";
 const PROMPT_VERSION = "1.3.0";
@@ -57,6 +58,8 @@ export class ContractGenerationProcessor {
             clarificationQuestionHistory(generation.providerMetadata),
           )
         : [];
+      const roleTerm = declaredRoleTerm(generation.templateVersion.template.slug, readSubjectDocumentsParty(generation.providerMetadata));
+      if (roleTerm) confirmedTerms.unshift(roleTerm);
       const result = await this.ai.generateStructured({
         maxTokens: 4_000,
         output: {
