@@ -5,6 +5,17 @@ import { invalidRequiredTermAnswers, knownContractTerms, missingContractTerms } 
 type Case = { slug: string; input: Record<string, unknown>; answers: Record<string, string>; completeField: string };
 const cases = JSON.parse(readFileSync(resolve(__dirname, "../../../../tests/fixtures/contract-cases.json"), "utf8")) as Case[];
 describe("Contract completeness: all five templates", () => {
+  it.each([
+    "Заказчик проверяет PDF и подтверждает приёмку ответом в чате в течение трёх дней",
+    "Письменное подтверждение результата",
+    "После проверки в мессенджере подтверждаем приёмку",
+  ])("accepts an explicit written acceptance without requiring a stock phrase: %s", termsAcceptance => {
+    expect(invalidRequiredTermAnswers("paid-services", {}, { termsAcceptance })).toEqual([]);
+    expect(missingContractTerms("paid-services", {}, { termsAcceptance }).map(item => item.id)).not.toContain("termsAcceptance");
+  });
+  it.each(["Обсудим потом в чате", "Пока не знаю", "Отправить PDF"])("still asks for an acceptance procedure when only a vague delivery is given: %s", termsAcceptance => {
+    expect(invalidRequiredTermAnswers("paid-services", {}, { termsAcceptance })).toHaveLength(1);
+  });
   it.each(cases)("$slug: cannot silently pass a minimal questionnaire", item => {
     expect(missingContractTerms(item.slug, item.input).map(question => question.id)).toEqual(Object.keys(item.answers));
     expect(missingContractTerms(item.slug, item.input).every(question => question.required)).toBe(true);

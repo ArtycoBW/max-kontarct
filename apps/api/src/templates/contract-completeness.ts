@@ -1,7 +1,7 @@
 import type { AiClarificationQuestion } from "@max-contract/contracts";
 import { contractLocationIssue, LOCATION_EXAMPLE } from "./contract-location";
 
-export const COMPLETENESS_VERSION = "1.1.0";
+export const COMPLETENESS_VERSION = "1.1.1";
 type Answers = Record<string, unknown>;
 type Rule = {
   id: string;
@@ -45,7 +45,7 @@ function payment(text: string): boolean {
 }
 const acceptance = (text: string) =>
   meaningful(text) &&
-  /(по акту|актом|подпис.*акт|акт.*подпис|осмотр.*акт|приемк.*(осмотр|провер)|подтвержд.*(письм|email|почт|сообщен)|провер.*результат.*\d)/u.test(
+  /(по акту|актом|подпис.*акт|акт.*подпис|осмотр.*акт|приемк.*(осмотр|провер)|подтвержд.*(письм|email|почт|сообщен|чат|мессенджер)|(письм|email|почт|сообщен|чат|мессенджер).*подтвержд|провер.*результат.*\d)/u.test(
     text,
   );
 const rule = (
