@@ -21,7 +21,6 @@ import {
   Building2,
   Check,
   CheckCircle2,
-  ChevronsDown,
   CircleAlert,
   CircleHelp,
   FileCheck2,
@@ -39,11 +38,12 @@ import {
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import type { FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { StartScreen } from "@/components/app/start-screen";
 import { Card } from "@/components/ui/card";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
@@ -85,7 +85,6 @@ import {
 } from "@/lib/api/templates";
 import { normalizeQuestionnaireAnswers } from "@/lib/validation/questionnaire-answers";
 import { cn } from "@/lib/utils";
-import { createStartFrameSequence } from "@/lib/ui/start-frame-sequence";
 import { getMaxStartPayload, type MaxStartPayload } from "@/lib/max/bridge";
 
 type AppTab = "home" | "deals" | "create" | "deal" | "documents" | "profile";
@@ -102,11 +101,6 @@ const navigation: Array<{
   { id: "documents", icon: Files, label: "Документы" },
   { id: "profile", icon: UserRound, label: "Профиль" },
 ];
-
-// The approved closing composition is source frame 154 from the design prototype.
-const START_SCREEN_FRAME_COUNT = 154;
-const startScreenFramePath = (index: number) =>
-  `/images/start-screen/frame-${String(index + 1).padStart(3, "0")}.webp`;
 
 function ScreenHeader({
   action,
@@ -2084,237 +2078,6 @@ function ActiveScreen({
   return <ProfileScreen fallbackPhone={phone} />;
 }
 
-function StartScreen({
-  onStart,
-  showEnvironmentBadge,
-}: {
-  onStart: () => void;
-  showEnvironmentBadge: boolean;
-}) {
-  const [chapterIndex, setChapterIndex] = useState(0);
-  const reducedMotion = useReducedMotion();
-  const chapters = [
-    { title: "Опишите свою сделку", text: "Расскажите, о чём хотите договориться. ИИ предложит подходящий шаблон или индивидуальный проект." },
-    { title: "Пригласите вторую сторону", text: "Отправьте приглашение сразу после описания. Пока вы готовите условия, второй участник может заполнить свой профиль." },
-    { title: "Проверьте условия вместе", text: "Проверьте суммы, даты и данные. Обе стороны согласуют одну итоговую редакцию. Дополнительные материалы можно обсудить отдельно." },
-    { title: "Подпишите и сохраните", text: "Подтвердите согласованный договор одноразовым кодом и скачайте итоговые файлы. На тестовом стенде код приходит в MAX." },
-  ];
-  const rootRef = useRef<HTMLDivElement>(null);
-  const frameCanvasRef = useRef<HTMLCanvasElement>(null);
-  const [scrollPercent, setScrollPercent] = useState(0);
-  const progressValueRef = useRef<HTMLElement>(null);
-  const progressChapterRef = useRef<HTMLSpanElement>(null);
-
-  const updateParallax = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (reducedMotion || event.pointerType !== "mouse") return;
-    const root = rootRef.current;
-    if (!root) return;
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const x = ((event.clientX - bounds.left) / bounds.width - 0.5) * 12;
-    const y = ((event.clientY - bounds.top) / bounds.height - 0.5) * 9;
-    root.style.setProperty("--start-screen-x", `${x.toFixed(2)}px`);
-    root.style.setProperty("--start-screen-y", `${y.toFixed(2)}px`);
-  };
-  const resetParallax = () => {
-    rootRef.current?.style.setProperty("--start-screen-x", "0px");
-    rootRef.current?.style.setProperty("--start-screen-y", "0px");
-  };
-
-  useEffect(() => {
-    const root = rootRef.current;
-    const frameCanvas = frameCanvasRef.current;
-    const scroller = root?.parentElement;
-    if (!root || !frameCanvas || !scroller) return;
-
-    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    let animationFrame = 0;
-    let targetProgress = 0;
-    let displayedProgress = 0;
-    let previousTime = 0;
-    const sequence = createStartFrameSequence(frameCanvas, START_SCREEN_FRAME_COUNT, requestRender);
-
-    const measure = () => {
-      const viewportHeight = scroller.clientHeight;
-      root.style.height = `${Math.round(viewportHeight * 4.05)}px`;
-      root.style.setProperty(
-        "--start-screen-viewport-height",
-        `${viewportHeight}px`,
-      );
-    };
-    const renderFrame = (time = 0) => {
-      animationFrame = 0;
-      const elapsed = previousTime ? Math.min(40, time - previousTime) : 16;
-      previousTime = time;
-      const distance = targetProgress - displayedProgress;
-      displayedProgress =
-        mediaQuery.matches || Math.abs(distance) < 0.0006
-          ? targetProgress
-          : displayedProgress + Math.sign(distance) * Math.min(Math.abs(distance) * (1 - Math.exp(-elapsed / 220)), elapsed / 1800);
-      const percent = Math.round(displayedProgress * 100);
-      setChapterIndex(Math.min(3, Math.floor(displayedProgress * 4)));
-      const chapter =
-        displayedProgress < 0.34
-          ? "УСЛОВИЯ"
-          : displayedProgress < 0.68
-            ? "СОГЛАСОВАНИЕ"
-            : "ПОДПИСЬ";
-      const hintOpacity = Math.max(0, 1 - displayedProgress * 9);
-
-      root.style.setProperty(
-        "--start-screen-progress",
-        displayedProgress.toFixed(4),
-      );
-      root.style.setProperty(
-        "--start-screen-hint-opacity",
-        hintOpacity.toFixed(3),
-      );
-      setScrollPercent(percent);
-      if (progressValueRef.current) {
-        progressValueRef.current.textContent = String(percent).padStart(2, "0");
-      }
-      if (progressChapterRef.current) {
-        progressChapterRef.current.textContent = chapter;
-      }
-      if (!mediaQuery.matches) sequence.render(displayedProgress);
-      if (Math.abs(targetProgress - displayedProgress) >= 0.0006) {
-        requestRender();
-      }
-    };
-    function requestRender() {
-      if (!animationFrame) {
-        animationFrame = window.requestAnimationFrame(renderFrame);
-      }
-    }
-    const updateTarget = () => {
-      const maxScroll = Math.max(1, root.offsetHeight - scroller.clientHeight);
-      targetProgress = Math.min(1, Math.max(0, scroller.scrollTop / maxScroll));
-      requestRender();
-    };
-    const resizeObserver = new ResizeObserver(() => {
-      measure();
-      updateTarget();
-    });
-
-    scroller.scrollTop = 0;
-    measure();
-    renderFrame();
-    resizeObserver.observe(scroller);
-    scroller.addEventListener("scroll", updateTarget, { passive: true });
-    mediaQuery.addEventListener("change", updateTarget);
-
-    return () => {
-      if (animationFrame) window.cancelAnimationFrame(animationFrame);
-      sequence.dispose();
-      resizeObserver.disconnect();
-      scroller.removeEventListener("scroll", updateTarget);
-      mediaQuery.removeEventListener("change", updateTarget);
-    };
-  }, []);
-
-  return (
-    <main className="app-viewport">
-      <section className="mini-app start-screen" aria-label="Начало работы">
-        {showEnvironmentBadge ? (
-          <span className="environment-badge">ТЕСТ</span>
-        ) : null}
-        <div className="start-screen-scroll">
-          <div className="start-screen-cinematic" ref={rootRef}>
-            <div
-              className="start-screen-stage"
-              onPointerLeave={resetParallax}
-              onPointerMove={updateParallax}
-            >
-              <header className="start-screen-header">
-                <span className="start-screen-brand" aria-label="Макс-Контракт">
-                  <span className="start-screen-brand-mark">
-                    <PenLine size={17} />
-                  </span>
-                  <span>
-                    МАКС
-                    <br />
-                    КОНТРАКТ
-                  </span>
-                </span>
-                <span className="start-screen-sequence">0{chapterIndex + 1} / 04</span>
-              </header>
-
-              <div className="start-screen-media" aria-hidden="true">
-                <div className="start-screen-media-plane">
-                  {/* Static fallback stays beneath the canvas until its first fully decoded frame. */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    alt=""
-                    className="start-screen-frame"
-                    decoding="sync"
-                    draggable={false}
-                    fetchPriority="high"
-                    src={startScreenFramePath(0)}
-                  />
-                  <canvas ref={frameCanvasRef} className="start-screen-frame start-screen-canvas" />
-                </div>
-                <span className="start-screen-shade" />
-                <span className="start-screen-rule" />
-                <span className="start-screen-media-note">
-                  Ясность · Контроль · Подпись
-                </span>
-              </div>
-
-              <section className="start-screen-card">
-                <span className="start-screen-kicker">
-                  Частные сделки без лишней сложности
-                </span>
-                <div className="start-screen-copy" aria-live="polite">
-                  {chapters.map((item, index) => <motion.div key={item.title} className="start-screen-copy-layer"
-                    aria-hidden={index !== chapterIndex} initial={false} animate={{ opacity: index === chapterIndex ? 1 : 0 }}
-                    transition={{ duration: reducedMotion ? 0 : 0.55, ease: [0.4, 0, 0.2, 1] }}>
-                    <h1>{item.title}</h1><p>{item.text}</p>
-                  </motion.div>)}
-                </div>
-                <nav className="start-screen-chapters" aria-label="Возможности сервиса">
-                  {chapters.map((item, index) => <Button variant="unstyled" key={item.title} type="button" aria-label={item.title} aria-current={index === chapterIndex ? "step" : undefined} onClick={() => {
-                    const root = rootRef.current;
-                    const scroller = root?.parentElement;
-                    if (root && scroller) scroller.scrollTo({ top: (root.offsetHeight - scroller.clientHeight) * (index / 3), behavior: reducedMotion ? "instant" : "smooth" });
-                  }}>{index + 1}</Button>)}
-                </nav>
-              </section>
-
-              <div className="start-screen-scroll-cue" aria-hidden="true">
-                <span>Листайте вниз</span>
-                <ChevronsDown size={15} strokeWidth={1.8} />
-              </div>
-
-              <footer className="start-screen-footer">
-                <div className="start-screen-progress">
-                  <span
-                    className="start-screen-progress-chapter"
-                    ref={progressChapterRef}
-                  >
-                    УСЛОВИЯ
-                  </span>
-                  <Progress className="start-screen-progress-track" aria-label="Прогресс просмотра" value={scrollPercent} />
-                  <strong ref={progressValueRef}>00</strong>
-                </div>
-                <Button
-                  aria-label="Начать работу с Макс-Контракт"
-                  className="start-screen-action"
-                  onClick={onStart}
-                  type="button"
-                  variant="unstyled"
-                >
-                  <span className="start-screen-action-label">Начать работу</span>
-                  <span className="start-screen-action-arrow">
-                    <ArrowRight size={18} />
-                  </span>
-                </Button>
-              </footer>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
-  );
-}
 
 function AuthenticationLoading({
   copy = "Проверяем сессию и данные запуска приложения.",

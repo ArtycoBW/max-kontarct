@@ -277,6 +277,23 @@ textarea:focus-visible {
   display: none;
 }
 
+.start-overview { padding: 28px 22px max(28px, env(safe-area-inset-bottom)); color: var(--ink); }
+.start-overview-brand { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.start-overview-heading { margin: 32px 0 24px; }
+.start-overview-heading h1 { font-size: clamp(32px, 8vw, 42px); line-height: 1.05; letter-spacing: -0.045em; margin: 14px 0; }
+.start-overview-heading > p:last-child { color: var(--muted); font-size: 15px; line-height: 1.6; }
+.start-overview-steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; }
+.card.start-overview-step { display: flex; align-items: flex-start; gap: 14px; padding: 20px 16px; border-radius: 22px; }
+.start-overview-number { flex: 0 0 34px; color: var(--accent); font-size: 14px; font-weight: 700; line-height: 24px; }
+.start-overview-step h2 { font-size: 20px; line-height: 1.25; letter-spacing: -0.03em; margin: 0; }
+.start-overview-step p { margin: 10px 0 0; font-size: 14px; line-height: 1.6; color: var(--muted); }
+.start-overview-footer { margin-top: 26px; }
+@media (max-width: 360px) {
+  .start-overview { padding-inline: 16px; }
+  .card.start-overview-step { gap: 8px; padding: 18px 12px; }
+  .start-overview-step h2 { font-size: 19px; }
+}
+
 .start-screen-cinematic {
   --start-screen-x: 0px;
   --start-screen-y: 0px;

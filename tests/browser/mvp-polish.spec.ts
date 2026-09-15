@@ -1,24 +1,27 @@
 import { expect, test, type Page } from "@playwright/test";
 import { actor, noOverflow, onboarding } from "./helpers";
 
-test("smooth start keeps card size stable and legal modal chrome stays visible on small screens", async ({ browser }) => {
+test("vertical start shows every stage and legal modal chrome stays visible on small screens", async ({ browser }) => {
   const context = await actor(browser, 73011, "+79997003011");
   const page = await context.newPage();
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
-  const card = page.locator(".start-screen-copy");
-  await expect(card).toBeVisible();
-  const height = (await card.boundingBox())!.height;
-  await expect(page.locator(".start-screen-canvas")).toHaveCSS("opacity", "1");
-  const initialFrame = await page.locator(".start-screen-canvas").evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL());
-  for (const title of ["Подпишите и сохраните", "Опишите свою сделку"]) {
-    await page.getByRole("button", { name: title, exact: true }).click();
-    await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
-    expect(Math.abs((await card.boundingBox())!.height - height)).toBeLessThan(1);
-    await expect(page.locator(".start-screen-canvas")).toHaveCSS("opacity", "1");
-    if (title === "Подпишите и сохраните") await expect.poll(() => page.locator(".start-screen-canvas").evaluate(canvas => (canvas as HTMLCanvasElement).toDataURL())).not.toBe(initialFrame);
+  const steps = page.getByRole("list", { name: "Этапы оформления договора" }).getByRole("listitem");
+  await expect(steps).toHaveCount(4);
+  await expect(page.locator(".start-screen-canvas, .start-screen-chapters, .legal-document-link")).toHaveCount(0);
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 640 });
+    await noOverflow(page);
+    let previousBottom = 0;
+    for (const step of await steps.all()) {
+      await expect(step.getByRole("heading")).toBeVisible();
+      const box = (await step.boundingBox())!;
+      expect(box.y).toBeGreaterThan(previousBottom);
+      previousBottom = box.y + box.height;
+    }
+    const action = page.getByRole("button", { name: "Начать работу с Макс-Контракт" });
+    expect((await action.boundingBox())!.y).toBeGreaterThan(previousBottom);
   }
-  await expect(page.locator(".start-screen-card .legal-document-link")).toHaveCount(0);
   await page.screenshot({ path: "test-results/start-without-legal-link.png" });
   await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
   await page.getByRole("button", { name: "Читать: Обработка персональных данных", exact: true }).click();
