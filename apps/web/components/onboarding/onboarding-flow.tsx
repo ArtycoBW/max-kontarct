@@ -64,7 +64,7 @@ const consentRows: ConsentRowDefinition[] = [
     type: "TERMS_OF_USE",
   },
   {
-    copy: "Необязательно для работы со сделками",
+    copy: "Сообщения о приглашениях, согласовании и готовности документов",
     icon: Bell,
     label: "Уведомления о статусах",
     required: false,
@@ -208,31 +208,46 @@ function ConsentScreen({
           {consentRows.map(({ copy, icon: Icon, label, required, type }) => {
             const switchId = `consent-${type.toLowerCase()}`;
             return (
-              <Card className="consent-card" key={type}>
-                <span className="consent-icon">
-                  <Icon size={17} />
-                </span>
-                <label htmlFor={switchId}>
-                  <strong>
-                    {label}
-                    {required ? <em> *</em> : null}
-                  </strong>
-                  <small>{copy}</small>
-                </label>
-                <Switch
-                  aria-label={label}
-                  checked={consents[type]}
-                  id={switchId}
-                  onCheckedChange={(checked) => onChange(type, checked)}
-                />
-                <div className="consent-document-action"><LegalDocuments type={type} label={`Читать: ${label}`} /></div>
+              <Card className="consent-card" key={type} role="group" aria-labelledby={`${switchId}-title`} data-accepted={consents[type]}>
+                <div className="consent-card-heading">
+                  <span className="consent-icon" aria-hidden="true"><Icon size={20} /></span>
+                  <label htmlFor={switchId}>
+                    <strong id={`${switchId}-title`}>{label}</strong>
+                    <small id={`${switchId}-description`}>{copy}</small>
+                  </label>
+                </div>
+                <div className="consent-card-footer">
+                  <LegalDocuments type={type} label="Ознакомиться" describedBy={`${switchId}-title`} />
+                  <div className="consent-control">
+                    <label htmlFor={switchId}>{required ? "Обязательно" : "По желанию"}</label>
+                    <Switch
+                      aria-label={label}
+                      aria-describedby={`${switchId}-description`}
+                      checked={consents[type]}
+                      disabled={isPending}
+                      id={switchId}
+                      onCheckedChange={(checked) => onChange(type, checked)}
+                    />
+                  </div>
+                </div>
               </Card>
             );
           })}
         </div>
 
-        <LegalDocuments type="ELECTRONIC_SIGNATURE" label="Соглашение о простой электронной подписи" />
-        <p className="field-hint">Соглашение о ПЭП принимается отдельно перед подписанием. На стенде опубликованы проекты документов.</p>
+        <Card className="consent-card consent-signature-card" role="group" aria-labelledby="signature-document-title">
+          <div className="consent-card-heading">
+            <span className="consent-icon" aria-hidden="true"><LockKeyhole size={20} /></span>
+            <div>
+              <strong id="signature-document-title">Простая электронная подпись</strong>
+              <small>Соглашение принимается отдельно перед подписанием договора.</small>
+            </div>
+          </div>
+          <div className="consent-card-footer">
+            <LegalDocuments type="ELECTRONIC_SIGNATURE" label="Ознакомиться" describedBy="signature-document-title" />
+          </div>
+        </Card>
+        <p className="consent-note">На стенде опубликованы проекты документов.</p>
 
         {error ? (
           <p className="onboarding-inline-error" role="alert">

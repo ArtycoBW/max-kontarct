@@ -4214,18 +4214,17 @@ button.service-status {
   max-width: 410px;
   margin: 17px 0 28px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 15px;
   line-height: 1.58;
 }
 
 .consent-list {
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 
-.consent-document-action { grid-column: 2 / -1; }
 .early-invitation-panel { display: grid; gap: 12px; padding: 18px; font-size: 13px; line-height: 1.5; }
-.legal-document-link { color: var(--accent); font-size: 12px; text-align: left; text-decoration: underline; text-underline-offset: 3px; padding: 8px 0; cursor: pointer; }
+.legal-document-link { justify-content: center; gap: 8px; min-height: 44px; padding: 10px 12px; color: var(--ink-deep); font-size: 14px; font-weight: 500; text-decoration: none; }
 .dialog-overlay { position: fixed; inset: 0; z-index: 100; background: #21171366; backdrop-filter: blur(4px); }
 .dialog-content { position: fixed; left: 50%; top: 50%; z-index: 110; transform: translate(-50%, -50%); width: min(600px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 24px; border: 1px solid var(--border); border-radius: 24px; color: var(--ink-deep); background: #fff; box-shadow: 0 24px 80px #21171333; }
 .dialog-title { margin: 0; font-size: 20px; line-height: 1.25; letter-spacing: -.03em; }
@@ -4246,9 +4245,10 @@ button.service-status {
 .legal-document-picker .select-trigger > span:first-child { white-space: normal; overflow-wrap: anywhere; }
 .legal-document-options { max-width: calc(100vw - 32px); }
 .legal-document-options .select-item { white-space: normal; overflow-wrap: anywhere; }
-.legal-document-body { font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
+.legal-document-body { font-size: 16px; line-height: 1.65; overflow-wrap: anywhere; }
 .legal-document-body article { margin-top: 24px; }
-.legal-document-body h3 { font-size: 18px; }
+.legal-document-body article:first-child { margin-top: 0; }
+.legal-document-body h3 { margin: 0 0 18px; font-size: 21px; line-height: 1.35; }
 .legal-document-body p { margin: 12px 0; }
 .invitation-offer { display: grid; gap: 12px; margin: 18px 0 26px; padding: 20px; line-height: 1.6; overflow-wrap: anywhere; }
 .invitation-offer p { margin: 0; white-space: pre-wrap; }
@@ -4365,12 +4365,53 @@ button.service-status {
 
 .consent-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 20px;
+  box-shadow: none;
+}
+
+.consent-card[data-accepted="true"] {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.consent-card-heading {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: start;
   gap: 12px;
-  min-height: 82px;
-  padding: 14px;
-  box-shadow: var(--shadow-card);
+}
+
+.consent-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.consent-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.consent-control label {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.consent-signature-card { margin-top: 20px; }
+.consent-note { margin: 16px 0 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+
+.consent-card-heading > div {
+  min-width: 0;
 }
 
 .consent-icon {
@@ -4395,20 +4436,17 @@ button.service-status {
 
 .consent-card strong {
   color: var(--ink-deep);
-  font-size: 10px;
-  line-height: 1.35;
-}
-
-.consent-card strong em {
-  color: var(--accent);
-  font-style: normal;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .consent-card small {
-  margin-top: 4px;
+  margin-top: 8px;
   color: var(--muted);
-  font-size: 9px;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .switch-root {
@@ -4453,6 +4491,8 @@ button.service-status {
 
 .onboarding-footer .button {
   min-height: 48px;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .onboarding-inline-error {

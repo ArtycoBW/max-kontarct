@@ -15,12 +15,12 @@ test("legal documents are available only during registration and reading does no
   const accept = page.getByRole("button", { name: "Принять и продолжить", exact: true });
   await expect(accept).toBeDisabled();
   for (const [label, title] of [
-    ["Читать: Обработка персональных данных", "Обработка персональных данных"],
-    ["Читать: Условия использования", "Пользовательские условия / оферта"],
-    ["Читать: Уведомления о статусах", "Согласие на сервисные уведомления"],
-    ["Соглашение о простой электронной подписи", "Соглашение о простой электронной подписи"],
+    ["Обработка персональных данных", "Обработка персональных данных"],
+    ["Условия использования", "Пользовательские условия / оферта"],
+    ["Уведомления о статусах", "Согласие на сервисные уведомления"],
+    ["Простая электронная подпись", "Соглашение о простой электронной подписи"],
   ]) {
-    const trigger = page.getByRole("button", { name: label, exact: true });
+    const trigger = page.getByRole("group", { name: label, exact: true }).getByRole("button", { name: "Ознакомиться", exact: true });
     await trigger.click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).not.toContainText("Проект · версия");

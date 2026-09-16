@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { ArrowUpRight } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -9,7 +10,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 
 type LegalDocument = { type: string; title: string; version: string; status: "DRAFT"; paragraphs: string[] };
 
-export function LegalDocuments({ type, label = "Документы и согласия" }: { type?: string; label?: string }) {
+export function LegalDocuments({ type, label = "Документы и согласия", describedBy }: { type?: string; label?: string; describedBy?: string }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(type ?? "PERSONAL_DATA");
   const documents = useQuery({
@@ -19,7 +20,7 @@ export function LegalDocuments({ type, label = "Документы и согла
     retry: false,
   });
   return <Modal open={open} onClose={() => setOpen(false)} title={type ? "Документ" : "Документы и согласия"}
-      trigger={<Button variant="unstyled" className="legal-document-link" type="button" onClick={() => setOpen(true)}>{label}</Button>}
+      trigger={<Button variant="outline" className="legal-document-link" aria-describedby={describedBy} type="button" onClick={() => setOpen(true)}>{label}<ArrowUpRight size={16} aria-hidden="true" /></Button>}
       footer={<Button className="full-width" type="button" onClick={() => setOpen(false)}>Понятно</Button>}>
       <div className="legal-document-body">
         {!type && documents.data ? <div className="legal-document-picker"><span>Выберите документ</span>

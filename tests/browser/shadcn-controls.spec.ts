@@ -7,7 +7,7 @@ test("registration legal Dialog fits small viewports, traps focus and restores t
   await page.goto("/");
   await page.waitForFunction(() => (window as Window & { testMaxUiReady?: boolean }).testMaxUiReady === true);
   await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
-  const trigger = page.getByRole("button", { name: "Читать: Уведомления о статусах", exact: true });
+  const trigger = page.getByRole("group", { name: "Уведомления о статусах", exact: true }).getByRole("button", { name: "Ознакомиться", exact: true });
   for (const [width, height] of [[320, 568], [390, 740], [1440, 900]]) {
     await page.setViewportSize({ width, height });
     await trigger.click();

@@ -24,7 +24,7 @@ test("vertical start shows every stage and legal modal chrome stays visible on s
   }
   await page.screenshot({ path: "test-results/start-without-legal-link.png" });
   await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
-  await page.getByRole("button", { name: "Читать: Обработка персональных данных", exact: true }).click();
+  await page.getByRole("group", { name: "Обработка персональных данных", exact: true }).getByRole("button", { name: "Ознакомиться", exact: true }).click();
   const dialog = page.getByRole("dialog");
   for (const width of [320, 390, 1440]) {
     await page.setViewportSize({ width, height: 640 });
