@@ -8,7 +8,8 @@ test("vertical start shows every stage and legal modal chrome stays visible on s
   await page.goto("/");
   const steps = page.getByRole("list", { name: "Этапы оформления договора" }).getByRole("listitem");
   await expect(steps).toHaveCount(4);
-  await expect(page.locator(".start-screen-canvas, .start-screen-chapters, .legal-document-link")).toHaveCount(0);
+  await expect(page.locator(".start-screen-chapters, .legal-document-link")).toHaveCount(0);
+  await expect(page.locator(".start-story-canvas")).toHaveCount(1);
   for (const width of [320, 390, 1440]) {
     await page.setViewportSize({ width, height: 640 });
     await noOverflow(page);

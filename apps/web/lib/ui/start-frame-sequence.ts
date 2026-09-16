@@ -64,6 +64,7 @@ export function createStartFrameSequence(canvas: HTMLCanvasElement, count: numbe
       }
       context.globalAlpha = 1;
       canvas.style.opacity = "1";
+      canvas.dataset.frame = wanted.toFixed(3);
       lastPaint = wanted;
     },
     dispose() { disposed = true; abort.abort(); frames.forEach(frame => frame.close()); frames.clear(); blobs.clear(); },

@@ -19,13 +19,21 @@ async function mockApp(page: Page) {
   return writes;
 }
 
-for (const width of [320, 390, 1440]) {
-  test(`photographic start keeps all four stages in normal flow at ${width}px`, async ({ page }) => {
+for (const width of [320, 390, 768, 1024, 1440]) {
+  test(`scrolling scrubs the original background with vertical stages at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
     await mockApp(page);
+    const canvas = page.locator(".start-story-canvas");
+    await expect(canvas).toHaveCSS("opacity", "1");
+    const firstFrame = await canvas.evaluate((el: HTMLCanvasElement) => el.toDataURL());
+    const scroller = page.locator(".start-screen-scroll");
     const steps = page.getByRole("list", { name: "Этапы оформления договора" }).getByRole("listitem");
     await expect(steps).toHaveCount(4);
-    await expect(page.locator(".start-screen-sequence, .start-screen-chapters, .start-overview-number, .start-screen-progress, canvas")).toHaveCount(0);
+    await expect(page.locator(".start-screen-sequence, .start-screen-chapters, .start-overview-number, .start-screen-progress")).toHaveCount(0);
+    await expect(page.locator("canvas")).toHaveCount(1);
     await expect(page.locator(".start-story button")).toHaveCount(1);
     const positions = await steps.evaluateAll(elements => elements.map(el => ({ top: el.getBoundingClientRect().top, bottom: el.getBoundingClientRect().bottom })));
     for (let i = 1; i < positions.length; i++) expect(positions[i]!.top).toBeGreaterThan(positions[i - 1]!.bottom);
@@ -35,11 +43,25 @@ for (const width of [320, 390, 1440]) {
       const step = steps.nth(i);
       await step.scrollIntoViewIfNeeded();
       await expect(step.getByRole("heading")).toBeInViewport();
-      await expect.poll(() => step.locator("img").evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
     }
-    await page.locator(".start-screen-scroll").evaluate(el => { el.scrollTop = 0; });
+    await scroller.evaluate(el => { el.scrollTop = el.scrollHeight; });
+    await expect.poll(async () => Number(await canvas.getAttribute("data-frame"))).toBe(153);
+    expect(await canvas.evaluate((el: HTMLCanvasElement) => el.toDataURL())).not.toBe(firstFrame);
+    await expect(action).toBeInViewport();
+    await page.screenshot({ path: `test-results/start-scroll-end-${width}.png` });
+    await scroller.evaluate(el => { el.scrollTop = 0; });
+    await expect.poll(async () => Number(await canvas.getAttribute("data-frame"))).toBe(0);
+    expect(await canvas.evaluate((el: HTMLCanvasElement) => el.toDataURL())).toBe(firstFrame);
     await page.screenshot({ path: `test-results/start-restored-${width}.png` });
+    await scroller.focus();
+    await page.keyboard.press("PageDown");
+    await expect.poll(() => scroller.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+    await expect.poll(async () => Number(await canvas.getAttribute("data-frame"))).toBeGreaterThan(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.setViewportSize({ width: 844, height: 390 });
+    await scroller.evaluate(el => { el.scrollTop = el.scrollHeight; });
+    await expect(action).toBeInViewport();
+    expect(errors).toEqual([]);
     await action.click();
     await expect(page.getByRole("navigation", { name: "Навигация приложения" })).toBeVisible();
   });
@@ -76,3 +98,24 @@ for (const width of [320, 390, 1440]) {
     await expect(input).toHaveValue("");
   });
 }
+
+test("reduced motion keeps a poster and all stages without fetching the sequence", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const frames: string[] = [];
+  page.on("request", request => { if (request.url().includes("/images/start-screen/") && request.resourceType() === "fetch") frames.push(request.url()); });
+  await mockApp(page);
+  await expect(page.locator(".start-story-canvas")).toBeHidden();
+  await expect(page.locator(".start-story-step")).toHaveCount(4);
+  expect(await page.locator(".start-story-media img").evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);
+  await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
+  expect(frames).toEqual([]);
+});
+
+test("failed frame downloads retain the poster and do not block reading or starting", async ({ page }) => {
+  await page.route("**/images/start-screen/*.webp", route => route.request().resourceType() === "fetch" ? route.abort() : route.continue());
+  await mockApp(page);
+  await expect(page.locator(".start-story-canvas")).toHaveCSS("opacity", "0");
+  await expect(page.locator(".start-story-step")).toHaveCount(4);
+  await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
+  await expect(page.getByRole("navigation", { name: "Навигация приложения" })).toBeVisible();
+});
