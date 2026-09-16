@@ -15,6 +15,7 @@ export function useStartScroll() {
     const canvas = canvasRef.current;
     if (!scroller || !story || !canvas) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const cards = Array.from(story.querySelectorAll<HTMLElement>(".start-story-card"));
     let sequence: ReturnType<typeof createStartFrameSequence> | undefined;
     let raf = 0;
     let target = 0;
@@ -27,6 +28,15 @@ export function useStartScroll() {
     }
     function render(time: number) {
       raf = 0;
+      const viewport = scroller!.getBoundingClientRect();
+      const heights = cards.map(card => card.getBoundingClientRect());
+      cards.forEach((card, index) => {
+        // The closing card and its CTA remain readable, including short viewports.
+        const center = heights[index]!.top + heights[index]!.height / 2 - viewport.top;
+        const t = Math.max(0, Math.min(1, (center / viewport.height - .5) / .24));
+        const opacity = index === cards.length - 1 ? 1 : t * t * (3 - 2 * t);
+        card.style.setProperty("--story-card-opacity", opacity.toFixed(3));
+      });
       const elapsed = lastTime ? Math.min(40, time - lastTime) : 16;
       lastTime = time;
       const delta = target - progress;
@@ -49,6 +59,7 @@ export function useStartScroll() {
       if (raf) cancelAnimationFrame(raf);
       raf = 0; lastTime = 0;
       if (reduce.matches) {
+        cards.forEach(card => card.style.removeProperty("--story-card-opacity"));
         sequence?.dispose(); sequence = undefined;
         canvas!.style.opacity = "0";
       } else update();

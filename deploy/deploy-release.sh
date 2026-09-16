@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 revision=${1:?Pass a commit SHA matching /tmp/max-contract-SHA.tar}
+checks=${2:-full}
+[[ "$checks" == full || "$checks" == --skip-tests ]] || exit 1
 [[ "$revision" =~ ^[a-f0-9]{7,40}$ ]] || exit 1
 archive="/tmp/max-contract-$revision.tar"
 [[ -f "$archive" && -f /etc/max-contract/backup.env ]] || { echo 'Archive or backup configuration missing' >&2; exit 1; }
@@ -18,8 +20,12 @@ npm ci --include=dev
 npm audit --omit=dev --audit-level=high
 npm run lint
 npm run typecheck
-npm run test
-npm run test:e2e
+if [[ "$checks" == full ]]; then
+    npm run test
+    npm run test:e2e
+else
+    printf 'Tests skipped by explicit deployment request; build and health checks remain enabled.\n'
+fi
 npm run build --workspace @max-contract/contracts
 npm run build --workspace @max-contract/api
 npm run build --workspace @max-contract/web

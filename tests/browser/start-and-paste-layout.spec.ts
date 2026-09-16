@@ -38,7 +38,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     const positions = await steps.evaluateAll(elements => elements.map(el => ({ top: el.getBoundingClientRect().top, bottom: el.getBoundingClientRect().bottom })));
     for (let i = 1; i < positions.length; i++) expect(positions[i]!.top).toBeGreaterThan(positions[i - 1]!.bottom);
     const action = page.getByRole("button", { name: "Начать работу с Макс-Контракт" });
-    expect((await action.boundingBox())!.y).toBeGreaterThan(positions[3]!.bottom);
+    await expect(steps.last().getByRole("button", { name: "Начать работу с Макс-Контракт" })).toHaveCount(1);
     for (let i = 0; i < 4; i++) {
       const step = steps.nth(i);
       await step.scrollIntoViewIfNeeded();

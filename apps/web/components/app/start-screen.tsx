@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowRight, PenLine } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useStartScroll } from "@/lib/ui/use-start-scroll";
@@ -23,7 +24,7 @@ export function StartScreen({ onStart, showEnvironmentBadge }: {
       <div className="start-screen-scroll" ref={scrollerRef} tabIndex={0} role="region" aria-label="Этапы работы с сервисом">
         <div className="start-story" ref={storyRef}>
           <header className="start-story-brand start-screen-brand" aria-label="Макс-Контракт">
-            <span className="start-screen-brand-mark"><PenLine size={17} /></span>
+            <Image className="start-story-logo" src="/images/max-contract-app-icon.jpg" width={38} height={38} alt="" />
             <span>МАКС<br />КОНТРАКТ</span>
           </header>
           <div className="start-story-scene">
@@ -42,16 +43,15 @@ export function StartScreen({ onStart, showEnvironmentBadge }: {
                     <Card className="start-story-card">
                       <span className="start-screen-kicker">{["Частные сделки без лишней сложности", "Вместе с другой стороной", "Понятные условия", "Договор под рукой"][index]}</span>
                       <Heading>{step.title}</Heading><p>{step.text}</p>
+                      {index === steps.length - 1 ? <footer className="start-story-footer">
+                        <Button aria-label="Начать работу с Макс-Контракт" className="start-story-cta" type="button" onClick={onStart}>
+                          Начать работу <ArrowRight size={18} aria-hidden="true" />
+                        </Button>
+                      </footer> : null}
                     </Card>
                   </li>;
                 })}
               </ol>
-              <footer className="start-story-footer">
-                <Button aria-label="Начать работу с Макс-Контракт" className="start-screen-action" variant="unstyled" type="button" onClick={onStart}>
-                  <span className="start-screen-action-label">Начать работу</span>
-                  <span className="start-screen-action-arrow"><ArrowRight size={18} /></span>
-                </Button>
-              </footer>
             </div>
           </div>
         </div>
