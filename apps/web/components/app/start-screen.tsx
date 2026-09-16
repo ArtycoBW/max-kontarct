@@ -19,27 +19,33 @@ export function StartScreen({ onStart, showEnvironmentBadge }: {
     <section className="mini-app start-screen" aria-label="Начало работы">
       {showEnvironmentBadge ? <span className="environment-badge">ТЕСТ</span> : null}
       <div className="start-screen-scroll">
-        <div className="start-overview">
-          <header className="start-overview-brand">
-            <span className="start-screen-brand-mark"><PenLine size={18} /></span>
-            <strong>МАКС-КОНТРАКТ</strong>
+        <div className="start-story">
+          <header className="start-story-brand start-screen-brand" aria-label="Макс-Контракт">
+            <span className="start-screen-brand-mark"><PenLine size={17} /></span>
+            <span>МАКС<br />КОНТРАКТ</span>
           </header>
-          <div className="start-overview-heading">
-            <p className="screen-eyebrow">Частные сделки без лишней сложности</p>
-            <h1>Подготовьте договор вместе</h1>
-            <p>От первого описания до согласования и подписания — четыре понятных этапа.</p>
-          </div>
-          <ol className="start-overview-steps" aria-label="Этапы оформления договора">
-            {steps.map((step, index) => <li key={step.title}>
-              <Card className="start-overview-step">
-                <span className="start-overview-number" aria-hidden="true">0{index + 1}</span>
-                <div><h2>{step.title}</h2><p>{step.text}</p></div>
-              </Card>
-            </li>)}
+          <ol className="start-story-steps" aria-label="Этапы оформления договора">
+            {steps.map((step, index) => {
+              const Heading = index === 0 ? "h1" : "h2";
+              return <li className="start-story-step" key={step.title}>
+                <div className="start-story-media" aria-hidden="true">
+                  {/* Existing approved photography, without a frame sequence or slide switching. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img alt="" src={`/images/start-screen/frame-${["001", "051", "103", "154"][index]}.webp`}
+                    loading={index === 0 ? "eager" : "lazy"} fetchPriority={index === 0 ? "high" : "auto"} decoding="async" />
+                  <span className="start-screen-rule" />
+                </div>
+                <Card className="start-story-card">
+                  <span className="start-screen-kicker">{["Частные сделки без лишней сложности", "Вместе с другой стороной", "Понятные условия", "Договор под рукой"][index]}</span>
+                  <Heading>{step.title}</Heading><p>{step.text}</p>
+                </Card>
+              </li>;
+            })}
           </ol>
-          <footer className="start-overview-footer">
-            <Button aria-label="Начать работу с Макс-Контракт" className="full-width" onClick={onStart}>
-              Начать работу <ArrowRight size={18} />
+          <footer className="start-story-footer">
+            <Button aria-label="Начать работу с Макс-Контракт" className="start-screen-action" variant="unstyled" type="button" onClick={onStart}>
+              <span className="start-screen-action-label">Начать работу</span>
+              <span className="start-screen-action-arrow"><ArrowRight size={18} /></span>
             </Button>
           </footer>
         </div>

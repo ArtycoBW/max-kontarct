@@ -13,10 +13,10 @@ test("early details import stays local until saving and subject files stay separ
   const deal = await (await creating).json();
   await page.getByRole("textbox", { name: /^Краткое описание/ }).fill("Нарисовать иллюстрации для сайта.");
   await page.getByRole("button", { name: "Мои реквизиты", exact: true }).click();
-  await page.getByRole("button", { name: "Вставить данные из MAX" }).click();
+  await page.getByRole("button", { name: "Вставить из Цифрового ID / Госуслуг" }).click();
   let writes = 0;
   page.on("request", request => { if (request.url().endsWith("/profile") && request.method() !== "GET") writes++; });
-  await page.getByLabel("Текст с подписями полей").fill("Фамилия: Примерова\nИмя: Мария\nДата рождения: 12.04.1995");
+  await page.getByLabel("Скопированный текст").fill("ФИО\nПримерова Мария Ивановна\nДата рождения\n12.04.1995");
   await page.getByRole("button", { name: "Перенести в форму" }).click();
   await expect(page.getByLabel("Фамилия", { exact: true })).toHaveValue("Примерова");
   expect(writes).toBe(0);
