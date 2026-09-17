@@ -73,6 +73,14 @@ describe("deal intake", () => {
     generateStructured.mockResolvedValue({ data: { templateSlug: "individual-agreement", title: "Соглашение об обмене", reason: "Нет готового типа", warnings: [], fields: [] }, metadata: fakeMetadata });
     expect(await service.suggest("user-1", "Обмен фотоаппарата на велосипед")).toMatchObject({ mode: "INDIVIDUAL", warnings: [INDIVIDUAL_WARNING] });
   });
+  it("replaces internal catalog slugs in all displayed AI prose without changing identifiers", async () => {
+    generateStructured.mockResolvedValue({ data: { templateSlug: "paid-services", title: "Договор paid-services", reason: "Подходит тип PAID-SERVICES.", warnings: ["Проверьте paid-services"], fields: [] }, metadata: fakeMetadata });
+    const result = await service.suggest("user-1", "Подготовить презентацию");
+    expect(result.template.slug).toBe("paid-services");
+    expect(result.title).toBe("Договор «Оказание услуг»");
+    expect(result.reason).toBe("Подходит тип «Оказание услуг».");
+    expect(result.warnings).toEqual(["Проверьте «Оказание услуг»"]);
+  });
   it("returns a safe retryable error on provider failure", async () => {
     generateStructured.mockRejectedValue(new AiProviderError("AI_PROVIDER_HTTP_ERROR", "private upstream details"));
     await expect(service.suggest("user-1", "Подготовить презентацию")).rejects.toMatchObject({ response: { code: "DEAL_INTAKE_UNAVAILABLE" } });

@@ -40,12 +40,13 @@ export class DealIntakeService {
         maxTokens: 2_500,
         safetyIdentifier: userId,
         prompt: {
-          id: "deal-intake", version: "1.0.0",
+          id: "deal-intake", version: "1.0.1",
           trustedInstruction: [
             "Помоги пользователю подготовить частный договор между двумя физическими лицами по описанию.",
             "Выбери наиболее подходящий тип из candidates по смыслу, не по совпадению слов. Если подходящего типа нет, выбери individual-agreement.",
             "Не выдавай смешанный или нестандартный договор за готовый тип. Для запроса вне частной сделки выбери индивидуальный проект и объясни ограничения в warnings.",
             "Верни короткое название сделки без имён, адресов, телефонов и других персональных данных, объяснение выбора и замечания для проверки.",
+            "Пиши title, reason и warnings на русском языке. Используй русские названия типов из candidates.title; не показывай пользователю технические slug и ключи полей анкеты.",
             "fields содержит только поля выбранной анкеты. value всегда строка (числа без разделителей, boolean true/false, дата YYYY-MM-DD, варианты enum строго из схемы).",
             "Заполняй только явно указанные факты. Не придумывай даты, год, суммы, роли, обязанности, порядок оплаты или значения переключателей. Если сведения противоречат друг другу, оставь поле незаполненным и добавь предупреждение.",
             "Для каждого поля evidence — дословная непустая цитата из description, подтверждающая значение. Не добавляй ФИО, паспорт, телефон или email в поля условий.",
@@ -67,10 +68,11 @@ export class DealIntakeService {
       const warnings = [...result.data.warnings];
       if (discarded) warnings.push("Часть условий не удалось однозначно перенести. Проверьте и дополните поля анкеты.");
       if (individual) warnings.unshift(INDIVIDUAL_WARNING);
+      const readable = (text: string) => localizeIntakeText(text, candidates);
       return {
         mode: individual ? "INDIVIDUAL" : "TEMPLATE", template,
-        title: result.data.title, description: source, reason: result.data.reason,
-        answers, warnings: [...new Set(warnings)],
+        title: readable(result.data.title), description: source, reason: readable(result.data.reason),
+        answers, warnings: [...new Set(warnings.map(readable))],
       };
     } catch (error) {
       if (error instanceof AiProviderError) {
@@ -79,6 +81,12 @@ export class DealIntakeService {
       throw error;
     }
   }
+}
+
+/** Model-facing identifiers must never replace human-readable catalog titles. */
+function localizeIntakeText(text: string, candidates: ContractTemplateDetailsResponse[]): string {
+  const titles = new Map(candidates.map(item => [item.slug.toLowerCase(), item.title]));
+  return text.replace(/[a-z0-9]+(?:-[a-z0-9]+)+/gi, token => titles.has(token.toLowerCase()) ? `«${titles.get(token.toLowerCase())}»` : token);
 }
 
 export function extractSupportedAnswers(

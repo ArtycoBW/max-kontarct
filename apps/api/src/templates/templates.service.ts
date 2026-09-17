@@ -76,6 +76,9 @@ export class TemplatesService {
       version.questionnaireSchema,
       request.answers,
     );
+    if (slug === "personal-loan" && request.answers.interestType === "Без процентов" && typeof request.answers.interestRate === "number" && request.answers.interestRate > 0) {
+      errors.push({ path: "interestRate", message: "Выбран заём без процентов, но указана процентная ставка. Очистите ставку или выберите «С процентами»." });
+    }
     if (errors.length > 0) {
       throw new BadRequestException({
         code: "TEMPLATE_ANSWERS_INVALID",

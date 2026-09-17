@@ -111,6 +111,20 @@ describe("TemplatesService", () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
+  it("explains a contradictory interest rate instead of generating an interest-free loan with interest", async () => {
+    const details = templateDetailsRecord();
+    findPublishedTemplateBySlug.mockResolvedValue({ ...details, slug: "personal-loan", versions: [{ ...details.versions[0]!, questionnaireSchema: {
+      type: "object", additionalProperties: false,
+      properties: { interestType: { type: "string", title: "Проценты" }, interestRate: { type: "number", title: "Ставка" } },
+    } }] });
+    await expect(service.validateAnswers("personal-loan", {
+      templateVersionId: "20000000-0000-4000-8000-000000000001", answers: { interestType: "Без процентов", interestRate: 5 },
+    })).rejects.toMatchObject({ response: { details: { errors: [{ path: "interestRate", message: "Выбран заём без процентов, но указана процентная ставка. Очистите ставку или выберите «С процентами»." }] } } });
+    await expect(service.validateAnswers("personal-loan", {
+      templateVersionId: "20000000-0000-4000-8000-000000000001", answers: { interestType: "Без процентов" },
+    })).resolves.toMatchObject({ valid: true });
+  });
+
   it("rejects answers that do not match the questionnaire", async () => {
     const details = templateDetailsRecord();
     const version = details.versions[0];

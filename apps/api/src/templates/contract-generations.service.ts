@@ -16,6 +16,7 @@ import { ContractGenerationsRepository } from "./contract-generations.repository
 import {
   isCompletenessSession,
   missingContractTerms,
+  withCompletenessContext,
 } from "./contract-completeness";
 
 @Injectable()
@@ -50,7 +51,7 @@ export class ContractGenerationsService {
       isCompletenessSession(generation.providerMetadata) &&
       missingContractTerms(
         templateSlug,
-        generation.inputAnswers as Record<string, unknown>,
+        withCompletenessContext(generation.inputAnswers as Record<string, unknown>, generation.providerMetadata),
         (generation.clarificationAnswers ?? {}) as Record<string, unknown>,
       ).length
     ) {

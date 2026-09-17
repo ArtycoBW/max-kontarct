@@ -51,7 +51,21 @@ for (const [index, item] of cases.entries()) {
     const complete = await api.post(`${base}/clarifications`, { data: { answers: completeAnswers, templateVersionId } });
     expect(complete.status()).toBe(200);
     expect(await complete.json()).toMatchObject({ status: "READY_TO_GENERATE", questions: [] });
+    // Conditions may appear only in the initial description. All three gates
+    // (clarification, enqueue, worker) must use that same context.
+    const fromDescription = await api.post(`${base}/clarifications`, { data: { answers: item.input, templateVersionId, description: Object.values(item.answers).join(". ") } });
+    expect(fromDescription.status()).toBe(200);
+    const described = await fromDescription.json();
+    expect(described).toMatchObject({ status: "READY_TO_GENERATE", questions: [] });
+    const describedPath = `${base}/clarifications/${described.id}/generation`;
+    expect((await api.post(describedPath)).status()).toBe(202);
+    await expect.poll(async () => (await (await api.get(describedPath)).json()).status).toBe("COMPLETED");
     expect((await api.post(`${base}/validate`, { data: { answers: { ...item.input, surprise: true }, templateVersionId } })).status()).toBe(400);
+    if (item.slug === "personal-loan") {
+      const conflicting = await api.post(`${base}/validate`, { data: { answers: { ...item.input, interestType: "Без процентов", interestRate: 5 }, templateVersionId } });
+      expect(conflicting.status()).toBe(400);
+      expect((await conflicting.json()).details.errors).toContainEqual({ path: "interestRate", message: "Выбран заём без процентов, но указана процентная ставка. Очистите ставку или выберите «С процентами»." });
+    }
     expect((await api.post(`${base}/validate`, { data: { answers: item.input, templateVersionId: "00000000-0000-4000-8000-000000000000" } })).status()).toBe(409);
     const numericKey = ["price", "paymentAmount", "loanAmount"].find(key => key in item.input)!;
     expect((await api.post(`${base}/validate`, { data: { answers: { ...item.input, [numericKey]: -1 }, templateVersionId } })).status()).toBe(400);

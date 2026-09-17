@@ -177,6 +177,19 @@ describe("ContractGenerationProcessor", () => {
     expect(markCompleted).not.toHaveBeenCalled();
   });
 
+  it("does not reject complete source-description terms after clarification and enqueue", async () => {
+    const generation = record();
+    generation.clarificationAnswers = {};
+    generation.templateVersion.questionnaireSchema = { properties: { price: { title: "Стоимость" } } };
+    generation.providerMetadata = { completenessVersion: "1.2.0", sourceDescription: "Услуга онлайн. Оплата в день приёмки, аванса нет. Передача по акту." };
+    findForProcessing.mockResolvedValue(generation);
+    generateStructured.mockResolvedValue({ data: draft(), metadata: metadata() });
+    await processor.process(job());
+    expect(markCompleted).toHaveBeenCalledTimes(1);
+    expect(generateStructured.mock.calls[0]?.[0].userData.sourceDescription).toBe(generation.providerMetadata.sourceDescription);
+    expect(generateStructured.mock.calls[0]?.[0].userData.inputAnswers).toEqual({ price: 1000 });
+  });
+
   it("keeps a transient provider error retryable before the final attempt", async () => {
     generateStructured.mockRejectedValue(new Error("provider timeout"));
     await expect(processor.process(job(0, 3))).rejects.toThrow(

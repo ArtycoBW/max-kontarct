@@ -4,6 +4,12 @@ import { acceptanceIssue, paymentIssue } from "./term-validation";
 
 export const COMPLETENESS_VERSION = "1.2.0";
 type Answers = Record<string, unknown>;
+/** Keep clarification, enqueue and worker checks on the same source context. */
+export function withCompletenessContext(input: Answers, metadata: unknown): Answers {
+  const sourceDescription = metadata && typeof metadata === "object" && "sourceDescription" in metadata && typeof metadata.sourceDescription === "string"
+    ? metadata.sourceDescription : "";
+  return { ...input, sourceDescription };
+}
 type Rule = {
   id: string;
   label: string;

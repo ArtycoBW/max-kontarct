@@ -10,6 +10,7 @@ import { ContractGenerationsRepository } from "./contract-generations.repository
 import {
   isCompletenessSession,
   missingContractTerms,
+  withCompletenessContext,
 } from "./contract-completeness";
 import type { AiClarificationQuestion } from "@max-contract/contracts";
 import {
@@ -45,7 +46,7 @@ export class ContractGenerationProcessor {
         isCompletenessSession(generation.providerMetadata) &&
         missingContractTerms(
           generation.templateVersion.template.slug,
-          generation.inputAnswers as Record<string, unknown>,
+          withCompletenessContext(generation.inputAnswers as Record<string, unknown>, generation.providerMetadata),
           (generation.clarificationAnswers ?? {}) as Record<string, unknown>,
         ).length
       )

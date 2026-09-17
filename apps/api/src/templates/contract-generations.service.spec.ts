@@ -94,6 +94,16 @@ describe("ContractGenerationsService", () => {
     expect(markQueued).not.toHaveBeenCalled();
   });
 
+  it("uses the same source-description terms as clarification when enqueueing", async () => {
+    findOwned.mockResolvedValue(record(AiGenerationStatus.READY_TO_GENERATE, {
+      providerMetadata: { completenessVersion: "1.2.0", sourceDescription: "Работы: г. Казань, ул. Примерная, д. 10. Оплата в день приёмки, аванса нет. Передача по акту." },
+    }));
+    markQueued.mockResolvedValue(record(AiGenerationStatus.QUEUED));
+    enqueue.mockResolvedValue();
+    await expect(service.start("work-contract", generationId, userId)).resolves.toMatchObject({ status: "QUEUED" });
+    expect(enqueue).toHaveBeenCalledWith(generationId);
+  });
+
   it("returns the owner's confirmed answers for review without reopening a completed session", async () => {
     findOwned.mockResolvedValue(record(AiGenerationStatus.COMPLETED, { clarificationAnswers: { termsAcceptance: "Проверка и подтверждение в чате" } }));
     await expect(service.get("property-rental", generationId, userId)).resolves.toMatchObject({ status: "COMPLETED", clarificationAnswers: { termsAcceptance: "Проверка и подтверждение в чате" } });

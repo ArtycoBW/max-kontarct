@@ -27,6 +27,7 @@ import {
   isCompletenessSession,
   knownContractTerms,
   missingContractTerms,
+  withCompletenessContext,
 } from "./contract-completeness";
 
 const PROMPT_ID = "contract-clarification";
@@ -55,7 +56,7 @@ export class AiClarificationsService {
       templateSlug,
       request,
     );
-    const completenessInput = { ...validated.answers, sourceDescription: request.description?.trim() ?? "" };
+    const completenessInput = withCompletenessContext(validated.answers, { sourceDescription: request.description?.trim() ?? "" });
     const output = await this.generate(
       {
         clarificationAnswers: {},
@@ -149,7 +150,7 @@ export class AiClarificationsService {
       : {};
     const cumulativeAnswers = { ...previousAnswers, ...answers };
     const inputAnswers = toJsonObject(session.inputAnswers);
-    const completenessInput = { ...inputAnswers, sourceDescription: sourceDescription(session.providerMetadata) };
+    const completenessInput = withCompletenessContext(inputAnswers, session.providerMetadata);
     const completenessEnabled = isCompletenessSession(session.providerMetadata);
     if (completenessEnabled) {
       const invalid = invalidRequiredTermAnswers(
