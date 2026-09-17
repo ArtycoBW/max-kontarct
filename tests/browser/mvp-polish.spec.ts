@@ -21,7 +21,10 @@ test("vertical start shows every stage and legal modal chrome stays visible on s
       previousBottom = box.y + box.height;
     }
     const action = page.getByRole("button", { name: "Начать работу с Макс-Контракт" });
-    expect((await action.boundingBox())!.y).toBeGreaterThan(previousBottom);
+    await expect(steps.last().getByRole("button", { name: "Начать работу с Макс-Контракт" })).toHaveCount(1);
+    const lastCopy = (await steps.last().getByRole("paragraph").boundingBox())!;
+    expect((await action.boundingBox())!.y).toBeGreaterThan(lastCopy.y + lastCopy.height);
+    expect((await action.boundingBox())!.y + (await action.boundingBox())!.height).toBeLessThanOrEqual(previousBottom);
   }
   await page.screenshot({ path: "test-results/start-without-legal-link.png" });
   await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();

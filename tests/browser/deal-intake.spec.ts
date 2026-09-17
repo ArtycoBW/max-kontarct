@@ -84,7 +84,7 @@ test("no catalog match leads to an individual project and generation", async ({ 
   await page.getByRole("textbox", { name: "Обязанности второй стороны", exact: true }).fill("Передать свой велосипед в исправном состоянии");
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
   await page.getByRole("button", { name: "Подготовить договор" }).click();
-  await expect(page.getByRole("button", { name: "Проверить свои данные" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Проверить договор и данные" })).toBeVisible();
   await expect(page.getByText(/Индивидуальный проект подготовлен ИИ/)).toBeVisible();
   await context.close();
 });

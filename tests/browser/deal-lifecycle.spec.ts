@@ -38,9 +38,15 @@ test("two participants create, review, approve, sign and verify a deal", async (
   // The known utilities answer suppresses a redundant AI clarification.
   await expect(first.getByRole("heading", { name: "Условия собраны" })).toBeVisible();
   await first.getByRole("button", { name: "Подготовить договор", exact: true }).click();
-  await first.getByRole("button", { name: "Проверить свои данные" }).click();
+  await first.getByRole("button", { name: "Проверить договор и данные" }).click();
+  await expect(first.getByRole("heading", { name: "Договор и приложения", exact: true })).toBeVisible();
+  await expect.poll(async () => (await first.getByRole("heading", { name: "Договор и приложения", exact: true }).boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(0);
+  await expect(first.getByRole("region", { name: "Текст договора" })).toBeVisible();
+  await expect(first.getByRole("heading", { name: "Приложения к договору" })).toBeVisible();
+  await noOverflow(first);
+  await first.screenshot({ path: "test-results/final-contract-review.png", fullPage: true });
   await first.getByRole("button", { name: "Сохранить сделку" }).click();
-  await first.getByRole("button", { name: /Браузерная проверка аренды/ }).click();
+  await expect(first.getByRole("heading", { name: "Браузерная проверка аренды", exact: true })).toBeVisible();
   const invitationResponse = first.waitForResponse(response => response.url().endsWith("/invitations") && response.request().method() === "POST");
   await first.getByRole("button", { name: "Создать приглашение" }).click();
   const invitation = await (await invitationResponse).json();
@@ -126,6 +132,7 @@ test("two participants create, review, approve, sign and verify a deal", async (
     await page.getByRole("button", { name: /Браузерная проверка аренды/ }).click();
     await expect(page.locator(".shared-deal-attachments").getByRole("link", { name: "Общий-акт.png" })).toBeVisible();
     await expect(page.locator(".shared-deal-attachments")).not.toContainText("Личный-документ");
+    await noOverflow(page);
   }
   await first.getByRole("button", { name: "Согласовать версию 1", exact: true }).click();
   await expect(first.getByRole("button", { name: "Версия согласована", exact: true })).toBeDisabled();
@@ -197,6 +204,9 @@ test("two participants create, review, approve, sign and verify a deal", async (
   }
   for (const [page, phone] of [[first, "+79997001001"], [second, "+79997001002"]] as const) {
     await expect(page.getByRole("checkbox")).toBeVisible({ timeout: 45_000 });
+    await expect(page.getByRole("region", { name: "Текст договора" })).toBeVisible();
+    await expect(page.locator(".shared-deal-attachments").getByRole("link", { name: "Общий-акт.png" })).toBeVisible();
+    await expect(page.locator(".shared-deal-attachments")).not.toContainText("Личный-документ");
     await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: "Получить код подписи" }).click();
     const otp = page.getByRole("textbox", { name: "Код подписи из 4 цифр" });

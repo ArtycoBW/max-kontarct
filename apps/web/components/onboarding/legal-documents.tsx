@@ -2,7 +2,6 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { ArrowUpRight } from "lucide-react";
 import { apiRequest } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -20,7 +19,7 @@ export function LegalDocuments({ type, label = "Документы и согла
     retry: false,
   });
   return <Modal open={open} onClose={() => setOpen(false)} title={type ? "Документ" : "Документы и согласия"}
-      trigger={<Button variant="outline" className="legal-document-link" aria-describedby={describedBy} type="button" onClick={() => setOpen(true)}>{label}<ArrowUpRight size={16} aria-hidden="true" /></Button>}
+      trigger={<Button variant="outline" className="legal-document-link" aria-describedby={describedBy} type="button" onClick={() => setOpen(true)}>{label}</Button>}
       footer={<Button className="full-width" type="button" onClick={() => setOpen(false)}>Понятно</Button>}>
       <div className="legal-document-body">
         {!type && documents.data ? <div className="legal-document-picker"><span>Выберите документ</span>

@@ -34,6 +34,7 @@ import { shareInMax } from "@/lib/max/bridge";
 import { participantRoleLabel } from "@/lib/deals/party-responsibility";
 import { DealChat } from "./deal-chat";
 import { SharedDealAttachments } from "./shared-deal-attachments";
+import { ContractPreview } from "./contract-preview";
 import { DealRevisionEditor } from "./deal-revision-editor";
 import { DealVersionHistory } from "./deal-version-history";
 
@@ -188,7 +189,6 @@ export function DealWorkspaceScreen({
       {notice ? <p className="deal-workspace-notice" role="status"><Check size={15} />{notice}</p> : null}
       {!notice && deal.approvals.currentUserApproved ? <p className="deal-workspace-notice" role="status"><Check size={15} />Версия согласована · {deal.approvals.totalApproved} из {deal.approvals.required}</p> : null}
 
-      {signingVisible ? <SigningFlow dealId={dealId} /> : null}
 
       {!signingVisible ? <section className="deal-workspace-section">
         <h2>Стороны и приглашение</h2>
@@ -236,24 +236,15 @@ export function DealWorkspaceScreen({
         ) : null}
       </section> : null}
 
-      {!signingVisible ? <section className="deal-workspace-section">
+      <section className="deal-workspace-section">
         <div className="deal-workspace-section-heading">
           <h2>Условия сделки</h2>
           <span>{deal.approvals.totalApproved} из {deal.approvals.required} согласовано</span>
         </div>
         {deal.contractDraft ? (
-          <Card className="deal-contract-preview">
-            <strong>{deal.contractDraft.title}</strong>
-            <p>{deal.contractDraft.preamble}</p>
-            {deal.contractDraft.sections.map((section) => (
-              <div key={section.heading}>
-                <h3>{section.heading}</h3>
-                {section.clauses.map((clause) => <p key={clause}>{clause}</p>)}
-              </div>
-            ))}
-          </Card>
+          <ContractPreview draft={deal.contractDraft} />
         ) : <Card className="form-message"><strong>Проект договора готовится</strong></Card>}
-      </section> : null}
+      </section>
 
       {profileRequired ? (
         <Card className="form-message is-warning">
@@ -270,7 +261,8 @@ export function DealWorkspaceScreen({
         </Card>
       ) : null}
 
-      {deal.contractDraft && !signingVisible ? <SharedDealAttachments dealId={dealId} /> : null}
+      {deal.contractDraft ? <SharedDealAttachments dealId={dealId} /> : null}
+      {signingVisible ? <SigningFlow dealId={dealId} /> : null}
 
       {canApprove && !profileRequired ? (
         <Button

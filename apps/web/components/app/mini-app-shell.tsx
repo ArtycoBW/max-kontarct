@@ -61,6 +61,8 @@ import { ProfileScreen } from "@/components/profile/profile-screen";
 import { DealWorkspaceScreen } from "@/components/deals/deal-workspace-screen";
 import { PartyResponsibility } from "@/components/deals/party-responsibility";
 import { EarlyDealData } from "@/components/deals/early-deal-data";
+import { ContractPreview } from "@/components/deals/contract-preview";
+import { SharedDealAttachments } from "@/components/deals/shared-deal-attachments";
 import { DocumentsScreen } from "@/components/files/documents-screen";
 import { InvitationEntryScreen } from "@/components/invitations/invitation-entry-screen";
 import { EarlyInvitationPanel } from "@/components/invitations/early-invitation-panel";
@@ -439,9 +441,11 @@ function getTemplateDisplaySummary(
 function CreateDealScreen({
   draftId,
   onBack,
+  onOpenDeal,
 }: {
   draftId: string | null;
   onBack: () => void;
+  onOpenDeal: (dealId: string) => void;
 }) {
   const queryClient = useQueryClient();
   const [activeDraftId, setActiveDraftId] = useState(draftId ?? "");
@@ -464,6 +468,11 @@ function CreateDealScreen({
   const [saveState, setSaveState] = useState<DraftSaveState>("idle");
   const [selectedSlug, setSelectedSlug] = useState("");
   const [step, setStep] = useState<CreateDealStep>("type");
+  useEffect(() => {
+    // Substeps share one mounted screen; do not inherit the previous form's
+    // scroll position and hide the next heading or validation message.
+    document.querySelector<HTMLElement>(".mini-app-scroll")?.scrollTo({ top: 0, behavior: "instant" });
+  }, [step, questionIndex]);
   const [title, setTitle] = useState("");
   const hydratedDraftId = useRef("");
   const lastSavedFingerprint = useRef("");
@@ -585,7 +594,7 @@ function CreateDealScreen({
       startContractGeneration(effectiveSelectedSlug, sessionId),
   });
   const generation = useQuery({
-    enabled: step === "generation" && Boolean(activeClarificationSession?.id),
+    enabled: (step === "generation" || step === "initiator") && Boolean(activeClarificationSession?.id),
     queryFn: () =>
       getContractGeneration(
         effectiveSelectedSlug,
@@ -995,6 +1004,7 @@ function CreateDealScreen({
         <p className="screen-copy">
           Опишите задачу своими словами или выберите готовый шаблон.
         </p>
+        <EarlyDealData roleChosen={false} beforeOpen={async () => {}} onProfileSaved={() => { void queryClient.invalidateQueries({ queryKey: queryKeys.profile.all }); }} />
 
         <Tabs value={creationMode} onValueChange={value => setCreationMode(value as "ai" | "catalog")}>
         <TabsList className="deal-creation-tabs" aria-label="Способ создания договора">
@@ -1344,11 +1354,15 @@ function CreateDealScreen({
           action={<DraftSaveStatus state={saveState} />}
           eyebrow="Шаг 5 из 5"
           onBack={() => setStep("generation")}
-          title="Ваши данные"
+          title="Договор и приложения"
         />
         <p className="screen-copy">
-          Проверьте данные инициатора, которые будут использованы в сделке.
+          Проверьте текст, свои данные и общие приложения. После сохранения откроется сделка: там можно пригласить вторую сторону, обсудить условия в чате и внести изменения до подписания.
         </p>
+        {generation.data?.draft ? <ContractPreview draft={generation.data.draft} /> : generation.isPending
+          ? <Card role="status">Загружаем текст договора…</Card>
+          : <RequestErrorCard message="Не удалось загрузить текст договора" onRetry={() => void generation.refetch()} />}
+        {activeDraftId ? <SharedDealAttachments dealId={activeDraftId} /> : null}
         {initiator ? (
           <Card className="initiator-summary-card">
             <span className="state-icon initiator-summary-icon">
@@ -1388,11 +1402,11 @@ function CreateDealScreen({
         <div className="create-flow-action">
           <Button
             className="full-width"
-            disabled={!initiator || saveState === "saving"}
+            disabled={!initiator || !generation.data?.draft || saveState === "saving"}
             onClick={() => {
               void enqueueDraftSave({ currentStep: "initiator" }).then(() => {
                 void queryClient.invalidateQueries({ queryKey: queryKeys.deals.list() });
-                onBack();
+                onOpenDeal(activeDraftId);
               }).catch(() => undefined);
             }}
             type="button"
@@ -1609,7 +1623,7 @@ function ContractGenerationScreen({
       {isComplete ? (
         <div className="create-flow-action">
           <Button className="full-width" onClick={onDone} type="button">
-            Проверить свои данные
+            Проверить договор и данные
           </Button>
         </div>
       ) : null}
@@ -2076,6 +2090,7 @@ function ActiveScreen({
       <CreateDealScreen
         draftId={draftId}
         onBack={() => onNavigate("deals")}
+        onOpenDeal={onOpenDraft}
       />
     );
   }

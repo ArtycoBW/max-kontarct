@@ -6,6 +6,9 @@ test("early details import stays local until saving and subject files stay separ
   const page = await context.newPage();
   await page.goto("/"); await onboarding(page);
   await page.getByRole("button", { name: "Создать", exact: true }).click();
+  await page.getByRole("button", { name: "Мои реквизиты", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Вставить из Цифрового ID / Госуслуг" })).toBeVisible();
+  await page.keyboard.press("Escape");
   await page.getByRole("tab", { name: "Готовые шаблоны" }).click();
   await page.getByRole("button", { name: /Оказание услуг/ }).click();
   const creating = page.waitForResponse(r => r.url().endsWith("/deals") && r.request().method() === "POST");
