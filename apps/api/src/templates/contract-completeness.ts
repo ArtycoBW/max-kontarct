@@ -1,7 +1,8 @@
 import type { AiClarificationQuestion } from "@max-contract/contracts";
 import { contractLocationIssue, LOCATION_EXAMPLE } from "./contract-location";
+import { acceptanceIssue, paymentIssue } from "./term-validation";
 
-export const COMPLETENESS_VERSION = "1.1.1";
+export const COMPLETENESS_VERSION = "1.2.0";
 type Answers = Record<string, unknown>;
 type Rule = {
   id: string;
@@ -25,29 +26,8 @@ export function normalizeTerm(value: string): string {
 function location(text: string, remote = true, shorthand = false): boolean {
   return contractLocationIssue(text, remote, shorthand) === null;
 }
-function payment(text: string): boolean {
-  if (
-    !meaningful(text) ||
-    !/(оплат|платеж|расчет|предоплат|аванс|стоимост)/u.test(text)
-  )
-    return false;
-  if (/(предоплат|аванс)/u.test(text)) {
-    return (
-      /100\s*%|полная предоплата|полностью.*(до|перед)/u.test(text) ||
-      (/\d/u.test(text) &&
-        /(остат|остальн|окончательн)/u.test(text) &&
-        /(после|при |в течение|до \d)/u.test(text))
-    );
-  }
-  return /(после|при передач|при получ|при подпис|до \d|кажд.*\d|в течение.*\d|ежедневно.*(утр|вечер))/u.test(
-    text,
-  );
-}
-const acceptance = (text: string) =>
-  meaningful(text) &&
-  /(по акту|актом|подпис.*акт|акт.*подпис|осмотр.*акт|приемк.*(осмотр|провер)|подтвержд.*(письм|email|почт|сообщен|чат|мессенджер)|(письм|email|почт|сообщен|чат|мессенджер).*подтвержд|провер.*результат.*\d)/u.test(
-    text,
-  );
+const payment = (text: string, direct = false) => paymentIssue(text, direct) === null;
+const acceptance = (text: string) => acceptanceIssue(text) === null;
 const rule = (
   id: string,
   label: string,
@@ -105,8 +85,7 @@ function rulesFor(slug: string, input: Answers): Rule[] {
                 ["materialsTerms", "materialsPayment"],
                 (text) =>
                   meaningful(text) &&
-                  /(материал|расходник)/u.test(text) &&
-                  /(заказчик|исполнитель|собственник)/u.test(text),
+                  ((/(материал|расходник)/u.test(text) && /(заказчик|исполнитель|собственник)/u.test(text)) || /материалы не (нужны|требуются|используются)|без материалов/u.test(text)),
               ),
             ]
           : []),
@@ -159,9 +138,9 @@ function rulesFor(slug: string, input: Answers): Rule[] {
                 ["depositReturn", "depositTerms"],
                 (text) =>
                   meaningful(text) &&
-                  /(возврат|возвращ|верну)/u.test(text) &&
+                  /(возврат|возвращ|верн)/u.test(text) &&
                   /(после|при |в течение|дн|день)/u.test(text) &&
-                  /(удерж|ущерб|долг|без удерж)/u.test(text),
+                  /(удерж|ущерб|долг|без удерж|все цело|поврежден)/u.test(text),
               ),
             ]
           : []),
@@ -193,7 +172,7 @@ function rulesFor(slug: string, input: Answers): Rule[] {
           ["loanTransfer", "transferTerms"],
           (text) =>
             meaningful(text) &&
-            /(перевод|наличн|банк)/u.test(text) &&
+            /(перевод|наличн|банк|сбп)/u.test(text) &&
             /(\d{4}-\d{2}-\d{2}|\d{1,2}[./]\d{1,2}[./]\d{4}|\d{1,2} (январ|феврал|март|апрел|мая|июн|июл|август|сентябр|октябр|ноябр|декабр)|при подпис|в день подпис|в течение \d+ дн)/u.test(
               text,
             ),
@@ -205,7 +184,7 @@ function rulesFor(slug: string, input: Answers): Rule[] {
           ["repaymentProcedure", "repaymentSchedule"],
           (text) =>
             meaningful(text) &&
-            (/одним платежом|единовременно|полностью.*(срок|дат)/u.test(text) ||
+            (/одним платежом|единовременно|целиком|полностью.*(срок|дат)/u.test(text) ||
               (/\d/u.test(text) && /(ежемесяч|график|платеж)/u.test(text))),
         ),
         ...(input.interestType === "С процентами" &&
@@ -216,9 +195,9 @@ function rulesFor(slug: string, input: Answers): Rule[] {
                 "Когда уплачиваются проценты?",
                 "Ставка уже указана. Уточните сроки уплаты процентов: вместе с возвратом займа или отдельными платежами.",
                 ["interestPayment", "interestSchedule"],
-                (text) =>
+                (text, direct) =>
                   meaningful(text) &&
-                  /(процент)/u.test(text) &&
+                  (direct || /(процент)/u.test(text)) &&
                   /(вместе|возврат|ежемесяч|\d)/u.test(text),
               ),
             ]
@@ -244,17 +223,14 @@ export function missingContractTerms(
   return rulesFor(slug, input)
     .filter((item) => {
       const direct = answerText(answers[item.id]);
-      if (
-        direct &&
-        item.valid((item.id === "termsPayment" ? "оплата " : "") + direct, true)
-      )
-        return false;
+      // An explicit correction wins over older questionnaire/description text,
+      // including an empty or incomplete correction that still needs clarification.
+      if (item.id in answers) return !item.valid(direct, true);
       if (
         item.keys.some((key) =>
           item.valid(
-            (item.id === "termsPayment" ? "оплата " : "") +
-              answerText(all[key]),
-            /Location|Address|^address$|^location$/u.test(key),
+            answerText(all[key]),
+            true,
           ),
         )
       )
@@ -289,20 +265,31 @@ export function invalidRequiredTermAnswers(
       (item) =>
         item.id in answers &&
         !item.valid(
-          (item.id === "termsPayment" ? "оплата " : "") +
-            answerText(answers[item.id]),
+          answerText(answers[item.id]),
           true,
         ),
     )
     .map((item) => ({
       path: item.id,
-      message: item.id === "termsLocation"
+      message: item.id === "termsPayment" ? paymentIssue(answerText(answers[item.id]), true)!
+        : item.id === "termsAcceptance" ? acceptanceIssue(answerText(answers[item.id]))!
+        : item.id === "termsLocation"
         ? `${contractLocationIssue(answerText(answers[item.id]))} ${LOCATION_EXAMPLE}`
         : item.id === "termsProperty"
           ? `Не удалось определить конкретный объект. Для помещения укажите населённый пункт, улицу и дом; для вещи — модель и идентификатор. ${item.description}`
-          : item.description,
+          : `${termIssue[item.id] ?? "Ответ пока не содержит конкретного условия."} ${item.description}`,
     }));
 }
+
+const termIssue: Record<string, string> = {
+  termsMaterials: "Не удалось определить, какая сторона предоставляет и оплачивает материалы.",
+  termsUtilities: "Не удалось определить плательщика коммунальных расходов и основание расчёта.",
+  termsDeposit: "Не удалось определить срок возврата обеспечительного платежа или условия удержаний.",
+  termsPaymentMethod: "Не удалось определить способ расчёта. Например: «Через СБП».",
+  termsLoanTransfer: "Не удалось определить дату/событие передачи денег и способ передачи.",
+  termsLoanRepayment: "Не удалось определить, возвращается ли сумма целиком или по графику.",
+  termsInterest: "Не удалось определить, когда уплачиваются проценты.",
+};
 
 export function knownContractTerms(
   slug: string,

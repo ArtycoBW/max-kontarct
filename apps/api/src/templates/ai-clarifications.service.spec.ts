@@ -326,6 +326,14 @@ describe("AiClarificationsService", () => {
     expect(update).not.toHaveBeenCalled();
     expect(generateStructured).not.toHaveBeenCalled();
   });
+  it("honours concrete conditions in the initial description without copying them into questionnaire fields", async () => {
+    const input = { workDescription: "Ремонт", workLocation: "У заказчика", materialsIncluded: true };
+    validateAnswers.mockResolvedValue({ answers: input, snapshot: { templateTitle: "Работы", templateVersionId: versionId } });
+    generateStructured.mockResolvedValue(aiResult({ status: "NEED_MORE_INFO", questions: [shortTextQuestion("address", "Полный адрес"), shortTextQuestion("paymentTerms", "Порядок оплаты")] }));
+    create.mockResolvedValue(record({ status: "READY_TO_GENERATE", questions: [] }));
+    await service.start("work-contract", userId, { answers: input, templateVersionId: versionId, description: "г. Казань, ул. Примерная, д. 10. Оплата в день приёмки, аванса нет. Подпишем акт." });
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ status: "READY_TO_GENERATE", questions: [], inputAnswers: input }));
+  });
 
   it("preserves mandatory answers and ignores their repeated AI variants", async () => {
     const input = { materialsIncluded: true };

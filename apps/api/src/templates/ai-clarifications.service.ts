@@ -55,6 +55,7 @@ export class AiClarificationsService {
       templateSlug,
       request,
     );
+    const completenessInput = { ...validated.answers, sourceDescription: request.description?.trim() ?? "" };
     const output = await this.generate(
       {
         clarificationAnswers: {},
@@ -65,7 +66,7 @@ export class AiClarificationsService {
         templateSlug,
         requiredQuestions: missingContractTerms(
           templateSlug,
-          validated.answers,
+          completenessInput,
         ),
       },
       userId,
@@ -75,10 +76,10 @@ export class AiClarificationsService {
       sanitizeClarificationOutput(output.data, {
         clarificationAnswers: {},
         inputAnswers: validated.answers,
-        previousQuestions: knownContractTerms(templateSlug, validated.answers),
+        previousQuestions: knownContractTerms(templateSlug, completenessInput),
         remainingQuestions: MAX_TOTAL_QUESTIONS,
       }),
-      missingContractTerms(templateSlug, validated.answers),
+      missingContractTerms(templateSlug, completenessInput),
       MAX_TOTAL_QUESTIONS,
     );
 
@@ -148,6 +149,7 @@ export class AiClarificationsService {
       : {};
     const cumulativeAnswers = { ...previousAnswers, ...answers };
     const inputAnswers = toJsonObject(session.inputAnswers);
+    const completenessInput = { ...inputAnswers, sourceDescription: sourceDescription(session.providerMetadata) };
     const completenessEnabled = isCompletenessSession(session.providerMetadata);
     if (completenessEnabled) {
       const invalid = invalidRequiredTermAnswers(
@@ -173,7 +175,7 @@ export class AiClarificationsService {
     const missing = completenessEnabled
       ? missingContractTerms(
           templateSlug,
-          inputAnswers,
+          completenessInput,
           cumulativeAnswers,
           questionHistory,
         )
@@ -222,7 +224,7 @@ export class AiClarificationsService {
             ...questionHistory,
             ...knownContractTerms(
               templateSlug,
-              inputAnswers,
+              completenessInput,
               cumulativeAnswers,
               questionHistory,
             ),

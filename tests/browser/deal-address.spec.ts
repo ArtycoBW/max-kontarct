@@ -14,6 +14,11 @@ test("incomplete address explains the missing part and corrected address is not 
   await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
   const location = page.getByLabel("Место выполнения работ", { exact: false });
   await expect(location).toHaveValue("г. Казань, ул. Примерная, д. 10");
+  // Remove the address from the initial description as well: a concrete address
+  // there now correctly suppresses a redundant clarification.
+  await page.getByRole("button", { name: "Назад", exact: true }).click();
+  await page.getByRole("textbox", { name: /^Краткое описание/ }).fill("Ремонт ванной. Оплата после приёмки, передача по акту.");
+  await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
   await location.fill("У заказчика");
   await page.getByRole("textbox", { name: "Описание работ", exact: false }).fill("Ремонт ванной комнаты. Оплата после приёмки. Передача по акту.");
   await futureDate(page, "Дата начала", 10);

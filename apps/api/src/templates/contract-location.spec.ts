@@ -20,7 +20,7 @@ describe("contract location syntax", () => {
     expect(errors[0]?.message).toContain(reason);
     expect(errors[0]?.message).toContain("Например:");
   });
-  it.each(["Работы стоимостью 10000 рублей", "Оплата через 5 дней", "Квартира собственника"])("does not turn unrelated text into an address: %s", text => {
+  it.each(["Работы стоимостью 10000 рублей", "Оплата через 5 дней", "Квартира собственника", "Не онлайн, место уточним"])("does not turn unrelated text into an address: %s", text => {
     expect(contractLocationIssue(text)).not.toBeNull();
   });
   it("does not require an apartment and keeps a supplied clarification", () => {

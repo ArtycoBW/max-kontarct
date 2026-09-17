@@ -12,7 +12,8 @@ export const LOCATION_EXAMPLE = "Например: «г. Казань, ул. П�
 export function contractLocationIssue(value: string, allowRemote = true, allowShorthand = true): string | null {
   const text = value.toLocaleLowerCase("ru-RU").replaceAll("ё", "е").replace(/\s+/g, " ").trim();
   if (!text || VAGUE.test(text)) return "Пока нет конкретного места исполнения. Напишите адрес или способ удалённой работы.";
-  if (REMOTE.test(text)) return allowRemote ? null : "Для помещения нужен его адрес, а не способ связи сторон.";
+  const remoteText = text.replace(/не\s+(?:онлайн|дистанционно|удаленно|по видеосвязи)/gu, " ");
+  if (REMOTE.test(remoteText)) return allowRemote ? null : "Для помещения нужен его адрес, а не способ связи сторон.";
   const street = [...text.matchAll(new RegExp(STREET, "gu"))].find(match =>
     !/^\d+\s*(?:кв\.|м(?:етр)?(?:\s|$))/u.test(text.slice(match.index + match[0].length)));
   const hasHouse = HOUSE.test(text);
