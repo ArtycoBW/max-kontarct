@@ -85,7 +85,7 @@ test("two participants create, review, approve, sign and verify a deal", async (
     await noOverflow(page);
   }
   await expect(second.getByText(longFilename, { exact: true })).toHaveCount(0);
-  const privateFileUrl = await first.getByRole("link", { name: /^Личный-документ-первого/ }).getAttribute("href");
+  const privateFileUrl = await first.getByRole("link", { name: /^Скачать Личный-документ-первого/ }).getAttribute("href");
   const outsider = await browser.newContext({ baseURL: "http://127.0.0.1:4300" });
   expect((await outsider.request.get(privateFileUrl!)).status()).toBe(401);
   expect((await outsider.request.post("/api/v1/auth/max", { data: { initData: maxProof(71004) } })).ok()).toBe(true);
@@ -130,7 +130,7 @@ test("two participants create, review, approve, sign and verify a deal", async (
   for (const page of [first, second]) {
     await page.getByRole("button", { name: "Сделки", exact: true }).click();
     await page.getByRole("button", { name: /Браузерная проверка аренды/ }).click();
-    await expect(page.locator(".shared-deal-attachments").getByRole("link", { name: "Общий-акт.png" })).toBeVisible();
+    await expect(page.locator(".shared-deal-attachments").getByRole("button", { name: "Просмотреть Общий-акт.png" })).toBeVisible();
     await expect(page.locator(".shared-deal-attachments")).not.toContainText("Личный-документ");
     await noOverflow(page);
   }
@@ -199,13 +199,13 @@ test("two participants create, review, approve, sign and verify a deal", async (
   await second.getByRole("button", { name: "История редакций" }).click();
   await expect(second.getByText("Изменён суточный платёж по предложению арендатора", { exact: true })).toBeVisible();
   for (const page of [first, second]) {
-    await expect(page.locator(".shared-deal-attachments").getByRole("link", { name: "Общий-акт.png" })).toBeVisible();
+    await expect(page.locator(".shared-deal-attachments").getByRole("button", { name: "Просмотреть Общий-акт.png" })).toBeVisible();
     await page.getByRole("button", { name: "Согласовать версию 2", exact: true }).click();
   }
   for (const [page, phone] of [[first, "+79997001001"], [second, "+79997001002"]] as const) {
     await expect(page.getByRole("checkbox")).toBeVisible({ timeout: 45_000 });
     await expect(page.getByRole("region", { name: "Текст договора" })).toBeVisible();
-    await expect(page.locator(".shared-deal-attachments").getByRole("link", { name: "Общий-акт.png" })).toBeVisible();
+    await expect(page.locator(".shared-deal-attachments").getByRole("button", { name: "Просмотреть Общий-акт.png" })).toBeVisible();
     await expect(page.locator(".shared-deal-attachments")).not.toContainText("Личный-документ");
     await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: "Получить код подписи" }).click();

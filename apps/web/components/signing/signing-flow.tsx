@@ -15,6 +15,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { queryKeys } from "@/lib/api/query-keys";
 import { ACTIVE_DEAL_REFRESH_MS } from "@/lib/api/deal-refresh";
 import { confirmDealSignature, getDealSigningState, issueDealSigningOtp } from "@/lib/api/signing";
+import { FilePreviewButton } from "@/components/files/file-preview";
 
 export function SigningFlow({ dealId }: { dealId: string }) {
   const queryClient = useQueryClient();
@@ -162,6 +163,7 @@ function SignedState({ state }: { state: DealSigningStateResponse }) {
       <Card className="signing-party-list">
         {state.parties.map((party) => <div key={`${party.role}-${party.displayName}`}><span>{party.signedAt ? <CheckCircle2 size={17} /> : <Clock3 size={17} />}<strong>{party.displayName}{party.isCurrentUser ? " · вы" : ""}</strong></span><small>{party.signedAt ? `Подписано ${formatDateTime(party.signedAt)}` : "Ожидаем подпись"}</small></div>)}
       </Card>
+      {state.finalPdf ? <FilePreviewButton file={{ ...state.finalPdf, url: state.finalPdf.downloadUrl }} label="Просмотреть подписанный договор" /> : null}
       {state.finalPdf ? <Button asChild className="full-width"><a href={state.finalPdf.downloadUrl}><Download size={17} /> Скачать подписанный PDF</a></Button> : null}
       {state.evidencePackage ? <Button asChild className="full-width" variant="secondary"><a href={state.evidencePackage.downloadUrl}><Download size={17} /> Скачать пакет материалов</a></Button> : null}
       {state.evidencePackage ? <p className="signing-package-note">В архиве — подписанный договор, общие вложения, история сделки и сведения о подписях.</p> : null}

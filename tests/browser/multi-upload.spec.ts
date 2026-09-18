@@ -37,9 +37,9 @@ test("multiple files keep successes, retry only failures and support larger mate
   });
   await materials.locator('input[type="file"]').setInputFiles(["first.pdf", "second.pdf", "third.pdf"].map(name => ({ name, mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.7 synthetic") })));
   await expect(page.locator(".upload-failures")).toContainText("second.pdf");
-  await expect(materials.locator(".uploaded-file-list a")).toHaveCount(2);
+  await expect(materials.locator(".deal-file-row")).toHaveCount(2);
   await page.getByRole("button", { name: "Повторить неудавшиеся" }).click();
-  await expect(materials.locator(".uploaded-file-list a")).toHaveCount(3);
+  await expect(materials.locator(".deal-file-row")).toHaveCount(3);
   await expect(page.locator(".upload-failures")).toHaveCount(0);
   expect(uploads).toEqual(["first.pdf", "second.pdf", "third.pdf", "second.pdf"]);
   for (const width of [320, 390, 1440]) { await page.setViewportSize({ width, height: 844 }); await noOverflow(page); }

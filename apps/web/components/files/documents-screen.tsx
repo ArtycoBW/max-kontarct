@@ -3,13 +3,11 @@
 import type {
   DealDocumentRequirementResponse,
   DealFileCategory,
-  DealFileResponse,
 } from "@max-contract/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Check,
-  Download,
   FileCheck2,
   FileImage,
   Files,
@@ -31,13 +29,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { getDeals } from "@/lib/api/deals";
 import {
   getDealDocuments,
-  getDealFileDownloadUrl,
   uploadDealFile,
   validateUploadCandidate,
 } from "@/lib/api/files";
 import { queryKeys } from "@/lib/api/query-keys";
 import { dealRefreshInterval } from "@/lib/api/deal-refresh";
 import { runUploadQueue, type UploadFailure } from "@/lib/api/upload-queue";
+import { DealFileList } from "./deal-file-list";
 
 export function DocumentsScreen({
   dealId,
@@ -188,7 +186,7 @@ function DealDocuments({ dealId, onBack, materialsOnly }: { dealId: string; onBa
           label="Добавить материалы"
           onSelect={(file) => void handleUpload(file, "EVIDENCE")}
         /> : <p className="screen-copy">Материалы загружает сторона, передающая предмет сделки. Здесь вы можете их просмотреть.</p>}
-        <FileList dealId={dealId} files={data.evidenceFiles} />
+        <DealFileList dealId={dealId} files={data.evidenceFiles} showReview />
       </section>
       {!materialsOnly ? <PrivacyNote /> : null}
     </div>
@@ -211,7 +209,7 @@ function RequirementCard({
   return (
     <Card className="requirement-upload-card">
       <header><span><FileCheck2 size={17} /></span><i><strong>{requirement.title}</strong><small>{requirement.description ?? "Документ по условиям сделки"}</small></i><em>{requirement.required ? "Обязательно" : "Дополнительно"}</em></header>
-      <FileList dealId={dealId} files={requirement.uploads} />
+      <DealFileList dealId={dealId} files={requirement.uploads} showReview />
       {requirement.canUpload !== false ? <UploadButton accept={accept} disabled={disabled} label={requirement.uploads.length ? "Загрузить ещё" : "Выбрать файл"} onSelect={onUpload} /> : <p className="field-description">Загружает другая сторона. От вас этот документ не требуется.</p>}
     </Card>
   );
@@ -242,21 +240,6 @@ function UploadButton({ accept, disabled, label, onSelect }: { accept: string; d
   );
 }
 
-function FileList({ dealId, files }: { dealId: string; files: DealFileResponse[] }) {
-  if (!files.length) return null;
-  return (
-    <div className="uploaded-file-list">
-      {files.map((file) => (
-        <a href={getDealFileDownloadUrl(dealId, file.id)} key={file.id} rel="noreferrer">
-          <span><FileCheck2 size={16} /></span>
-          <i><strong>{file.originalName}</strong><small>{formatBytes(file.sizeBytes)} · {file.owner.isCurrentUser ? "ваш файл" : file.owner.displayName} · {fileReviewLabel(file.reviewStatus)}</small>{file.reviewComment ? <em>{file.reviewComment}</em> : null}</i>
-          <Download size={16} />
-        </a>
-      ))}
-    </div>
-  );
-}
-
 function BackTitle({ onBack, title }: { onBack: () => void; title: string }) {
   return <header className="flow-header"><p className="screen-eyebrow">Документы сделки</p><div className="flow-header-row"><div className="flow-header-title"><Button aria-label="Назад" className="flow-back-button" onClick={onBack} size="icon" variant="ghost"><ArrowLeft size={21} /></Button><h1>{title}</h1></div></div></header>;
 }
@@ -272,6 +255,3 @@ function DocumentsError({ onRetry }: { onRetry: () => void }) {
 function DocumentsLoading({ onBack }: { onBack: () => void }) {
   return <div className="screen-content documents-screen"><BackTitle onBack={onBack} title="Документы" /><div className="documents-loading"><Skeleton /><Skeleton /><Skeleton /></div></div>;
 }
-
-function formatBytes(bytes: number): string { return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} МБ` : `${Math.ceil(bytes / 1024)} КБ`; }
-function fileReviewLabel(status: DealFileResponse["reviewStatus"]): string { return { ACCEPTED: "принят", PENDING: "на проверке", REJECTED: "нужно исправить" }[status]; }

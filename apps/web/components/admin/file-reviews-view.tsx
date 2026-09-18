@@ -25,6 +25,7 @@ import {
   reviewAdminFile,
 } from "@/lib/api/admin";
 import { queryKeys } from "@/lib/api/query-keys";
+import { FilePreviewButton } from "@/components/files/file-preview";
 
 export function AdminFileReviewsView({ canReview }: { canReview: boolean }) {
   const queryClient = useQueryClient();
@@ -87,6 +88,7 @@ export function AdminFileReviewsView({ canReview }: { canReview: boolean }) {
               {file.reviewComment ? <><CircleAlert size={14} /><span>{file.reviewComment}</span></> : null}
             </div>
             <footer>
+              {canReview ? <FilePreviewButton file={{ ...file, url: getAdminFileDownloadUrl(file.id) }} /> : null}
               {canReview ? <Button asChild variant="outline"><a href={getAdminFileDownloadUrl(file.id)}><Download size={15} /> Скачать</a></Button> : null}
               {canReview ? <Button onClick={event => { opener.current = event.currentTarget; setSelected(file); setComment(file.reviewComment ?? ""); }} variant={file.reviewStatus === "PENDING" ? "primary" : "outline"}><ShieldCheck size={15} /> {file.reviewStatus === "PENDING" ? "Проверить" : "Результат проверки"}</Button> : <small>Только администратор может открыть файл и принять решение.</small>}
             </footer>
@@ -101,6 +103,7 @@ export function AdminFileReviewsView({ canReview }: { canReview: boolean }) {
             <header><span><small>Ручная проверка</small><DialogTitle>{selected.originalName}</DialogTitle></span><Button aria-label="Закрыть" onClick={() => setSelected(null)} size="icon" variant="ghost"><X size={18} /></Button></header>
             <p>{canDecide ? "Проверьте, что файл читается и соответствует требованию. Примите материал или укажите, что нужно исправить." : `Материал ${selectedFile?.reviewStatus === "ACCEPTED" ? "принят" : "отклонён"}. Решение сохранено. Для новой проверки нужен новый файл.`}</p>
             <Button asChild variant="outline"><a href={getAdminFileDownloadUrl(selected.id)}><Download size={15} /> Скачать материал</a></Button>
+            <FilePreviewButton file={{ ...selected, url: getAdminFileDownloadUrl(selected.id) }} />
             <label>Комментарий<Textarea readOnly={!canDecide} maxLength={1000} onChange={(event) => setComment(event.target.value)} placeholder={canDecide ? "Обязателен при отклонении" : "Без комментария"} rows={4} value={canDecide ? comment : selectedFile?.reviewComment ?? ""} /></label>
             <footer>
               {canDecide ? <>

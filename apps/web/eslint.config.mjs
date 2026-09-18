@@ -18,5 +18,5 @@ export default defineConfig([
       }],
     },
   },
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "public/ocr/**"]),
+  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "public/ocr/**", "public/pdfjs/**"]),
 ]);

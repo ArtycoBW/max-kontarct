@@ -44,3 +44,4 @@ CLAUDE.md
 
 # Source archives are local references only
 *.rar
+apps/web/public/pdfjs/

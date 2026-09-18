@@ -2,6 +2,7 @@ const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 require("./prepare-ocr-assets.cjs");
+require("./prepare-pdf-assets.cjs");
 const env = { ...process.env, API_PROXY_TARGET: "http://127.0.0.1:4301", API_INTERNAL_BASE_URL: "http://127.0.0.1:4301/api/v1" };
 function run(args, cwd = root) {
   const result = spawnSync(process.execPath, args, { cwd, env, stdio: "inherit" });
