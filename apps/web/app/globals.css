@@ -3801,17 +3801,24 @@ button.service-status {
   line-height: 1.5;
 }
 
-.ai-question-example {
-  display: grid;
-  gap: 6px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
+.clarification-error {
+  align-items: flex-start;
+  gap: 8px;
   font-size: 14px;
   line-height: 1.5;
 }
 
-.ai-question-heading .ai-question-example p {
-  color: inherit;
+.clarification-error > svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.clarification-error p {
+  margin: 0;
+}
+
+.clarification-error p + p {
+  margin-top: 6px;
 }
 
 .ai-options {

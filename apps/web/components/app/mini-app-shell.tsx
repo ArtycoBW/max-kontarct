@@ -1690,14 +1690,6 @@ function AiClarificationScreen({
                 {question.required ? <span aria-hidden="true"> *</span> : null}
               </h2>
               {question.description ? <p>{question.description}</p> : null}
-              {fieldExample(question.id) ? (
-                <div className="ai-question-example">
-                  <strong>Пример ответа</strong>
-                  <p>«{fieldExample(question.id)}»</p>
-                  {question.id === "termsPayment" ? <p>С авансом: «Аванс 30%, остаток в день приёмки».</p> : null}
-                  <p>Напишите своими словами, как договорились вы. Это только пример.</p>
-                </div>
-              ) : null}
             </div>
             <AiQuestionControl
               answer={answer}
@@ -1706,9 +1698,15 @@ function AiClarificationScreen({
               question={question}
             />
             {error ? (
-              <span className="field-error" id={errorId} role="alert">
-                <CircleAlert size={13} /> {error}
-              </span>
+              <div className="field-error clarification-error" id={errorId} role="alert">
+                <CircleAlert aria-hidden="true" size={16} />
+                <div>
+                  <p>{error}</p>
+                  {!/например|«/iu.test(error) && fieldExample(question.id) ? (
+                    <p>Например: «{fieldExample(question.id)}».</p>
+                  ) : null}
+                </div>
+              </div>
             ) : null}
           </Card>
         </motion.div>

@@ -29,6 +29,9 @@ test("bathroom repair asks for missing terms, retains answers after validation, 
   const place = page.getByRole("textbox", { name: "Где именно будут выполняться работы?" });
   await place.fill("потом");
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Когда и в каком порядке производится оплата?" })).toHaveAttribute("placeholder", "В день приёмки, аванса нет");
+  await expect(page.getByText("Пример ответа", { exact: true })).toHaveCount(0);
+  await expect(page.locator(".clarification-error")).toHaveCount(0);
   await page.getByRole("textbox", { name: "Когда и в каком порядке производится оплата?" }).fill("в день приёмки, аванса нет");
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
   await page.getByRole("textbox", { name: "Как стороны передают и принимают результат?" }).fill("Совместный осмотр и подписание акта в течение 3 дней");
@@ -51,11 +54,12 @@ test("bathroom repair asks for missing terms, retains answers after validation, 
   const payment = page.getByRole("textbox", { name: "Когда и в каком порядке производится оплата?" });
   await expect(payment).toHaveValue("Предоплата 50%");
   await expect(page.locator(".field-error")).toContainText("нет порядка оплаты остатка");
+  await expect(page.locator(".field-error")).toContainText("«Остаток в день приёмки»");
+  await expect(page.locator(".field-error")).not.toContainText("В день приёмки, аванса нет");
   await expect(page.locator(".field-error")).not.toContainText("Сумму, уже указанную в анкете");
   await page.screenshot({ path: "test-results/payment-specific-error.png", fullPage: true });
   await payment.fill("аванса нет, сразу на месте оплата будет произведена");
-  await expect(page.locator(".ai-question-example")).toContainText("Пример ответа");
-  await expect(page.locator(".ai-question-example")).toContainText("Аванс 30%, остаток в день приёмки");
+  await expect(page.locator(".ai-question-example")).toHaveCount(0);
   await noOverflow(page);
   await page.screenshot({ path: "test-results/payment-conversational-example.png", fullPage: true });
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
