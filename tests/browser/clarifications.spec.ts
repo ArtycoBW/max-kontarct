@@ -53,12 +53,16 @@ test("bathroom repair asks for missing terms, retains answers after validation, 
   await expect(page.locator(".field-error")).toContainText("нет порядка оплаты остатка");
   await expect(page.locator(".field-error")).not.toContainText("Сумму, уже указанную в анкете");
   await page.screenshot({ path: "test-results/payment-specific-error.png", fullPage: true });
-  await payment.fill("в день приёмки, аванса нет");
+  await payment.fill("аванса нет, сразу на месте оплата будет произведена");
+  await expect(page.locator(".ai-question-example")).toContainText("Пример ответа");
+  await expect(page.locator(".ai-question-example")).toContainText("Аванс 30%, остаток в день приёмки");
+  await noOverflow(page);
+  await page.screenshot({ path: "test-results/payment-conversational-example.png", fullPage: true });
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
   await page.getByRole("button", { name: "Завершить", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Условия собраны" })).toBeVisible();
   const persisted = await context.request.get(`/api/v1/templates/work-contract/clarifications/${session.id}`);
-  expect((await persisted.json()).answers).toMatchObject({ termsLocation: "Москва, улица Примерная, дом 10, квартира 2", termsPayment: "в день приёмки, аванса нет" });
+  expect((await persisted.json()).answers).toMatchObject({ termsLocation: "Москва, улица Примерная, дом 10, квартира 2", termsPayment: "аванса нет, сразу на месте оплата будет произведена" });
   await page.screenshot({ path: "test-results/clarification-ready.png", fullPage: true });
   await context.close();
 });
