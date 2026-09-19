@@ -198,13 +198,12 @@ for (const width of [320, 390, 1440]) test(`compact deal panels, nested preview 
   await expect(page.locator(".deal-workspace-screen")).toBeVisible();
   await page.getByRole("button", { name: /^Чат сделки Обсудить/ }).click();
   const chat = page.getByRole("dialog", { name: "Чат сделки", exact: true });
-  await chat.getByRole("combobox", { name: "Тип сообщения" }).click();
-  await page.getByRole("option", { name: "Предложить изменения", exact: true }).click();
+  await chat.getByRole("button", { name: "Предложить изменения", exact: true }).click();
   await chat.getByRole("textbox", { name: "Сообщение участнику сделки" }).fill("Предлагаю изменить срок работ");
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: /^Чат сделки Обсудить/ }).click();
   await expect(chat.getByRole("textbox")).toHaveValue("Предлагаю изменить срок работ");
-  await expect(chat.getByRole("combobox", { name: "Тип сообщения" })).toContainText("Предложить изменения");
+  await expect(chat.getByRole("button", { name: "Предложить изменения", exact: true })).toHaveAttribute("aria-pressed", "true");
   await chat.getByRole("button", { name: "Отправить сообщение" }).click();
   await expect(chat.getByRole("log")).toContainText("Предлагаю изменить срок работ");
   await page.screenshot({ path: `test-results/chat-modal-${width}.png` });
@@ -226,6 +225,17 @@ for (const [width, height] of [[320, 568], [390, 640], [1440, 900]]) test(`chat 
   await expect(input).toHaveCSS("resize", "none");
   await expect(input).toHaveCSS("height", "84px");
   await input.fill("Первая строка\nВторая строка\nТретья строка\nЧетвёртая строка");
+  const mode = chat.getByRole("group", { name: "Тип сообщения" });
+  await expect(mode.getByRole("button")).toHaveCount(2);
+  for (const button of await mode.getByRole("button").all()) {
+    expect(await button.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
+  await mode.getByRole("button", { name: "Предложить изменения", exact: true }).click();
+  await expect(mode.getByRole("button", { name: "Предложить изменения", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(chat.getByRole("listbox")).toHaveCount(0);
+  await expect(input).toHaveValue("Первая строка\nВторая строка\nТретья строка\nЧетвёртая строка");
+  await mode.getByRole("button", { name: "Сообщение", exact: true }).click();
+  await expect(mode.getByRole("button", { name: "Сообщение", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(input).toHaveCSS("height", "84px");
   await chat.getByRole("button", { name: "Отправить сообщение", exact: true }).click();
   await expect(input).toHaveValue("");

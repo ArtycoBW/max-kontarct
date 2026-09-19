@@ -144,8 +144,7 @@ test("two participants create, review, approve, sign and verify a deal", async (
   expect(original.approvals.totalApproved).toBe(1);
   await openDealPanel(first, "Чат сделки");
   await openDealPanel(second, "Чат сделки");
-  await second.getByRole("combobox", { name: "Тип сообщения" }).click();
-  await second.getByRole("option", { name: "Предложить изменения", exact: true }).click();
+  await second.getByRole("button", { name: "Предложить изменения", exact: true }).click();
   const proposal = "Предлагаю изменить платёж на 3000 рублей в день.";
   await second.getByRole("textbox", { name: "Сообщение участнику сделки" }).fill(proposal);
   // Simulate a lost response after the server has already accepted the message.

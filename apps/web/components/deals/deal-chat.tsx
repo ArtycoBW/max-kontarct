@@ -5,7 +5,6 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowDown, LoaderCircle, MessageCircle, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest } from "@/lib/api/client";
 
@@ -80,7 +79,10 @@ export function DealChat({ dealId, status, draft, onDraftChange, draftKind, onKi
     </div>
     <form className="deal-chat-composer" onSubmit={event => { event.preventDefault(); if (!send.isPending && body.trim()) send.mutate(); }}>
     {messages.error ? <p role="alert">Не удалось загрузить переписку. <Button variant="ghost" onClick={() => void messages.refetch()}>Повторить</Button></p> : null}
-    {editable ? <Select value={kind} onValueChange={next => { setKind(next as SendDealMessageRequest["kind"]); pendingId.current = null; }} disabled={send.isPending}><SelectTrigger aria-label="Тип сообщения"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="MESSAGE">Сообщение</SelectItem><SelectItem value="CHANGE_REQUEST">Предложить изменения</SelectItem></SelectContent></Select> : null}
+    {editable ? <div className="deal-chat-mode" role="group" aria-label="Тип сообщения">
+      <Button type="button" variant="ghost" aria-pressed={kind === "MESSAGE"} disabled={send.isPending} onClick={() => { if (kind !== "MESSAGE") { setKind("MESSAGE"); pendingId.current = null; send.reset(); } }}>Сообщение</Button>
+      <Button type="button" variant="ghost" aria-pressed={kind === "CHANGE_REQUEST"} disabled={send.isPending} onClick={() => { if (kind !== "CHANGE_REQUEST") { setKind("CHANGE_REQUEST"); pendingId.current = null; send.reset(); } }}>Предложить изменения</Button>
+    </div> : null}
     {kind === "CHANGE_REQUEST" && editable ? <p className="field-description">Предложение отправится в чат. Изменения договора стороны согласуют отдельно.</p> : null}
     <div className="deal-chat-input-row">
     <Textarea className="deal-chat-input" aria-label="Сообщение участнику сделки" maxLength={4000} rows={3} value={body} disabled={send.isPending} onChange={e => { setBody(e.target.value); pendingId.current = null; send.reset(); }} placeholder="Напишите сообщение" />

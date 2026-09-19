@@ -5137,8 +5137,10 @@ button.service-status {
 .deal-chat-older { align-self: center; font-size: 12px; }
 .deal-chat-new { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); white-space: nowrap; min-height: 36px; font-size: 12px; background: #fff; box-shadow: 0 3px 12px #21171315; }
 .deal-chat-composer { flex: none; display: grid; gap: 8px; border-top: 1px solid var(--border); padding: 10px 14px 14px; background: #fff; }
-.deal-chat-composer .select-trigger { width: fit-content; max-width: 100%; min-height: 34px; height: 34px; border: 0; padding: 4px 8px; font-size: 12px; gap: 8px; box-shadow: none; }
-.deal-chat-composer .select-trigger[data-state="open"] { background: #f5f2ef; }
+.deal-chat-mode { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.8fr); gap: 4px; padding: 4px; border-radius: 14px; background: #f5f2ef; min-width: 0; }
+.deal-chat-mode .button { min-width: 0; min-height: 44px; padding: 8px 6px; border-radius: 10px; font-size: 12px; font-weight: 500; white-space: nowrap; color: var(--muted); }
+.deal-chat-mode .button[aria-pressed="true"] { background: #fff; color: var(--ink-deep); box-shadow: 0 1px 4px #21171312; }
+.deal-chat-mode .button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .deal-chat-composer .field-description { margin: 0; font-size: 11px; line-height: 1.4; }
 .deal-chat-input-row { display: flex; align-items: flex-end; gap: 10px; min-width: 0; }
 .deal-chat-composer .textarea.deal-chat-input { flex: 1; min-width: 0; height: 84px; min-height: 84px; max-height: 84px; line-height: 20px; padding: 11px 12px; font-size: 14px; resize: none; overflow-y: auto; border-radius: 14px; }
