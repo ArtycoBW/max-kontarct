@@ -38,6 +38,7 @@ import {
   type FrozenDealSnapshot,
 } from "./deal-version-freeze";
 import { requiredForParty } from "../files/document-policy";
+import { loadDocumentStage } from "../files/document-readiness";
 
 const invitationSelect = {
   acceptedAt: true,
@@ -567,6 +568,11 @@ export class DealInvitationsService {
         },
       });
       if (updated.count !== 1) throw invitationUnavailable();
+      if (nextStatus !== DealStatus.DRAFT) {
+        // The guarded update holds the deal row lock; re-read accepted files now.
+        const documentStatus = await loadDocumentStage(transaction, invitation.deal.id);
+        await transaction.deal.updateMany({ where: { id: invitation.deal.id, status: nextStatus }, data: { status: documentStatus } });
+      }
       await transaction.auditEvent.create({
         data: {
           actorUserId: userId,

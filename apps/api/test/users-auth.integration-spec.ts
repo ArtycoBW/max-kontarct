@@ -452,20 +452,20 @@ describe("users/auth database foundation (integration)", () => {
     ).resolves.toMatchObject({ userId: counterparty.id });
   });
 
-  it("opens a single final approval only after both parties' documents are accepted", async () => {
+  it.each(["review-first", "start-first"])("opens final approval with real DB (%s), then freezes after both approvals", async (order) => {
     const template = await database.contractTemplateVersion.findFirstOrThrow({
       include: { documentRequirements: { where: { required: true } } },
       where: { status: TemplateVersionStatus.PUBLISHED },
     });
     const participants = await Promise.all([1, 2].map((index) => database.user.create({ data: {
       profile: { create: { firstName: "Тест", lastName: `Участник${index}` } },
-      phones: { create: { e164: `+7999000100${index}`, isPrimary: true, source: PhoneVerificationSource.MAX, verifiedAt: new Date() } },
+      phones: { create: { e164: `+79990001${order === "review-first" ? "01" : "02"}${index}`, isPrimary: true, source: PhoneVerificationSource.MAX, verifiedAt: new Date() } },
     } })));
     const initiator = participants[0]!;
     const counterparty = participants[1]!;
     const deal = await database.deal.create({ data: {
       initiatorUserId: initiator.id,
-      status: DealStatus.DOCUMENTS_REVIEW,
+      status: order === "review-first" ? DealStatus.DRAFT : DealStatus.DOCUMENTS_REVIEW,
       templateVersionId: template.id,
       title: "Одно итоговое согласование",
       parties: { create: [
@@ -520,13 +520,24 @@ describe("users/auth database foundation (integration)", () => {
     for (const file of files.slice(1, -1)) {
       await reviewService.review(initiator.id, file.id, { comment: "Проверено", status: "ACCEPTED" });
     }
-    expect((await database.deal.findUniqueOrThrow({ where: { id: deal.id } })).status).toBe(DealStatus.DOCUMENTS_REVIEW);
+    expect((await database.deal.findUniqueOrThrow({ where: { id: deal.id } })).status).toBe(order === "review-first" ? DealStatus.DRAFT : DealStatus.DOCUMENTS_REVIEW);
     await reviewService.review(initiator.id, files.at(-1)!.id, { comment: "Проверено", status: "ACCEPTED" });
+    if (order === "review-first") {
+      const beforeStart = await database.deal.findUniqueOrThrow({ where: { id: deal.id } });
+      expect(beforeStart.status).toBe(DealStatus.DRAFT);
+      const repository = new DealsRepository(prisma);
+      const args = { dealId: deal.id, userId: initiator.id, expectedUpdatedAt: beforeStart.updatedAt, expectedVersionId: version.id, versionNumber: 1, nextStatus: DealStatus.INVITATION_READY };
+      const started = await repository.startAgreement(args);
+      expect(started?.status).toBe(DealStatus.TERMS_REVIEW);
+      await expect(repository.startAgreement(args)).resolves.toBeNull();
+    }
     const ready = await database.deal.findUniqueOrThrow({ where: { id: deal.id } });
     expect(ready.status).toBe(DealStatus.TERMS_REVIEW);
     expect(await database.dealApproval.count({ where: { dealId: deal.id } })).toBe(0);
     const first = await service.approve(initiator.id, deal.id, version.id, { expectedDealUpdatedAt: ready.updatedAt.toISOString() });
     expect(first).toMatchObject({ totalApproved: 1, dealStatus: DealStatus.TERMS_REVIEW });
+    const retry = await service.approve(initiator.id, deal.id, version.id, { expectedDealUpdatedAt: first.dealUpdatedAt });
+    expect(retry.totalApproved).toBe(1);
     const second = await service.approve(counterparty.id, deal.id, version.id, { expectedDealUpdatedAt: first.dealUpdatedAt });
     expect(second).toMatchObject({ totalApproved: 2, dealStatus: DealStatus.READY_TO_SIGN });
     const frozen = await database.dealVersion.findUniqueOrThrow({ where: { id: version.id } });

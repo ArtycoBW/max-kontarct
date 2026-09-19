@@ -370,7 +370,7 @@ async function syncDealDocumentsStatus(
     },
     where: { id: dealId },
   });
-  if (!deal || (deal.status !== DealStatus.DOCUMENTS_PENDING && deal.status !== DealStatus.COUNTERPARTY_JOINED)) return;
+  if (!deal || deal.parties.length !== 2 || (deal.status !== DealStatus.DOCUMENTS_PENDING && deal.status !== DealStatus.COUNTERPARTY_JOINED)) return;
   const requiredIds = deal.templateVersion.documentRequirements
     .filter(({ required }) => required)
     .map(({ id }) => id);
@@ -428,7 +428,7 @@ async function syncDealReviewStatus(
     where: { id: dealId },
   });
   if (
-    !deal ||
+    !deal || deal.parties.length !== 2 ||
     (deal.status !== DealStatus.COUNTERPARTY_JOINED && deal.status !== DealStatus.DOCUMENTS_PENDING &&
       deal.status !== DealStatus.DOCUMENTS_REVIEW)
   ) return;

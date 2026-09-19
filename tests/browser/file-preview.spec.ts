@@ -21,7 +21,7 @@ function syntheticPdf(singlePage = false) {
   return Buffer.from(text);
 }
 
-async function openFiles(page: Page) {
+async function openFiles(page: Page, options: { status?: string; role?: string; profileCompleted?: boolean } = {}) {
   const picture = await page.evaluate(() => {
     const canvas = document.createElement("canvas"); canvas.width = 600; canvas.height = 400;
     const ctx = canvas.getContext("2d")!;
@@ -48,11 +48,11 @@ async function openFiles(page: Page) {
     if (path.endsWith("/deals")) return route.fulfill({ json: { items: [{ id: "deal", title: "Тестовые материалы", templateTitle: "Выполнение работ", versionNumber: 1, status: "DRAFT", updatedAt: "2026-09-18" }] } });
     if (path.endsWith("/deal/files")) return route.fulfill({ json: { dealId: "deal", dealTitle: "Тестовые материалы", dealStatus: "DRAFT", evidenceFiles: files, requirements: [], canUploadEvidence: false, allowedMimeTypes: [] } });
     if (path.endsWith("/deal/workspace")) return route.fulfill({ json: {
-      id: "deal", title: "Тестовые материалы", status: "TERMS_REVIEW", versionId: "version", versionNumber: 1, updatedAt: "2026-09-19", currentUserRole: "INITIATOR",
+      id: "deal", title: "Тестовые материалы", status: options.status ?? "TERMS_REVIEW", versionId: "version", versionNumber: 1, updatedAt: "2026-09-19", currentUserRole: options.role ?? "INITIATOR",
       template: { title: "Выполнение работ", slug: "work-contract", versionId: "template" },
       approvals: { currentUserApproved: approved, required: 2, totalApproved: approved ? 1 : 0 },
       draft: { description: "Подготовка материалов", subjectDocumentsParty: "INITIATOR", answers: {} },
-      initiator: { displayName: "Тест Первый", role: "INITIATOR", profileCompleted: true }, counterparty: { displayName: "Тест Второй", role: "COUNTERPARTY", profileCompleted: true }, invitation: null,
+      initiator: { displayName: "Тест Первый", role: "INITIATOR", profileCompleted: options.profileCompleted ?? true }, counterparty: { displayName: "Тест Второй", role: "COUNTERPARTY", profileCompleted: options.profileCompleted ?? true }, invitation: null,
       contractDraft: { title: "Договор выполнения работ", preamble: "Стороны договорились о следующем.", warnings: [], sections: Array.from({ length: 15 }, (_, i) => ({ heading: `${i + 1}. Условия договора`, clauses: ["Исполнитель выполняет согласованные работы. Заказчик проверяет результат и оплачивает его в день приёмки."] })) },
     } });
     if (path.endsWith("/approve")) { approved = true; return route.fulfill({ json: { totalApproved: 1 } }); }
@@ -76,6 +76,48 @@ async function openFiles(page: Page) {
   expect(reads).toEqual([]);
   return reads;
 }
+
+for (const role of ["INITIATOR", "COUNTERPARTY"]) test(`approval is visible and works for ${role}`, async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 640 });
+  await openFiles(page, { role });
+  await page.getByRole("button", { name: "Сделки", exact: true }).click();
+  await page.getByRole("button", { name: /Тестовые материалы/ }).click();
+  await page.getByRole("button", { name: /^Договор Версия/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Договор", exact: true });
+  const approve = dialog.getByRole("button", { name: "Согласовать версию 1", exact: true });
+  await expect(approve).toBeVisible();
+  const rect = await approve.boundingBox();
+  expect(rect!.y + rect!.height).toBeLessThanOrEqual(640);
+  await approve.click();
+  await expect(dialog.getByRole("button", { name: "Версия согласована", exact: true })).toBeDisabled();
+  await expect(dialog).toContainText("1 из 2 согласовано");
+  await page.screenshot({ path: `test-results/approval-${role}.png` });
+});
+
+for (const status of ["DOCUMENTS_PENDING", "DOCUMENTS_REVIEW"]) test(`contract explains ${status} and links back to its documents`, async ({ page }) => {
+  await openFiles(page, { status });
+  await page.getByRole("button", { name: "Сделки", exact: true }).click();
+  await page.getByRole("button", { name: /Тестовые материалы/ }).click();
+  await page.getByRole("button", { name: /^Договор Версия/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Договор", exact: true });
+  await expect(dialog.getByRole("button", { name: "Согласовать версию 1", exact: true })).toHaveCount(0);
+  await expect(dialog.locator(".deal-panel-footer")).toContainText(status === "DOCUMENTS_REVIEW" ? "на проверке" : "нужны принятые");
+  await dialog.getByRole("button", { name: "Проверить документы", exact: true }).click();
+  await expect(page.locator(".documents-screen")).toBeVisible();
+  await page.getByRole("button", { name: "Назад", exact: true }).click();
+  await expect(page.locator(".deal-workspace-screen")).toBeVisible();
+});
+
+test("contract explains profile prerequisite instead of an empty footer", async ({ page }) => {
+  await openFiles(page, { profileCompleted: false });
+  await page.getByRole("button", { name: "Сделки", exact: true }).click();
+  await page.getByRole("button", { name: /Тестовые материалы/ }).click();
+  await page.getByRole("button", { name: /^Договор Версия/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Договор", exact: true });
+  await expect(dialog).toContainText("Для согласования заполните профиль");
+  await expect(dialog.getByRole("button", { name: "Заполнить профиль", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Согласовать версию 1", exact: true })).toHaveCount(0);
+});
 
 for (const width of [320, 390, 1440]) test(`image and multipage PDF preview at ${width}px`, async ({ page }) => {
   await page.addInitScript(() => {

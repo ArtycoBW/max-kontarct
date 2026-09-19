@@ -9,6 +9,7 @@ import {
 } from "@prisma/client";
 
 import { PrismaService } from "../database/prisma.service";
+import { loadDocumentStage } from "../files/document-readiness";
 
 const dealDraftSelect = {
   createdAt: true,
@@ -224,8 +225,8 @@ export class DealsRepository {
       const joined = await transaction.dealParty.count({ where: { dealId: input.dealId, role: DealPartyRole.COUNTERPARTY } });
       const activeInvitation = await transaction.dealInvitation.count({ where: { dealId: input.dealId, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } } });
       if (joined || activeInvitation) {
-        const required = await transaction.templateDocumentRequirement.count({ where: { templateVersion: { deals: { some: { id: input.dealId } } }, required: true } });
-        await transaction.deal.update({ where: { id: input.dealId }, data: { status: joined ? (required ? DealStatus.DOCUMENTS_PENDING : DealStatus.TERMS_REVIEW) : DealStatus.INVITATION_READY } });
+        const status = joined ? await loadDocumentStage(transaction, input.dealId) : DealStatus.INVITATION_READY;
+        await transaction.deal.update({ where: { id: input.dealId }, data: { status } });
       }
 
       await transaction.auditEvent.create({
@@ -295,6 +296,11 @@ export class DealsRepository {
           status: DealApprovalStatus.APPROVED,
         },
       });
+      const documentStages: DealStatus[] = [DealStatus.COUNTERPARTY_JOINED, DealStatus.DOCUMENTS_PENDING, DealStatus.DOCUMENTS_REVIEW, DealStatus.TERMS_REVIEW];
+      if (documentStages.includes(input.nextStatus)) {
+        const status = await loadDocumentStage(transaction, input.dealId);
+        await transaction.deal.update({ where: { id: input.dealId }, data: { status } });
+      }
       await transaction.auditEvent.create({
         data: {
           actorUserId: input.userId,

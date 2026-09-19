@@ -243,6 +243,8 @@ export function DealWorkspaceScreen({
 
       <div className="deal-panel-grid">
       <DealPanel title="Договор" description={`Версия ${deal.versionNumber} · ${deal.approvals.totalApproved} из ${deal.approvals.required} согласовано`} icon={<FileCheck2 size={22} />} footer={<>
+        {documentsPending ? <><p className="field-description">{deal.status === "DOCUMENTS_REVIEW" ? "Обязательные документы на проверке. После их принятия здесь появится кнопка согласования." : "Согласование пока недоступно: нужны принятые обязательные документы обеих сторон."}</p><Button variant="outline" onClick={onOpenDocuments}>Проверить документы</Button></> : null}
+        {canApprove && profileRequired ? <><p className="field-description">Для согласования заполните профиль и подтвердите номер телефона.</p><Button onClick={onOpenProfile}>Заполнить профиль</Button></> : null}
         {canApprove && !profileRequired ? <Button className="full-width" disabled={versionApproved || approval.isPending} onClick={() => approval.mutate()}>{approval.isPending ? "Сохраняем согласование…" : versionApproved ? "Версия согласована" : `Согласовать версию ${deal.versionNumber}`}</Button> : null}
         {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" ? <Button className="full-width" onClick={onEdit} variant="secondary">Редактировать черновик</Button> : null}
         {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" && deal.contractDraft && deal.counterparty ? <Button className="full-width" disabled={startAgreement.isPending} onClick={() => startAgreement.mutate()}>Передать итоговые условия на согласование</Button> : null}
@@ -259,7 +261,7 @@ export function DealWorkspaceScreen({
         ) : <Card className="form-message"><strong>Проект договора готовится</strong></Card>}
       </section>
 
-      {profileRequired ? (
+      {profileRequired && !canApprove ? (
         <Card className="form-message is-warning">
           <strong>Сначала заполните профиль</strong>
           <span>Фамилия, имя и основные данные нужны для согласования версии и подготовки документов.</span>

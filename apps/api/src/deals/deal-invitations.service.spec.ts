@@ -21,7 +21,7 @@ describe("DealInvitationsService", () => {
   const transaction = {
     $executeRaw: jest.fn(),
     auditEvent: { create: jest.fn() },
-    deal: { updateMany: jest.fn() },
+    deal: { updateMany: jest.fn(), findUniqueOrThrow: jest.fn() },
     dealFile: { findMany: jest.fn() },
     dealApproval: { create: jest.fn(), upsert: jest.fn() },
     dealVersion: { updateMany: jest.fn() },
@@ -74,6 +74,7 @@ describe("DealInvitationsService", () => {
     transaction.$executeRaw.mockResolvedValue(1);
     dealFindFirst.mockResolvedValue(workspaceRecord());
     transaction.deal.updateMany.mockResolvedValue({ count: 1 });
+    transaction.deal.findUniqueOrThrow.mockResolvedValue({ ...workspaceRecord(), parties: [initiatorParty(), counterpartyParty()], templateVersion: { documentRequirements: [{ id: "required-identity", required: true }] }, files: [] });
     transaction.dealFile.findMany.mockResolvedValue([]);
     transaction.dealVersion.updateMany.mockResolvedValue({ count: 1 });
     transaction.dealApproval.upsert.mockResolvedValue({
@@ -280,6 +281,28 @@ describe("DealInvitationsService", () => {
       service.join(counterpartyId, { publicCode: "AbCdEfGhIjKl", token }),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(transaction.dealParty.create).not.toHaveBeenCalled();
+  });
+
+  it.each(["ACCEPTED", "PENDING", "REJECTED"])("rechecks %s documents when the second party joins", async (reviewStatus) => {
+    dealFindFirst.mockResolvedValue(workspaceRecord({ parties: [initiatorParty(), counterpartyParty()] }));
+    const token = "correct-token-value-1234567890ab";
+    invitationFindUnique.mockResolvedValue(joinInvitation(token));
+    prisma.user.findUnique.mockResolvedValue({ consents: [
+      { documentVersion: "personal-v1", granted: true, type: ConsentType.PERSONAL_DATA },
+      { documentVersion: "terms-v1", granted: true, type: ConsentType.TERMS_OF_USE },
+    ], maxAccount: { maxUserId: "222" }, phones: [{ id: "phone" }] });
+    transaction.dealInvitation.updateMany.mockResolvedValue({ count: 1 });
+    prisma.maxAccount.findUnique.mockResolvedValue({ maxUserId: "111" });
+    transaction.deal.findUniqueOrThrow.mockResolvedValue({ ...workspaceRecord(),
+      parties: [initiatorParty(), counterpartyParty()],
+      templateVersion: { documentRequirements: [{ id: "identity", required: true }] },
+      files: [initiatorId, counterpartyId].map(ownerUserId => ({ ownerUserId, requirementId: "identity", reviewStatus })),
+    });
+    await service.join(counterpartyId, { publicCode: "AbCdEfGhIjKl", token });
+    expect(transaction.deal.updateMany).toHaveBeenLastCalledWith({
+      where: { id: dealId, status: "DOCUMENTS_PENDING" },
+      data: { status: reviewStatus === "ACCEPTED" ? "TERMS_REVIEW" : reviewStatus === "PENDING" ? "DOCUMENTS_REVIEW" : "DOCUMENTS_PENDING" },
+    });
   });
 
   it("freezes an exact canonical snapshot before READY_TO_SIGN", async () => {

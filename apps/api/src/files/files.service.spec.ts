@@ -139,6 +139,7 @@ describe("FilesService ACL", () => {
     });
     prisma.deal.findUnique.mockResolvedValue({
       templateVersion: { documentRequirements: [] },
+      parties: [{ userId: USER_ID }, { userId: OTHER_USER_ID }],
     });
 
     await expect(service.review(USER_ID, FILE_ID, { comment: null, status: "ACCEPTED" }))
