@@ -63,6 +63,7 @@ import { PartyResponsibility } from "@/components/deals/party-responsibility";
 import { EarlyDealData } from "@/components/deals/early-deal-data";
 import { ContractPreview } from "@/components/deals/contract-preview";
 import { SharedDealAttachments } from "@/components/deals/shared-deal-attachments";
+import { DealPanel } from "@/components/deals/deal-panel";
 import { DocumentsScreen } from "@/components/files/documents-screen";
 import { InvitationEntryScreen } from "@/components/invitations/invitation-entry-screen";
 import { EarlyInvitationPanel } from "@/components/invitations/early-invitation-panel";
@@ -1359,10 +1360,14 @@ function CreateDealScreen({
         <p className="screen-copy">
           Проверьте текст, свои данные и общие приложения. После сохранения откроется сделка: там можно пригласить вторую сторону, обсудить условия в чате и внести изменения до подписания.
         </p>
+        <div className="deal-panel-grid">
+        <DealPanel title="Договор" description="Прочитать подготовленный текст" icon={<FileCheck2 size={22} />}>
         {generation.data?.draft ? <ContractPreview draft={generation.data.draft} /> : generation.isPending
           ? <Card role="status">Загружаем текст договора…</Card>
           : <RequestErrorCard message="Не удалось загрузить текст договора" onRetry={() => void generation.refetch()} />}
-        {activeDraftId ? <SharedDealAttachments dealId={activeDraftId} /> : null}
+        </DealPanel>
+        {activeDraftId ? <DealPanel title="Приложения к договору" description="Посмотреть фото и общие материалы" icon={<Files size={22} />}><SharedDealAttachments dealId={activeDraftId} /></DealPanel> : null}
+        </div>
         {initiator ? (
           <Card className="initiator-summary-card">
             <span className="state-icon initiator-summary-icon">
@@ -2352,8 +2357,11 @@ function AppWorkspace({
     initialDealId,
   );
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [documentsReturnDealId, setDocumentsReturnDealId] = useState<string | null>(null);
 
   const navigate = (tab: AppTab) => {
+    setDocumentsReturnDealId(null);
+    if (tab === "documents") setSelectedDealId(null);
     if (tab === "create") setDraftId(null);
     if (tab !== "deal" && tab !== "documents") setSelectedDealId(null);
     setActive(tab);
@@ -2370,11 +2378,17 @@ function AppWorkspace({
   };
 
   const openDocuments = (dealId: string) => {
+    setDocumentsReturnDealId(active === "deal" ? dealId : null);
     setSelectedDealId(dealId);
     setActive("documents");
   };
 
   const clearDocumentDeal = () => {
+    if (documentsReturnDealId) {
+      openDeal(documentsReturnDealId);
+      setDocumentsReturnDealId(null);
+      return;
+    }
     setSelectedDealId(null);
     setActive("documents");
   };

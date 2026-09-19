@@ -38,6 +38,14 @@ export async function noOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
 }
 
+export async function openDealPanel(page: Page, title: "Договор" | "Приложения к договору" | "Чат сделки") {
+  const dialog = page.getByRole("dialog", { name: title, exact: true });
+  if (await dialog.isVisible()) return;
+  if (await page.locator(".deal-panel-dialog").isVisible()) await page.keyboard.press("Escape");
+  await page.locator(".deal-panel-trigger").filter({ has: page.locator("strong", { hasText: new RegExp(`^${title}$`) }) }).click();
+  await expect(dialog).toBeVisible();
+}
+
 export async function selectSupplierRole(page: Page) {
   await page.getByRole("combobox", { name: "Ваша роль в сделке" }).click();
   await page.getByRole("option").first().click();

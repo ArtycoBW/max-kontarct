@@ -5078,6 +5078,63 @@ button.service-status {
   .file-preview-dialog > .dialog-close { top: calc(12px + env(safe-area-inset-top)); right: 8px; }
   .file-preview-download { padding: 8px 10px; }
 }
+/* Compact deal navigation; documents are read in one dedicated scroll surface. */
+.deal-panel-grid { display: grid; gap: 10px; }
+.deal-panel-trigger { display: flex; justify-content: flex-start; align-items: center; gap: 14px; width: 100%; padding: 18px; min-height: 90px; border-radius: 18px; text-align: left; white-space: normal; }
+.deal-panel-icon { display: grid; place-items: center; flex: 0 0 44px; height: 44px; color: var(--accent); background: #fff0eb; border-radius: 14px; }
+.deal-panel-trigger > span:nth-child(2) { display: grid; gap: 5px; min-width: 0; }
+.deal-panel-trigger strong { font-size: 16px; line-height: 1.35; font-weight: 650; }
+.deal-panel-trigger small { font-size: 12px; line-height: 1.5; font-weight: 400; color: var(--muted); }
+.deal-panel-open { margin-left: auto; font-size: 12px; color: var(--muted); }
+.dialog-content.deal-panel-dialog { display: flex; flex-direction: column; gap: 0; padding: 0; overflow: hidden; width: min(860px, calc(100vw - 24px)); height: min(900px, calc(100dvh - 24px)); max-height: calc(100dvh - 24px); }
+.deal-panel-header { flex: none; padding: 24px 62px 20px 24px; border-bottom: 1px solid var(--border); }
+.deal-panel-header .dialog-description { margin: 0; }
+.deal-panel-body { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 24px; display: flex; flex-direction: column; gap: 18px; }
+.deal-panel-body > * { flex-shrink: 0; }
+.deal-panel-footer { flex: none; display: grid; gap: 8px; padding: 14px 24px; border-top: 1px solid var(--border); max-height: 35%; overflow: auto; }
+.deal-panel-footer:empty { display: none; }
+.deal-panel-body .deal-contract-preview { max-height: none; overflow: visible; border: 0; padding: 0; font-size: 15px; line-height: 1.8; }
+.deal-panel-body .deal-contract-preview p { font-size: 15px; line-height: 1.8; }
+.deal-panel-body .deal-contract-preview h3 { font-size: 16px; margin-top: 24px; }
+.deal-panel-body .deal-workspace-section-heading { display: none; }
+.deal-panel-body > .shared-deal-attachments { border: 0; padding: 0; }
+.deal-panel-body > .shared-deal-attachments > h2, .deal-panel-body > .shared-deal-attachments > .field-description { display: none; }
+.deal-chat-dialog .deal-panel-body { overflow: hidden; padding: 16px; }
+.deal-chat-dialog .deal-chat { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 12px; border: 0; padding: 0; }
+.deal-chat-dialog .deal-chat > h2, .deal-chat-dialog .deal-chat > .field-description:first-of-type { display: none; }
+.deal-chat-dialog .deal-chat-log { flex: 1; min-height: 60px; max-height: none; }
+.deal-chat-dialog .deal-chat > :not(.deal-chat-log) { flex-shrink: 0; }
+/* File viewer: one compact header, one tool strip, PDF page navigation only. */
+.dialog-content.file-preview-dialog { border-radius: 20px; }
+.file-preview-header { padding: 12px 60px 12px 18px; }
+.file-preview-header > div { width: 100%; }
+.file-preview-header .dialog-description { margin: 2px 0 0; font-size: 12px; }
+.file-preview-picker { height: auto; min-height: 38px; border: 0; padding: 0; gap: 10px; border-radius: 4px; box-shadow: none; font-size: 15px; font-weight: 600; }
+.file-preview-picker > span:first-child { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.file-preview-options { max-width: min(560px, calc(100vw - 24px)); }
+.file-preview-options [role="option"] { white-space: normal; overflow-wrap: anywhere; }
+.file-preview-toolbar { padding: 4px 12px; flex-wrap: nowrap; gap: 4px; }
+.file-preview-scale { min-width: 76px; font-size: 12px; }
+.file-preview-download { width: 44px; padding: 0; border: 0; }
+.file-preview-download span { display: none; }
+.file-preview-viewport { padding: 12px; background: #323638; }
+.file-preview-viewport canvas { box-shadow: 0 3px 14px #0003; }
+.file-preview-loading { color: #fff; }
+.pdf-preview-pages { padding: 5px 12px; gap: 18px; }
+.pdf-preview-pages .button { border: 0; }
+.pdf-page-picker { width: 130px; min-height: 40px; border: 0; justify-content: center; font-size: 13px; gap: 8px; }
+@media (max-width: 600px) {
+  .deal-panel-open { display: none; }
+  .deal-panel-trigger { padding: 14px; }
+  .deal-panel-header { padding: 20px 54px 16px 18px; }
+  .deal-panel-body { padding: 18px; }
+  .deal-panel-footer { padding: 12px 18px; }
+  .dialog-content.file-preview-dialog { width: calc(100vw - 12px); height: calc(100dvh - 12px); max-height: calc(100dvh - 12px); border-radius: 18px; }
+  .file-preview-header { padding: 10px 52px 10px 14px; }
+  .file-preview-toolbar { padding: 3px 8px; }
+  .file-preview-tools { gap: 0; }
+  .file-preview-viewport { padding: 8px; }
+}
 .invitation-entry-action { position: static; margin-top: 22px; padding-bottom: 0; }
 .invitation-entry-action small { display: block; margin-top: 9px; text-align: center; color: var(--app-muted); font-size: 9px; }
 

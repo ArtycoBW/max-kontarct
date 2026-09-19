@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, FileText, ImageIcon, RotateCw, ZoomIn, ZoomOut } from "lucide-react";
+import { Download, FileText, RotateCw, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fetchPreview, fileSizeLabel, fileTypeLabel, previewKind, type PreviewFile } from "@/lib/files/preview";
 import { PdfPreview } from "./pdf-preview";
 
@@ -15,15 +16,16 @@ export function FilePreviewDialog({ files, index, onIndexChange, onClose, return
   return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
     <DialogContent className="file-preview-dialog" onCloseAutoFocus={returnFocus ? event => { event.preventDefault(); returnFocus(); } : undefined}>
       <header className="file-preview-header">
-        <span className="file-type-icon" aria-hidden="true">{previewKind(file.mimeType) === "image" ? <ImageIcon size={24} /> : <FileText size={24} />}</span>
-        <div><DialogTitle title={file.originalName}>{file.originalName}</DialogTitle><DialogDescription>{fileTypeLabel(file.mimeType)} · {fileSizeLabel(file.sizeBytes)}</DialogDescription></div>
+        <div>
+          <DialogTitle className={files.length > 1 ? "is-visually-hidden" : ""} title={file.originalName}>{file.originalName}</DialogTitle>
+          {files.length > 1 ? <Select value={String(index)} onValueChange={value => onIndexChange(Number(value))}>
+            <SelectTrigger className="file-preview-picker" aria-label="Выбрать файл"><SelectValue /></SelectTrigger>
+            <SelectContent className="file-preview-options">{files.map((item, i) => <SelectItem key={item.id} value={String(i)}>{item.originalName}</SelectItem>)}</SelectContent>
+          </Select> : null}
+          <DialogDescription>{fileTypeLabel(file.mimeType)} · {fileSizeLabel(file.sizeBytes)}{files.length > 1 ? ` · Файл ${index + 1} из ${files.length}` : ""}</DialogDescription>
+        </div>
       </header>
       <PreviewContent key={file.id} {...file} />
-      {files.length > 1 ? <footer className="file-preview-gallery">
-        <Button variant="ghost" size="icon" aria-label="Предыдущий файл" disabled={index === 0} onClick={() => onIndexChange(index - 1)}><ChevronLeft size={20} /></Button>
-        <span aria-live="polite">Файл {index + 1} из {files.length}</span>
-        <Button variant="ghost" size="icon" aria-label="Следующий файл" disabled={index === files.length - 1} onClick={() => onIndexChange(index + 1)}><ChevronRight size={20} /></Button>
-      </footer> : null}
     </DialogContent>
   </Dialog>;
 }
@@ -40,7 +42,7 @@ function PreviewContent({ id, originalName, mimeType, sizeBytes, url }: PreviewF
     <div className="file-preview-toolbar">
       {kind !== "unsupported" ? <div className="file-preview-tools" role="group" aria-label="Масштаб и поворот">
         <Button variant="ghost" size="icon" aria-label="Уменьшить" disabled={zoom <= 0.5 || Boolean(error)} onClick={() => setZoom(n => Math.max(0.5, n - 0.25))}><ZoomOut size={19} /></Button>
-        <Button variant="ghost" className="file-preview-scale" aria-label="Сбросить масштаб" disabled={Boolean(error)} onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</Button>
+        <Button variant="ghost" className="file-preview-scale" aria-label="Сбросить масштаб" title="По ширине окна" disabled={Boolean(error)} onClick={() => setZoom(1)}>{zoom === 1 ? "По ширине" : `${Math.round(zoom * 100)}%`}</Button>
         <Button variant="ghost" size="icon" aria-label="Увеличить" disabled={zoom >= 3 || Boolean(error)} onClick={() => setZoom(n => Math.min(3, n + 0.25))}><ZoomIn size={19} /></Button>
         <Button variant="ghost" size="icon" aria-label="Повернуть" disabled={Boolean(error)} onClick={() => setRotation(n => (n + 90) % 360)}><RotateCw size={18} /></Button>
       </div> : <span />}

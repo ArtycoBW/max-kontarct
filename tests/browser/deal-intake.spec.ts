@@ -59,6 +59,7 @@ test("free description prefills a matching template and survives draft reload", 
   // Reopen the saved draft from the user's workspace (the shell starts on Home).
   await page.getByRole("button", { name: "Сделки", exact: true }).click();
   await page.getByRole("button", { name: /Проект по описанию/ }).first().click();
+  await page.locator(".deal-panel-trigger").filter({ has: page.locator("strong", { hasText: /^Договор$/ }) }).click();
   await page.getByRole("button", { name: "Редактировать черновик" }).click();
   await expect(page.getByRole("textbox", { name: "Стоимость услуги, ₽", exact: true })).toHaveValue("15000");
   await context.close();

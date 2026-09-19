@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import JSZip from "jszip";
-import { actor, futureDate, maxProof, noOverflow, onboarding, selectSupplierRole } from "./helpers";
+import { actor, futureDate, maxProof, noOverflow, onboarding, openDealPanel, selectSupplierRole } from "./helpers";
 
 test("two participants create, review, approve, sign and verify a deal", async ({ browser }) => {
   const initiator = await actor(browser, 71001, "+79997001001");
@@ -41,8 +41,10 @@ test("two participants create, review, approve, sign and verify a deal", async (
   await first.getByRole("button", { name: "Проверить договор и данные" }).click();
   await expect(first.getByRole("heading", { name: "Договор и приложения", exact: true })).toBeVisible();
   await expect.poll(async () => (await first.getByRole("heading", { name: "Договор и приложения", exact: true }).boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(0);
+  await openDealPanel(first, "Договор");
   await expect(first.getByRole("region", { name: "Текст договора" })).toBeVisible();
-  await expect(first.getByRole("heading", { name: "Приложения к договору" })).toBeVisible();
+  await first.keyboard.press("Escape");
+  await expect(first.locator(".deal-panel-trigger").filter({ hasText: "Приложения к договору" })).toBeVisible();
   await noOverflow(first);
   await first.screenshot({ path: "test-results/final-contract-review.png", fullPage: true });
   await first.getByRole("button", { name: "Сохранить сделку" }).click();
@@ -130,14 +132,18 @@ test("two participants create, review, approve, sign and verify a deal", async (
   for (const page of [first, second]) {
     await page.getByRole("button", { name: "Сделки", exact: true }).click();
     await page.getByRole("button", { name: /Браузерная проверка аренды/ }).click();
+    await openDealPanel(page, "Приложения к договору");
     await expect(page.locator(".shared-deal-attachments").getByRole("button", { name: "Просмотреть Общий-акт.png" })).toBeVisible();
     await expect(page.locator(".shared-deal-attachments")).not.toContainText("Личный-документ");
     await noOverflow(page);
   }
+  await openDealPanel(first, "Договор");
   await first.getByRole("button", { name: "Согласовать версию 1", exact: true }).click();
   await expect(first.getByRole("button", { name: "Версия согласована", exact: true })).toBeDisabled();
   const original = await (await first.request.get(workspaceUrl)).json();
   expect(original.approvals.totalApproved).toBe(1);
+  await openDealPanel(first, "Чат сделки");
+  await openDealPanel(second, "Чат сделки");
   await second.getByRole("combobox", { name: "Тип сообщения" }).click();
   await second.getByRole("option", { name: "Предложить изменения", exact: true }).click();
   const proposal = "Предлагаю изменить платёж на 3000 рублей в день.";
@@ -164,6 +170,7 @@ test("two participants create, review, approve, sign and verify a deal", async (
   await expect(second.getByRole("log")).toContainText("Подготовлю новую редакцию.");
   expect(await second.evaluate(() => (window as Window & { __chatXss?: boolean }).__chatXss)).toBeUndefined();
   await expect(second.getByRole("button", { name: "Изменить условия договора" })).toHaveCount(0);
+  await openDealPanel(first, "Договор");
   await first.getByRole("button", { name: "Изменить условия договора" }).click();
   const editor = first.getByRole("dialog", { name: "Новая редакция договора" });
   await editor.getByRole("textbox", { name: "Что меняется", exact: true }).fill("Изменён суточный платёж по предложению арендатора");
@@ -185,6 +192,7 @@ test("two participants create, review, approve, sign and verify a deal", async (
   expect(revisionResult.ok()).toBe(true);
   const revisionPayload = revisionResult.request().postDataJSON();
   await expect(editor).toHaveCount(0);
+  await second.keyboard.press("Escape");
   await expect(second.getByText("Редакция условий № 2", { exact: true })).toBeVisible();
   const revised = await (await first.request.get(workspaceUrl)).json();
   expect(revised.versionNumber).toBe(2);
@@ -196,17 +204,22 @@ test("two participants create, review, approve, sign and verify a deal", async (
   const history = await (await second.request.get(`${dealApi}/versions`)).json();
   expect(history.items.map((item: { versionNumber: number }) => item.versionNumber)).toEqual([2, 1]);
   expect(history.items[1].approvals.revoked + history.items[1].approvals.superseded).toBe(1);
+  await openDealPanel(second, "Договор");
   await second.getByRole("button", { name: "История редакций" }).click();
   await expect(second.getByText("Изменён суточный платёж по предложению арендатора", { exact: true })).toBeVisible();
   for (const page of [first, second]) {
+    await openDealPanel(page, "Приложения к договору");
     await expect(page.locator(".shared-deal-attachments").getByRole("button", { name: "Просмотреть Общий-акт.png" })).toBeVisible();
+    await openDealPanel(page, "Договор");
     await page.getByRole("button", { name: "Согласовать версию 2", exact: true }).click();
   }
   for (const [page, phone] of [[first, "+79997001001"], [second, "+79997001002"]] as const) {
     await expect(page.getByRole("checkbox")).toBeVisible({ timeout: 45_000 });
     await expect(page.getByRole("region", { name: "Текст договора" })).toBeVisible();
+    await openDealPanel(page, "Приложения к договору");
     await expect(page.locator(".shared-deal-attachments").getByRole("button", { name: "Просмотреть Общий-акт.png" })).toBeVisible();
     await expect(page.locator(".shared-deal-attachments")).not.toContainText("Личный-документ");
+    await openDealPanel(page, "Договор");
     await page.getByRole("checkbox").check();
     await page.getByRole("button", { name: "Получить код подписи" }).click();
     const otp = page.getByRole("textbox", { name: "Код подписи из 4 цифр" });
@@ -229,7 +242,9 @@ test("two participants create, review, approve, sign and verify a deal", async (
   expect((await first.request.post(`${dealApi}/versions`, { data: { ...revisionPayload, expectedVersionId: revised.versionId } })).status()).toBe(409);
   expect((await second.request.post(`${dealApi}/messages`, { data: { body: "Изменить подписанную версию", kind: "CHANGE_REQUEST", clientId: randomUUID() } })).status()).toBe(409);
   expect((await second.request.post(`${dealApi}/messages`, { data: { body: "Договор получил, спасибо", kind: "MESSAGE", clientId: randomUUID() } })).ok()).toBe(true);
+  await openDealPanel(first, "Чат сделки");
   await expect(first.getByRole("log")).toContainText("Договор получил, спасибо");
+  await first.keyboard.press("Escape");
   await first.locator(".mini-app-scroll").evaluate(element => { element.scrollTop = element.scrollHeight; });
   const bottomGap = await first.getByRole("button", { name: "Документы сделки", exact: true }).evaluate(element => {
     const scroll = element.closest(".mini-app-scroll")!;
@@ -237,6 +252,7 @@ test("two participants create, review, approve, sign and verify a deal", async (
   });
   expect(bottomGap).toBeGreaterThanOrEqual(20);
   await first.screenshot({ path: "test-results/completed-mobile-bottom.png", fullPage: true });
+  await openDealPanel(first, "Договор");
   const pdfDownload = first.waitForEvent("download");
   await first.getByRole("link", { name: "Скачать подписанный PDF" }).click();
   const pdf = await pdfDownload;

@@ -35,6 +35,7 @@ test("a new revision offers earlier clarification answers for explicit review wi
   const updated = await saved.json();
   expect((await page.request.post(`/api/v1/deals/${draft.id}/agreement/start`, { data: { expectedVersionId: updated.versionId, expectedUpdatedAt: updated.updatedAt } })).ok()).toBe(true);
   await page.goto(`/?WebAppStartParam=deal_${draft.id.replaceAll("-", "")}`);
+  await page.locator(".deal-panel-trigger").filter({ has: page.locator("strong", { hasText: /^Договор$/ }) }).click();
   await page.getByRole("button", { name: "Изменить условия договора" }).click();
   const editor = page.getByRole("dialog", { name: "Новая редакция договора" });
   await editor.getByRole("textbox", { name: "Что меняется", exact: true }).fill("Уточняем порядок приёмки");

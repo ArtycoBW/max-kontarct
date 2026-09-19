@@ -36,6 +36,8 @@ async function openFiles(page: Page) {
     { id: "other", originalName: "Архив.zip", mimeType: "application/zip" },
   ].map(file => ({ ...file, sizeBytes: 12345, owner: { displayName: "Тест", isCurrentUser: true }, category: "EVIDENCE", requirementId: null, reviewStatus: "PENDING", reviewComment: null, visibility: "DEAL_PARTICIPANTS", uploadedAt: "2026-09-18", sha256: "test" }));
   const reads: string[] = [];
+  let approved = false;
+  const messages: { id: string; body: string; isCurrentUser: boolean; kind: string; versionNumber: number; createdAt: string }[] = [];
   await page.route("https://st.max.ru/js/max-web-app.js", route => route.fulfill({ contentType: "application/javascript", body: "window.WebApp={initData:'test',ready(){window.testReady=true},expand(){}}" }));
   await page.route("**/api/v1/**", async route => {
     const path = new URL(route.request().url()).pathname;
@@ -43,6 +45,19 @@ async function openFiles(page: Page) {
     if (path.endsWith("/onboarding")) return route.fulfill({ json: { completed: true, phoneVerified: true, requiredConsentsAccepted: true, consents: [], phone: null } });
     if (path.endsWith("/deals")) return route.fulfill({ json: { items: [{ id: "deal", title: "Тестовые материалы", templateTitle: "Выполнение работ", versionNumber: 1, status: "DRAFT", updatedAt: "2026-09-18" }] } });
     if (path.endsWith("/deal/files")) return route.fulfill({ json: { dealId: "deal", dealTitle: "Тестовые материалы", dealStatus: "DRAFT", evidenceFiles: files, requirements: [], canUploadEvidence: false, allowedMimeTypes: [] } });
+    if (path.endsWith("/deal/workspace")) return route.fulfill({ json: {
+      id: "deal", title: "Тестовые материалы", status: "TERMS_REVIEW", versionId: "version", versionNumber: 1, updatedAt: "2026-09-19", currentUserRole: "INITIATOR",
+      template: { title: "Выполнение работ", slug: "work-contract", versionId: "template" },
+      approvals: { currentUserApproved: approved, required: 2, totalApproved: approved ? 1 : 0 },
+      draft: { description: "Подготовка материалов", subjectDocumentsParty: "INITIATOR", answers: {} },
+      initiator: { displayName: "Тест Первый", role: "INITIATOR", profileCompleted: true }, counterparty: { displayName: "Тест Второй", role: "COUNTERPARTY", profileCompleted: true }, invitation: null,
+      contractDraft: { title: "Договор выполнения работ", preamble: "Стороны договорились о следующем.", warnings: [], sections: Array.from({ length: 15 }, (_, i) => ({ heading: `${i + 1}. Условия договора`, clauses: ["Исполнитель выполняет согласованные работы. Заказчик проверяет результат и оплачивает его в день приёмки."] })) },
+    } });
+    if (path.endsWith("/approve")) { approved = true; return route.fulfill({ json: { totalApproved: 1 } }); }
+    if (path.endsWith("/messages")) {
+      if (route.request().method() === "POST") messages.push({ ...route.request().postDataJSON(), id: String(messages.length), isCurrentUser: true, versionNumber: 1, createdAt: new Date().toISOString() });
+      return route.fulfill({ json: { items: messages, nextCursor: null } });
+    }
     if (path.endsWith("/content")) {
       const id = path.split("/").at(-2)!; reads.push(id);
       if (id === "private") return route.fulfill({ status: 403, json: { message: "Forbidden" } });
@@ -78,13 +93,18 @@ for (const width of [320, 390, 1440]) test(`image and multipage PDF preview at $
   await dialog.getByRole("button", { name: "Повернуть", exact: true }).click();
   await expect(image).toHaveCSS("transform", /matrix\(0, 1, -1, 0,/);
   await page.screenshot({ path: `test-results/image-preview-${width}.png` });
-  await dialog.getByRole("button", { name: "Следующий файл" }).click();
+  await dialog.getByRole("combobox", { name: "Выбрать файл" }).click();
+  await page.getByRole("option", { name: "Техническое задание с очень длинным названием.pdf" }).click();
   expect(await page.evaluate(() => (window as Window & { revoked?: string[] }).revoked?.length)).toBe(1);
   await expect(dialog.getByRole("navigation", { name: "Страницы PDF" })).toContainText("1 из 2");
   await expect(dialog.getByRole("img", { name: "Страница 1" })).toBeVisible();
   await dialog.getByRole("button", { name: "Следующая страница" }).click();
   await expect(dialog.getByRole("img", { name: "Страница 2" })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Следующая страница" })).toBeDisabled();
+  await dialog.getByRole("combobox", { name: "Перейти к странице" }).click();
+  await page.getByRole("option", { name: "1 из 2", exact: true }).click();
+  await expect(dialog.getByRole("img", { name: "Страница 1" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Следующая страница" }).click();
   await dialog.getByRole("button", { name: "Увеличить", exact: true }).click();
   await expect(dialog.getByRole("img", { name: "Страница 2" })).toBeVisible();
   await page.screenshot({ path: `test-results/pdf-preview-${width}.png` });
@@ -105,9 +125,11 @@ test("corrupt PDF, denied access and unsupported types are recoverable", async (
   await dialog.getByRole("button", { name: "Повторить", exact: true }).click();
   await expect(dialog.getByRole("alert")).toBeVisible();
   expect(reads.filter(id => id === "bad")).toHaveLength(2);
-  await dialog.getByRole("button", { name: "Следующий файл" }).click();
+  await dialog.getByRole("combobox", { name: "Выбрать файл" }).click();
+  await page.getByRole("option", { name: "Закрытый.png" }).click();
   await expect(dialog.getByRole("alert")).toContainText("У вас нет доступа");
-  await dialog.getByRole("button", { name: "Следующий файл" }).click();
+  await dialog.getByRole("combobox", { name: "Выбрать файл" }).click();
+  await page.getByRole("option", { name: "Архив.zip" }).click();
   await expect(dialog).toContainText("Для этого формата нет предпросмотра");
   expect(reads).not.toContain("other");
 });
@@ -129,4 +151,51 @@ test("closing during a slow load cancels the request and leaves no viewer behind
   await expect(page.getByRole("dialog").getByRole("img")).toBeVisible();
   await expect.poll(() => page.workers().length).toBe(0);
   expect(errors).toEqual([]);
+});
+
+for (const width of [320, 390, 1440]) test(`compact deal panels, nested preview and document return at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  await openFiles(page);
+  // Entry from the Documents tab must still go back to the document picker.
+  await page.getByRole("button", { name: "Назад", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Документы", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Сделки", exact: true }).click();
+  await page.getByRole("button", { name: /Тестовые материалы/ }).click();
+  await expect(page.locator(".deal-panel-trigger")).toHaveCount(3);
+  await expect(page.getByRole("region", { name: "Текст договора" })).toHaveCount(0);
+  await expect(page.getByRole("log")).toHaveCount(0);
+  await page.screenshot({ path: `test-results/compact-deal-${width}.png`, fullPage: true });
+  await page.getByRole("button", { name: /^Договор Версия/ }).click();
+  const contract = page.getByRole("dialog", { name: "Договор", exact: true });
+  await expect(contract.getByRole("region", { name: "Текст договора" })).toBeVisible();
+  expect(await contract.locator(".deal-contract-preview").evaluate(el => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
+  await contract.getByRole("button", { name: "Согласовать версию 1" }).click();
+  await expect(contract.getByRole("button", { name: "Версия согласована", exact: true })).toBeDisabled();
+  await page.screenshot({ path: `test-results/contract-modal-${width}.png` });
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /^Приложения к договору Фото/ }).click();
+  const attachments = page.getByRole("dialog", { name: "Приложения к договору", exact: true });
+  await attachments.getByRole("button", { name: "Просмотреть Фото предмета сделки.png" }).click();
+  const viewer = page.getByRole("dialog", { name: "Фото предмета сделки.png", exact: true });
+  await expect(viewer.getByRole("img")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(viewer).toHaveCount(0);
+  await expect(attachments).toBeVisible();
+  await attachments.getByRole("button", { name: "Документы сделки" }).click();
+  await expect(page.locator(".documents-screen")).toBeVisible();
+  await page.getByRole("button", { name: "Назад", exact: true }).click();
+  await expect(page.locator(".deal-workspace-screen")).toBeVisible();
+  await page.getByRole("button", { name: /^Чат сделки Обсудить/ }).click();
+  const chat = page.getByRole("dialog", { name: "Чат сделки", exact: true });
+  await chat.getByRole("combobox", { name: "Тип сообщения" }).click();
+  await page.getByRole("option", { name: "Предложить изменения", exact: true }).click();
+  await chat.getByRole("textbox", { name: "Сообщение участнику сделки" }).fill("Предлагаю изменить срок работ");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /^Чат сделки Обсудить/ }).click();
+  await expect(chat.getByRole("textbox")).toHaveValue("Предлагаю изменить срок работ");
+  await expect(chat.getByRole("combobox", { name: "Тип сообщения" })).toContainText("Предложить изменения");
+  await chat.getByRole("button", { name: "Отправить сообщение" }).click();
+  await expect(chat.getByRole("log")).toContainText("Предлагаю изменить срок работ");
+  await page.screenshot({ path: `test-results/chat-modal-${width}.png` });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import type { DealInvitationResponse, DealStatus } from "@max-contract/contracts";
+import type { DealInvitationResponse, DealStatus, SendDealMessageRequest } from "@max-contract/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -8,6 +8,8 @@ import {
   Clock3,
   Copy,
   FileCheck2,
+  Files,
+  MessageCircle,
   RefreshCw,
   Send,
   ShieldCheck,
@@ -37,6 +39,7 @@ import { SharedDealAttachments } from "./shared-deal-attachments";
 import { ContractPreview } from "./contract-preview";
 import { DealRevisionEditor } from "./deal-revision-editor";
 import { DealVersionHistory } from "./deal-version-history";
+import { DealPanel } from "./deal-panel";
 
 export function DealWorkspaceScreen({
   dealId,
@@ -55,6 +58,8 @@ export function DealWorkspaceScreen({
   const [issuedInvitation, setIssuedInvitation] =
     useState<DealInvitationResponse | null>(null);
   const [notice, setNotice] = useState("");
+  const [chatDraft, setChatDraft] = useState("");
+  const [chatKind, setChatKind] = useState<SendDealMessageRequest["kind"]>("MESSAGE");
   const workspace = useQuery({
     queryFn: () => getDealWorkspace(dealId),
     queryKey: queryKeys.deals.workspace(dealId),
@@ -236,6 +241,14 @@ export function DealWorkspaceScreen({
         ) : null}
       </section> : null}
 
+      <div className="deal-panel-grid">
+      <DealPanel title="Договор" description={`Версия ${deal.versionNumber} · ${deal.approvals.totalApproved} из ${deal.approvals.required} согласовано`} icon={<FileCheck2 size={22} />} footer={<>
+        {canApprove && !profileRequired ? <Button className="full-width" disabled={versionApproved || approval.isPending} onClick={() => approval.mutate()}>{approval.isPending ? "Сохраняем согласование…" : versionApproved ? "Версия согласована" : `Согласовать версию ${deal.versionNumber}`}</Button> : null}
+        {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" ? <Button className="full-width" onClick={onEdit} variant="secondary">Редактировать черновик</Button> : null}
+        {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" && deal.contractDraft && deal.counterparty ? <Button className="full-width" disabled={startAgreement.isPending} onClick={() => startAgreement.mutate()}>Передать итоговые условия на согласование</Button> : null}
+        {deal.currentUserRole === "INITIATOR" && !["DRAFT", "SIGNED_BY_ONE", "SIGNED", "COMPLETED", "CANCELED"].includes(deal.status) ? <DealRevisionEditor deal={deal} onSaved={() => { void refreshWorkspace(queryClient, dealId); }} /> : null}
+        {startAgreement.error ? <p role="alert">{startAgreement.error.message}</p> : null}
+      </>}>
       <section className="deal-workspace-section">
         <div className="deal-workspace-section-heading">
           <h2>Условия сделки</h2>
@@ -261,40 +274,25 @@ export function DealWorkspaceScreen({
         </Card>
       ) : null}
 
-      {deal.contractDraft ? <SharedDealAttachments dealId={dealId} /> : null}
       {signingVisible ? <SigningFlow dealId={dealId} /> : null}
-
-      {canApprove && !profileRequired ? (
-        <Button
-          className="full-width"
-          disabled={versionApproved || approval.isPending}
-          onClick={() => approval.mutate()}
-        >
-          <Check size={18} />
-          {approval.isPending
-            ? "Сохраняем согласование…"
-            : versionApproved
-              ? "Версия согласована"
-              : `Согласовать версию ${deal.versionNumber}`}
-        </Button>
-      ) : null}
+      {deal.versionNumber > 1 ? <DealVersionHistory dealId={dealId} versionId={deal.versionId} /> : null}
+      </DealPanel>
+      <DealPanel title="Приложения к договору" description="Фото и общие материалы · без личных документов" icon={<Files size={22} />} footer={<Button variant="outline" className="full-width" onClick={onOpenDocuments}>Документы сделки</Button>}>
+        <SharedDealAttachments dealId={dealId} />
+      </DealPanel>
+      {deal.counterparty ? <DealPanel title="Чат сделки" description="Обсудить детали и предложить изменения" icon={<MessageCircle size={22} />} className="deal-chat-dialog">
+        <DealChat key={dealId} dealId={dealId} status={deal.status} draft={chatDraft} onDraftChange={setChatDraft} draftKind={chatKind} onKindChange={setChatKind} />
+      </DealPanel> : null}
+      </div>
 
       {documentsPending ? <Card className="form-message"><strong>{deal.status === "DOCUMENTS_REVIEW" ? "Документы на проверке" : "Сначала подготовьте документы"}</strong><span>Когда обязательные документы обеих сторон будут приняты, откроется финальное согласование этой версии договора.</span></Card> : null}
 
-      {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" ? (
-        <Button className="full-width" onClick={onEdit} variant="secondary">Редактировать черновик</Button>
-      ) : null}
-      {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" && deal.contractDraft && deal.counterparty ? <Button className="full-width" disabled={startAgreement.isPending} onClick={() => startAgreement.mutate()}>Передать итоговые условия на согласование</Button> : null}
-      {startAgreement.error ? <p role="alert">{startAgreement.error.message}</p> : null}
 
       {deal.counterparty ? (
         <Button className="full-width" onClick={onOpenDocuments} variant="secondary">
           <FileCheck2 size={18} /> Документы сделки
         </Button>
       ) : null}
-      {deal.counterparty ? <DealChat key={dealId} dealId={dealId} status={deal.status} /> : null}
-      {deal.currentUserRole === "INITIATOR" && !["DRAFT", "SIGNED_BY_ONE", "SIGNED", "COMPLETED", "CANCELED"].includes(deal.status) ? <DealRevisionEditor deal={deal} onSaved={() => { void refreshWorkspace(queryClient, dealId); }} /> : null}
-      {deal.versionNumber > 1 ? <DealVersionHistory dealId={dealId} versionId={deal.versionId} /> : null}
 
       {issueInvitation.error ? (
         <Card className="form-message is-error" role="alert">

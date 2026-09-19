@@ -8,11 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest } from "@/lib/api/client";
 
-export function DealChat({ dealId, status }: { dealId: string; status: DealStatus }) {
+export function DealChat({ dealId, status, draft, onDraftChange, draftKind, onKindChange }: { dealId: string; status: DealStatus; draft?: string; onDraftChange?: (text: string) => void; draftKind?: SendDealMessageRequest["kind"]; onKindChange?: (kind: SendDealMessageRequest["kind"]) => void }) {
   const queryClient = useQueryClient();
   const key = ["deal-chat", dealId];
-  const [body, setBody] = useState("");
-  const [kind, setKind] = useState<SendDealMessageRequest["kind"]>("MESSAGE");
+  const [localBody, setLocalBody] = useState("");
+  const body = draft ?? localBody;
+  const setBody = onDraftChange ?? setLocalBody;
+  const [localKind, setLocalKind] = useState<SendDealMessageRequest["kind"]>("MESSAGE");
+  const kind = draftKind ?? localKind;
+  const setKind = onKindChange ?? setLocalKind;
   const pendingId = useRef<string | null>(null);
   const pendingKind = useRef<SendDealMessageRequest["kind"] | null>(null);
   const log = useRef<HTMLDivElement>(null);

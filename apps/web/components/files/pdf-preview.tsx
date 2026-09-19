@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { fetchPreview, type PreviewFile } from "@/lib/files/preview";
 
@@ -59,11 +60,12 @@ export function PdfPreview({ file, zoom, rotation, onError }: {
         if (cancelled || !canvas.current) return;
         const angle = (page.rotate + rotation) % 360;
         const natural = page.getViewport({ scale: 1, rotation: angle });
-        const scale = Math.max(1, width - 32) / natural.width * zoom;
+        const scale = Math.max(1, width) / natural.width * zoom;
         const viewport = page.getViewport({ scale, rotation: angle });
         // Bound canvas memory on mobile while retaining a scrollable zoomed page.
         const pixelRatio = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(8_000_000 / (viewport.width * viewport.height)));
         const target = canvas.current;
+        if (container.current) { container.current.scrollTop = 0; container.current.scrollLeft = 0; }
         target.width = Math.ceil(viewport.width * pixelRatio);
         target.height = Math.ceil(viewport.height * pixelRatio);
         target.style.width = `${viewport.width}px`;
@@ -83,7 +85,10 @@ export function PdfPreview({ file, zoom, rotation, onError }: {
     </div>
     <nav className="pdf-preview-pages" aria-label="Страницы PDF">
       <Button variant="outline" size="icon" aria-label="Предыдущая страница" disabled={!document || pageNumber === 1} onClick={() => setPageNumber(n => n - 1)}><ChevronLeft size={18} /></Button>
-      <span aria-live="polite">{document ? `${pageNumber} из ${document.numPages}` : "Загрузка страниц…"}</span>
+      {document ? <Select value={String(pageNumber)} onValueChange={value => setPageNumber(Number(value))}>
+        <SelectTrigger aria-label="Перейти к странице" className="pdf-page-picker"><SelectValue /></SelectTrigger>
+        <SelectContent>{Array.from({ length: document.numPages }, (_, i) => <SelectItem key={i} value={String(i + 1)}>{i + 1} из {document.numPages}</SelectItem>)}</SelectContent>
+      </Select> : <span>Загрузка страниц…</span>}
       <Button variant="outline" size="icon" aria-label="Следующая страница" disabled={!document || pageNumber === document.numPages} onClick={() => setPageNumber(n => n + 1)}><ChevronRight size={18} /></Button>
     </nav>
   </div>;
