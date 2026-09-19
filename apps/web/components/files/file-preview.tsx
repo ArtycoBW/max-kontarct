@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download, FileText, ImageIcon, Maximize, RotateCw, ZoomIn, ZoomOut } from "lucide-react";
+import { Download, FileText, ImageIcon, Maximize, RotateCw, X, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fetchPreview, fileSizeLabel, fileTypeLabel, previewKind, type PreviewFile } from "@/lib/files/preview";
 import { PdfPreview } from "./pdf-preview";
@@ -14,18 +14,19 @@ export function FilePreviewDialog({ files, index, onIndexChange, onClose, return
   const file = files[index];
   if (!file) return null;
   return <Dialog open onOpenChange={open => { if (!open) onClose(); }}>
-    <DialogContent className="file-preview-dialog" onCloseAutoFocus={returnFocus ? event => { event.preventDefault(); returnFocus(); } : undefined}>
+    <DialogContent className="file-preview-dialog" showCloseButton={false} onCloseAutoFocus={returnFocus ? event => { event.preventDefault(); returnFocus(); } : undefined}>
       <header className="file-preview-header">
         <div>
           <DialogTitle className={files.length > 1 ? "is-visually-hidden" : ""} title={file.originalName}>{file.originalName}</DialogTitle>
           {files.length > 1 ? <Select value={String(index)} onValueChange={value => onIndexChange(Number(value))}>
             <SelectTrigger className="file-preview-picker" aria-label="Выбрать файл" title={file.originalName}><SelectValue>{file.originalName}</SelectValue></SelectTrigger>
             <SelectContent className="file-preview-options" align="start" collisionPadding={12}>{files.map((item, i) => <SelectItem key={item.id} value={String(i)} aria-label={item.originalName} textValue={item.originalName}>
-              <span className="file-preview-option"><span aria-hidden="true">{previewKind(item.mimeType) === "image" ? <ImageIcon size={20} /> : <FileText size={20} />}</span><span><strong>{item.originalName}</strong><small aria-hidden="true">{fileTypeLabel(item.mimeType)} · {fileSizeLabel(item.sizeBytes)}</small></span></span>
+              <span className="file-preview-option" title={item.originalName}><span aria-hidden="true">{previewKind(item.mimeType) === "image" ? <ImageIcon size={20} /> : <FileText size={20} />}</span><span><strong>{item.originalName}</strong><small aria-hidden="true">{fileTypeLabel(item.mimeType)} · {fileSizeLabel(item.sizeBytes)}</small></span></span>
             </SelectItem>)}</SelectContent>
           </Select> : null}
           <DialogDescription>{fileTypeLabel(file.mimeType)} · {fileSizeLabel(file.sizeBytes)}{files.length > 1 ? ` · Файл ${index + 1} из ${files.length}` : ""}</DialogDescription>
         </div>
+        <DialogClose asChild><Button variant="ghost" size="icon" aria-label="Закрыть окно"><X size={20} /></Button></DialogClose>
       </header>
       <PreviewContent key={file.id} {...file} />
     </DialogContent>

@@ -18,7 +18,7 @@ export function DealFileList({ dealId, files, showReview = false, showDownload =
       {files.map(file => <li className={`deal-file-row${showDownload ? "" : " is-preview-only"}`} key={file.id}>
         <Button variant="unstyled" className="deal-file-open" aria-label={`Просмотреть ${file.originalName}`} onClick={event => { opener.current = event.currentTarget; setSelected(file.id); }}>
           <span className={`file-type-icon ${previewKind(file.mimeType) === "image" ? "is-image" : ""}`} aria-hidden="true">{previewKind(file.mimeType) === "image" ? <ImageIcon size={24} /> : <FileText size={24} />}</span>
-          <span className="deal-file-info"><strong>{file.originalName}</strong><small>{fileTypeLabel(file.mimeType)} · {fileSizeLabel(file.sizeBytes)}</small><span className="deal-file-preview-label"><Eye size={13} /> Просмотреть</span></span>
+          <span className="deal-file-info"><strong title={file.originalName}>{file.originalName}</strong><small>{fileTypeLabel(file.mimeType)} · {fileSizeLabel(file.sizeBytes)}</small><span className="deal-file-preview-label"><Eye size={13} /> Просмотреть</span></span>
         </Button>
         {showDownload ? <Button asChild size="icon" variant="ghost"><a href={getDealFileDownloadUrl(dealId, file.id)} download={file.originalName} aria-label={`Скачать ${file.originalName}`}><Download size={18} /></a></Button> : null}
         {showReview ? <div className="deal-file-review"><span>{file.owner.isCurrentUser ? "Ваш файл" : file.owner.displayName} · {{ ACCEPTED: "Принят", PENDING: "На проверке", REJECTED: "Нужно исправить" }[file.reviewStatus]}</span>{file.reviewComment ? <p>{file.reviewComment}</p> : null}</div> : null}

@@ -39,7 +39,7 @@ async function openFiles(page: Page) {
   ].map(file => ({ ...file, sizeBytes: 12345, owner: { displayName: "Тест", isCurrentUser: true }, category: "EVIDENCE", requirementId: null, reviewStatus: "PENDING", reviewComment: null, visibility: "DEAL_PARTICIPANTS", uploadedAt: "2026-09-18", sha256: "test" }));
   const reads: string[] = [];
   let approved = false;
-  const messages: { id: string; body: string; isCurrentUser: boolean; kind: string; versionNumber: number; createdAt: string }[] = [];
+  const messages: { id: string; body: string; authorName?: string; isCurrentUser: boolean; kind: string; versionNumber: number; createdAt: string }[] = Array.from({ length: 24 }, (_, i) => ({ id: String(i), body: i % 2 ? "Да, приложу фотографии и описание к договору." : "Проверьте, пожалуйста, состав приложений. Все условия обсудим здесь.", authorName: "Вторая сторона", isCurrentUser: i % 2 === 1, kind: "MESSAGE", versionNumber: 1, createdAt: new Date(Date.UTC(2026, 8, 19, 12, i)).toISOString() }));
   await page.route("https://st.max.ru/js/max-web-app.js", route => route.fulfill({ contentType: "application/javascript", body: "window.WebApp={initData:'test',ready(){window.testReady=true},expand(){}}" }));
   await page.route("**/api/v1/**", async route => {
     const path = new URL(route.request().url()).pathname;
@@ -180,6 +180,9 @@ for (const width of [320, 390, 1440]) test(`compact deal panels, nested preview 
   await expect(attachments.getByRole("link", { name: /^Скачать/ })).toHaveCount(0);
   await expect(attachments.getByRole("button", { name: "Документы сделки" })).toHaveCount(0);
   await expect(attachments.locator(".deal-panel-footer")).toHaveCount(0);
+  const filename = attachments.locator(".deal-file-info strong").filter({ hasText: "Техническое задание" });
+  await expect(filename).toHaveCSS("white-space", "nowrap");
+  await expect(filename).toHaveCSS("text-overflow", "ellipsis");
   await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
   await page.screenshot({ path: `test-results/attachments-clean-${width}.png` });
   await attachments.getByRole("button", { name: "Просмотреть Фото предмета сделки.png" }).click();
@@ -206,6 +209,34 @@ for (const width of [320, 390, 1440]) test(`compact deal panels, nested preview 
   await expect(chat.getByRole("log")).toContainText("Предлагаю изменить срок работ");
   await page.screenshot({ path: `test-results/chat-modal-${width}.png` });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+for (const [width, height] of [[320, 568], [390, 640], [1440, 900]]) test(`chat composer and message layout at ${width}x${height}`, async ({ page }) => {
+  await page.setViewportSize({ width, height });
+  await openFiles(page);
+  await page.getByRole("button", { name: "Сделки", exact: true }).click();
+  await page.getByRole("button", { name: /Тестовые материалы/ }).click();
+  await page.getByRole("button", { name: /^Чат сделки Обсудить/ }).click();
+  const chat = page.getByRole("dialog", { name: "Чат сделки", exact: true });
+  const input = chat.getByRole("textbox", { name: "Сообщение участнику сделки" });
+  const log = chat.getByRole("log");
+  await expect(log.locator("article")).toHaveCount(24);
+  await expect.poll(() => log.evaluate(el => el.scrollHeight - el.scrollTop - el.clientHeight < 2)).toBe(true);
+  await expect(input).toHaveAttribute("rows", "3");
+  await expect(input).toHaveCSS("resize", "none");
+  await expect(input).toHaveCSS("height", "84px");
+  await input.fill("Первая строка\nВторая строка\nТретья строка\nЧетвёртая строка");
+  await expect(input).toHaveCSS("height", "84px");
+  await chat.getByRole("button", { name: "Отправить сообщение", exact: true }).click();
+  await expect(input).toHaveValue("");
+  await expect(log).toContainText("Четвёртая строка");
+  await expect.poll(() => log.evaluate(el => el.scrollHeight - el.scrollTop - el.clientHeight < 2)).toBe(true);
+  const outgoing = await log.locator(".is-own").last().boundingBox();
+  const incoming = await log.locator("article:not(.is-own)").last().boundingBox();
+  expect(outgoing!.x + outgoing!.width).toBeGreaterThan(incoming!.x + incoming!.width);
+  expect(await log.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  expect(await input.evaluate(el => el.getBoundingClientRect().bottom <= window.innerHeight)).toBe(true);
+  await page.screenshot({ path: `test-results/chat-compact-${width}.png` });
 });
 
 for (const [width, height] of [[320, 568], [390, 640], [844, 390], [1440, 900]]) test(`single-page viewer layout at ${width}x${height}`, async ({ page }) => {
