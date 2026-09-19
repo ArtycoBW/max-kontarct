@@ -77,6 +77,23 @@ async function openFiles(page: Page, options: { status?: string; role?: string; 
   return reads;
 }
 
+test("revision dialog keeps its heading and description separated when resizing", async ({ page }) => {
+  await openFiles(page);
+  await page.getByRole("button", { name: "Сделки", exact: true }).click();
+  await page.getByRole("button", { name: /Тестовые материалы/ }).click();
+  await page.getByRole("button", { name: /^Договор Версия/ }).click();
+  await page.getByRole("button", { name: "Изменить условия договора", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Новая редакция договора", exact: true });
+  for (const width of [390, 320, 1440, 320]) {
+    await page.setViewportSize({ width, height: 740 });
+    await expect.poll(() => editor.evaluate(el => {
+      const title = el.querySelector(".dialog-title")!.getBoundingClientRect();
+      const description = el.querySelector(".dialog-description")!.getBoundingClientRect();
+      return title.bottom <= description.top && el.scrollWidth <= el.clientWidth;
+    })).toBe(true);
+  }
+});
+
 for (const role of ["INITIATOR", "COUNTERPARTY"]) test(`approval is visible and works for ${role}`, async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 640 });
   await openFiles(page, { role });

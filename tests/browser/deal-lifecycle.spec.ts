@@ -59,6 +59,7 @@ test("two participants create, review, approve, sign and verify a deal", async (
   await expect(second.getByRole("heading", { name: "Основные условия" })).toHaveCount(0);
   await onboarding(second, false);
   await expect(second.getByRole("button", { name: "Документы сделки" })).toBeVisible();
+  await openDealPanel(second, "Договор");
   await second.getByRole("button", { name: "Заполнить профиль" }).click();
   await second.getByLabel("Фамилия", { exact: true }).fill("Участникова");
   await second.getByLabel("Имя", { exact: true }).fill("Анна");
@@ -179,9 +180,12 @@ test("two participants create, review, approve, sign and verify a deal", async (
   await expect(editor.getByRole("button", { name: "Сохранить новую редакцию" })).toBeVisible();
   for (const width of [320, 390, 1440]) {
     await first.setViewportSize({ width, height: 900 }); await noOverflow(first);
-    const title = await editor.getByRole("heading", { name: "Новая редакция договора", exact: true }).boundingBox();
-    const descriptionBox = await editor.locator(".dialog-description").boundingBox();
-    expect(title!.y + title!.height).toBeLessThanOrEqual(descriptionBox!.y);
+    // Measure both elements in the same layout frame after the responsive resize.
+    await expect.poll(() => editor.evaluate(el => {
+      const title = el.querySelector(".dialog-title")!.getBoundingClientRect();
+      const description = el.querySelector(".dialog-description")!.getBoundingClientRect();
+      return title.bottom <= description.top;
+    })).toBe(true);
   }
   await first.setViewportSize({ width: 390, height: 844 });
   await first.screenshot({ path: "test-results/deal-revision-preview.png", fullPage: true });

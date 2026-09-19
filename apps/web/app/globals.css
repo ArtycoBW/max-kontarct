@@ -4271,7 +4271,8 @@ button.service-status {
 .dialog-close { position: absolute; right: 16px; top: 16px; }
 .app-modal { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
 .app-modal-header { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 24px; border-bottom: 1px solid var(--border); }
-.app-modal-header.is-stacked { display: grid; justify-content: stretch; gap: 8px; padding-right: 56px; }
+.app-modal-header.is-stacked { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; justify-content: stretch; gap: 8px; padding-right: 56px; }
+.app-modal-header.is-stacked > * { min-width: 0; overflow-wrap: anywhere; }
 .app-modal-header.is-stacked .dialog-description { margin: 0; line-height: 1.5; }
 .app-modal-header h2 { margin: 0; font-size: 20px; line-height: 1.25; letter-spacing: -.03em; }
 .app-modal-close { display: grid; flex: none; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--surface-muted, #f6f2ef); cursor: pointer; }
