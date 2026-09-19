@@ -7,16 +7,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { fetchPreview, type PreviewFile } from "@/lib/files/preview";
 
-export function PdfPreview({ file, zoom, rotation, onError }: {
-  file: PreviewFile; zoom: number; rotation: number; onError: (message: string) => void;
+export function PdfPreview({ file, zoom, rotation, fitPage = false, onError }: {
+  file: PreviewFile; zoom: number; rotation: number; fitPage?: boolean; onError: (message: string) => void;
 }) {
   const [document, setDocument] = useState<PDFDocumentProxy | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [rendered, setRendered] = useState<string | null>(null);
-  const [width, setWidth] = useState(0);
+  const [area, setArea] = useState({ width: 0, height: 0 });
+  const { width, height } = area;
   const container = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const renderKey = `${pageNumber}:${width}:${zoom}:${rotation}`;
+  const renderKey = `${pageNumber}:${width}:${height}:${zoom}:${rotation}:${fitPage}`;
   const busy = !document || rendered !== renderKey;
   useEffect(() => {
     const controller = new AbortController();
@@ -46,7 +47,10 @@ export function PdfPreview({ file, zoom, rotation, onError }: {
   useEffect(() => {
     const element = container.current;
     if (!element) return;
-    const observer = new ResizeObserver(entries => setWidth(entries[0]?.contentRect.width ?? 0));
+    const observer = new ResizeObserver(entries => {
+      const rect = entries[0]?.contentRect;
+      if (rect) setArea({ width: Math.floor(rect.width), height: Math.floor(rect.height) });
+    });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
@@ -60,7 +64,7 @@ export function PdfPreview({ file, zoom, rotation, onError }: {
         if (cancelled || !canvas.current) return;
         const angle = (page.rotate + rotation) % 360;
         const natural = page.getViewport({ scale: 1, rotation: angle });
-        const scale = Math.max(1, width) / natural.width * zoom;
+        const scale = (fitPage ? Math.min(Math.max(1, width) / natural.width, Math.max(1, height) / natural.height) : Math.max(1, width) / natural.width) * zoom;
         const viewport = page.getViewport({ scale, rotation: angle });
         // Bound canvas memory on mobile while retaining a scrollable zoomed page.
         const pixelRatio = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(8_000_000 / (viewport.width * viewport.height)));
@@ -76,20 +80,20 @@ export function PdfPreview({ file, zoom, rotation, onError }: {
       } catch { if (!cancelled) onError("Не удалось отобразить страницу PDF. Повторите попытку или скачайте файл."); }
     })();
     return () => { cancelled = true; render?.cancel(); };
-  }, [document, pageNumber, width, zoom, rotation, onError, renderKey]);
+  }, [document, pageNumber, width, height, zoom, rotation, fitPage, onError, renderKey]);
 
   return <div className="pdf-preview">
     <div className="file-preview-viewport" ref={container} aria-busy={busy}>
       {busy ? <div className="file-preview-loading" role="status">Открываем PDF…</div> : null}
       <canvas ref={canvas} role="img" aria-label={`Страница ${pageNumber}`} style={{ visibility: busy ? "hidden" : "visible" }} />
     </div>
-    <nav className="pdf-preview-pages" aria-label="Страницы PDF">
+    {document && document.numPages > 1 ? <nav className="pdf-preview-pages" aria-label="Страницы PDF">
       <Button variant="outline" size="icon" aria-label="Предыдущая страница" disabled={!document || pageNumber === 1} onClick={() => setPageNumber(n => n - 1)}><ChevronLeft size={18} /></Button>
       {document ? <Select value={String(pageNumber)} onValueChange={value => setPageNumber(Number(value))}>
         <SelectTrigger aria-label="Перейти к странице" className="pdf-page-picker"><SelectValue /></SelectTrigger>
         <SelectContent>{Array.from({ length: document.numPages }, (_, i) => <SelectItem key={i} value={String(i + 1)}>{i + 1} из {document.numPages}</SelectItem>)}</SelectContent>
       </Select> : <span>Загрузка страниц…</span>}
       <Button variant="outline" size="icon" aria-label="Следующая страница" disabled={!document || pageNumber === document.numPages} onClick={() => setPageNumber(n => n + 1)}><ChevronRight size={18} /></Button>
-    </nav>
+    </nav> : null}
   </div>;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download, FileText, RotateCw, ZoomIn, ZoomOut } from "lucide-react";
+import { Download, FileText, ImageIcon, Maximize, RotateCw, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,8 +19,10 @@ export function FilePreviewDialog({ files, index, onIndexChange, onClose, return
         <div>
           <DialogTitle className={files.length > 1 ? "is-visually-hidden" : ""} title={file.originalName}>{file.originalName}</DialogTitle>
           {files.length > 1 ? <Select value={String(index)} onValueChange={value => onIndexChange(Number(value))}>
-            <SelectTrigger className="file-preview-picker" aria-label="Выбрать файл"><SelectValue /></SelectTrigger>
-            <SelectContent className="file-preview-options">{files.map((item, i) => <SelectItem key={item.id} value={String(i)}>{item.originalName}</SelectItem>)}</SelectContent>
+            <SelectTrigger className="file-preview-picker" aria-label="Выбрать файл" title={file.originalName}><SelectValue>{file.originalName}</SelectValue></SelectTrigger>
+            <SelectContent className="file-preview-options" align="start" collisionPadding={12}>{files.map((item, i) => <SelectItem key={item.id} value={String(i)} aria-label={item.originalName} textValue={item.originalName}>
+              <span className="file-preview-option"><span aria-hidden="true">{previewKind(item.mimeType) === "image" ? <ImageIcon size={20} /> : <FileText size={20} />}</span><span><strong>{item.originalName}</strong><small aria-hidden="true">{fileTypeLabel(item.mimeType)} · {fileSizeLabel(item.sizeBytes)}</small></span></span>
+            </SelectItem>)}</SelectContent>
           </Select> : null}
           <DialogDescription>{fileTypeLabel(file.mimeType)} · {fileSizeLabel(file.sizeBytes)}{files.length > 1 ? ` · Файл ${index + 1} из ${files.length}` : ""}</DialogDescription>
         </div>
@@ -33,6 +35,7 @@ export function FilePreviewDialog({ files, index, onIndexChange, onClose, return
 function PreviewContent({ id, originalName, mimeType, sizeBytes, url }: PreviewFile) {
   const file = useMemo(() => ({ id, originalName, mimeType, sizeBytes, url }), [id, originalName, mimeType, sizeBytes, url]);
   const [zoom, setZoom] = useState(1);
+  const [fitPage, setFitPage] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -42,14 +45,15 @@ function PreviewContent({ id, originalName, mimeType, sizeBytes, url }: PreviewF
     <div className="file-preview-toolbar">
       {kind !== "unsupported" ? <div className="file-preview-tools" role="group" aria-label="Масштаб и поворот">
         <Button variant="ghost" size="icon" aria-label="Уменьшить" disabled={zoom <= 0.5 || Boolean(error)} onClick={() => setZoom(n => Math.max(0.5, n - 0.25))}><ZoomOut size={19} /></Button>
-        <Button variant="ghost" className="file-preview-scale" aria-label="Сбросить масштаб" title="По ширине окна" disabled={Boolean(error)} onClick={() => setZoom(1)}>{zoom === 1 ? "По ширине" : `${Math.round(zoom * 100)}%`}</Button>
+        <Button variant="ghost" className="file-preview-scale" aria-label="Сбросить масштаб" title={kind === "pdf" ? "По ширине окна" : "Показать целиком"} disabled={Boolean(error)} onClick={() => { setZoom(1); setFitPage(false); }}>{zoom === 1 ? fitPage || kind === "image" ? "Целиком" : "По ширине" : `${Math.round(zoom * 100)}%`}</Button>
         <Button variant="ghost" size="icon" aria-label="Увеличить" disabled={zoom >= 3 || Boolean(error)} onClick={() => setZoom(n => Math.min(3, n + 0.25))}><ZoomIn size={19} /></Button>
         <Button variant="ghost" size="icon" aria-label="Повернуть" disabled={Boolean(error)} onClick={() => setRotation(n => (n + 90) % 360)}><RotateCw size={18} /></Button>
+        {kind === "pdf" ? <Button variant="ghost" size="icon" aria-label="Показать страницу целиком" title="Показать страницу целиком" aria-pressed={fitPage && zoom === 1} disabled={Boolean(error)} onClick={() => { setFitPage(true); setZoom(1); }}><Maximize size={18} /></Button> : null}
       </div> : <span />}
       <Button asChild variant="outline" className="file-preview-download"><a href={url} download={originalName} aria-label="Скачать"><Download size={17} /><span>Скачать</span></a></Button>
     </div>
     {error ? <div className="file-preview-state" role="alert"><FileText size={36} /><strong>Не удалось открыть файл</strong><p>{error}</p><Button variant="outline" onClick={() => { setError(null); setAttempt(n => n + 1); }}>Повторить</Button></div>
-      : kind === "pdf" ? <PdfPreview key={attempt} file={file} zoom={zoom} rotation={rotation} onError={reportError} />
+      : kind === "pdf" ? <PdfPreview key={attempt} file={file} zoom={zoom} rotation={rotation} fitPage={fitPage} onError={reportError} />
       : kind === "image" ? <ImagePreview key={attempt} file={file} zoom={zoom} rotation={rotation} onError={reportError} />
       : <div className="file-preview-state"><FileText size={36} /><strong>Для этого формата нет предпросмотра</strong><p>Скачайте файл и откройте в подходящем приложении.</p></div>}
   </>;
@@ -86,7 +90,7 @@ function ImagePreview({ file, zoom, rotation, onError }: { file: PreviewFile; zo
   const sideways = rotation % 180 !== 0;
   const rotatedWidth = sideways ? natural.height : natural.width;
   const rotatedHeight = sideways ? natural.width : natural.height;
-  const fit = natural.width ? Math.min(Math.max(1, area.width - 32) / rotatedWidth, Math.max(1, area.height - 32) / rotatedHeight, 1) : 1;
+  const fit = natural.width ? Math.min(Math.max(1, area.width) / rotatedWidth, Math.max(1, area.height) / rotatedHeight, 1) : 1;
   const scale = fit * zoom;
   return <div className="file-preview-viewport image-preview-viewport" ref={container} aria-busy={!natural.width}>
     {!natural.width ? <div className="file-preview-loading" role="status">Открываем изображение…</div> : null}

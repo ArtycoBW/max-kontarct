@@ -1,12 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 
 // Generated test documents only. All API calls are intercepted; nothing is uploaded.
-function syntheticPdf() {
-  const stream = (label: string) => `BT /F1 24 Tf 40 230 Td (${label}) Tj ET\n0.2 0.5 0.6 rg 40 80 210 90 re f\n`;
+function syntheticPdf(singlePage = false) {
+  const stream = (label: string) => singlePage
+    ? `BT /F1 22 Tf 40 790 Td (${label}) Tj ET\n${Array.from({ length: 34 }, (_, i) => `BT /F1 12 Tf 40 ${740 - i * 19} Td (Section ${i + 1}. Test contract terms and conditions.) Tj ET`).join("\n")}\n`
+    : `BT /F1 24 Tf 40 230 Td (${label}) Tj ET\n0.2 0.5 0.6 rg 40 80 210 90 re f\n`;
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R >>",
+    singlePage ? "<< /Type /Pages /Kids [3 0 R] /Count 1 >>" : "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${singlePage ? "595 842" : "300 300"}] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R >>`,
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 5 0 R >> >> /Contents 7 0 R >>",
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     ...["TEST PAGE 1", "TEST PAGE 2"].map(label => `<< /Length ${Buffer.byteLength(stream(label))} >>\nstream\n${stream(label)}endstream`),
@@ -175,13 +177,19 @@ for (const width of [320, 390, 1440]) test(`compact deal panels, nested preview 
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: /^Приложения к договору Фото/ }).click();
   const attachments = page.getByRole("dialog", { name: "Приложения к договору", exact: true });
+  await expect(attachments.getByRole("link", { name: /^Скачать/ })).toHaveCount(0);
+  await expect(attachments.getByRole("button", { name: "Документы сделки" })).toHaveCount(0);
+  await expect(attachments.locator(".deal-panel-footer")).toHaveCount(0);
+  await expect(page.locator("[data-sonner-toast]")).toHaveCount(0);
+  await page.screenshot({ path: `test-results/attachments-clean-${width}.png` });
   await attachments.getByRole("button", { name: "Просмотреть Фото предмета сделки.png" }).click();
   const viewer = page.getByRole("dialog", { name: "Фото предмета сделки.png", exact: true });
   await expect(viewer.getByRole("img")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(viewer).toHaveCount(0);
   await expect(attachments).toBeVisible();
-  await attachments.getByRole("button", { name: "Документы сделки" }).click();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Документы сделки", exact: true }).click();
   await expect(page.locator(".documents-screen")).toBeVisible();
   await page.getByRole("button", { name: "Назад", exact: true }).click();
   await expect(page.locator(".deal-workspace-screen")).toBeVisible();
@@ -198,4 +206,44 @@ for (const width of [320, 390, 1440]) test(`compact deal panels, nested preview 
   await expect(chat.getByRole("log")).toContainText("Предлагаю изменить срок работ");
   await page.screenshot({ path: `test-results/chat-modal-${width}.png` });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+for (const [width, height] of [[320, 568], [390, 640], [844, 390], [1440, 900]]) test(`single-page viewer layout at ${width}x${height}`, async ({ page }) => {
+  await page.setViewportSize({ width, height });
+  await openFiles(page);
+  await page.route("**/files/pdf/content", route => route.fulfill({ contentType: "application/pdf", body: syntheticPdf(true) }));
+  await page.getByRole("button", { name: "Просмотреть Техническое задание с очень длинным названием.pdf" }).click();
+  const viewer = page.locator(".file-preview-dialog");
+  await expect(viewer.getByRole("img", { name: "Страница 1" })).toBeVisible();
+  await expect(viewer.getByRole("navigation", { name: "Страницы PDF" })).toHaveCount(0);
+  const viewport = viewer.locator(".file-preview-viewport");
+  await expect(viewport).toHaveAttribute("aria-busy", "false");
+  expect(await viewport.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  await viewer.getByRole("button", { name: "Показать страницу целиком" }).click();
+  await expect(viewport).toHaveAttribute("aria-busy", "false");
+  await expect.poll(() => viewport.evaluate(el => el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  await viewer.getByRole("button", { name: "Повернуть", exact: true }).click();
+  await expect(viewport).toHaveAttribute("aria-busy", "false");
+  await expect.poll(() => viewport.evaluate(el => el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  for (let turn = 0; turn < 3; turn++) await viewer.getByRole("button", { name: "Повернуть", exact: true }).click();
+  await viewer.getByRole("button", { name: "Сбросить масштаб" }).click();
+  await expect(viewport).toHaveAttribute("aria-busy", "false");
+  for (const control of await viewer.locator("button, a").all()) {
+    const rect = await control.boundingBox();
+    expect(rect).not.toBeNull();
+    expect(rect!.x).toBeGreaterThanOrEqual(0);
+    expect(rect!.x + rect!.width).toBeLessThanOrEqual(width + 1);
+    expect(rect!.y + rect!.height).toBeLessThanOrEqual(height + 1);
+  }
+  await page.screenshot({ path: `test-results/single-pdf-${width}.png` });
+  await viewer.getByRole("combobox", { name: "Выбрать файл" }).click();
+  const options = page.getByRole("listbox");
+  await expect(options).toBeVisible();
+  const bounds = await options.boundingBox();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width + 1);
+  await page.screenshot({ path: `test-results/file-picker-${width}.png`, animations: "disabled" });
+  await page.getByRole("option", { name: "Фото предмета сделки.png", exact: true }).click();
+  await expect(viewer.getByRole("img", { name: "Фото предмета сделки.png" })).toBeVisible();
+  await expect(viewer.getByRole("link", { name: "Скачать", exact: true })).toHaveAttribute("href", /\/image\/content$/);
 });

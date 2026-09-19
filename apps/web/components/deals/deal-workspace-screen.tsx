@@ -277,7 +277,7 @@ export function DealWorkspaceScreen({
       {signingVisible ? <SigningFlow dealId={dealId} /> : null}
       {deal.versionNumber > 1 ? <DealVersionHistory dealId={dealId} versionId={deal.versionId} /> : null}
       </DealPanel>
-      <DealPanel title="Приложения к договору" description="Фото и общие материалы · без личных документов" icon={<Files size={22} />} footer={<Button variant="outline" className="full-width" onClick={onOpenDocuments}>Документы сделки</Button>}>
+      <DealPanel title="Приложения к договору" description="Фото и общие материалы · без личных документов" icon={<Files size={22} />}>
         <SharedDealAttachments dealId={dealId} />
       </DealPanel>
       {deal.counterparty ? <DealPanel title="Чат сделки" description="Обсудить детали и предложить изменения" icon={<MessageCircle size={22} />} className="deal-chat-dialog">
