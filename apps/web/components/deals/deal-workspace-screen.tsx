@@ -242,15 +242,7 @@ export function DealWorkspaceScreen({
       </section> : null}
 
       <div className="deal-panel-grid">
-      <DealPanel title="Договор" description={`Версия ${deal.versionNumber} · ${deal.approvals.totalApproved} из ${deal.approvals.required} согласовано`} icon={<FileCheck2 size={22} />} footer={<>
-        {documentsPending ? <><p className="field-description">{deal.status === "DOCUMENTS_REVIEW" ? "Обязательные документы на проверке. После их принятия здесь появится кнопка согласования." : "Согласование пока недоступно: нужны принятые обязательные документы обеих сторон."}</p><Button variant="outline" onClick={onOpenDocuments}>Проверить документы</Button></> : null}
-        {canApprove && profileRequired ? <><p className="field-description">Для согласования заполните профиль и подтвердите номер телефона.</p><Button onClick={onOpenProfile}>Заполнить профиль</Button></> : null}
-        {canApprove && !profileRequired ? <Button className="full-width" disabled={versionApproved || approval.isPending} onClick={() => approval.mutate()}>{approval.isPending ? "Сохраняем согласование…" : versionApproved ? "Версия согласована" : `Согласовать версию ${deal.versionNumber}`}</Button> : null}
-        {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" ? <Button className="full-width" onClick={onEdit} variant="secondary">Редактировать черновик</Button> : null}
-        {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" && deal.contractDraft && deal.counterparty ? <Button className="full-width" disabled={startAgreement.isPending} onClick={() => startAgreement.mutate()}>Передать итоговые условия на согласование</Button> : null}
-        {deal.currentUserRole === "INITIATOR" && !["DRAFT", "SIGNED_BY_ONE", "SIGNED", "COMPLETED", "CANCELED"].includes(deal.status) ? <DealRevisionEditor deal={deal} onSaved={() => { void refreshWorkspace(queryClient, dealId); }} /> : null}
-        {startAgreement.error ? <p role="alert">{startAgreement.error.message}</p> : null}
-      </>}>
+      <DealPanel title="Договор" description={`Версия ${deal.versionNumber} · ${deal.approvals.totalApproved} из ${deal.approvals.required} согласовано`} icon={<FileCheck2 size={22} />}>
       <section className="deal-workspace-section">
         <div className="deal-workspace-section-heading">
           <h2>Условия сделки</h2>
@@ -261,22 +253,6 @@ export function DealWorkspaceScreen({
         ) : <Card className="form-message"><strong>Проект договора готовится</strong></Card>}
       </section>
 
-      {profileRequired && !canApprove ? (
-        <Card className="form-message is-warning">
-          <strong>Сначала заполните профиль</strong>
-          <span>Фамилия, имя и основные данные нужны для согласования версии и подготовки документов.</span>
-          <Button onClick={onOpenProfile}>Заполнить профиль</Button>
-        </Card>
-      ) : null}
-
-      {approval.error && !profileRequired ? (
-        <Card className="form-message is-error" role="alert">
-          <strong>Согласование не сохранено</strong>
-          <span>{approval.error instanceof ApiError ? approval.error.message : "Повторите попытку"}</span>
-        </Card>
-      ) : null}
-
-      {signingVisible ? <SigningFlow dealId={dealId} /> : null}
       {deal.versionNumber > 1 ? <DealVersionHistory dealId={dealId} versionId={deal.versionId} /> : null}
       </DealPanel>
       <DealPanel title="Приложения к договору" description="Фото и общие материалы · без личных документов" icon={<Files size={22} />}>
@@ -287,7 +263,35 @@ export function DealWorkspaceScreen({
       </DealPanel> : null}
       </div>
 
-      {documentsPending ? <Card className="form-message"><strong>{deal.status === "DOCUMENTS_REVIEW" ? "Документы на проверке" : "Сначала подготовьте документы"}</strong><span>Когда обязательные документы обеих сторон будут приняты, откроется финальное согласование этой версии договора.</span></Card> : null}
+      <section className="deal-workspace-actions" aria-label="Действия по сделке">
+      {documentsPending ? <Card className="form-message"><strong>{deal.status === "DOCUMENTS_REVIEW" ? "Документы на проверке" : "Сначала подготовьте документы"}</strong><span>{deal.status === "DOCUMENTS_REVIEW" ? "Обязательные документы на проверке. После их принятия здесь появится кнопка согласования." : "Согласование пока недоступно: нужны принятые обязательные документы обеих сторон."}</span></Card> : null}
+      {profileRequired && !signingVisible && deal.status !== "CANCELED" ? (
+        <Card className="form-message is-warning">
+          <strong>Сначала заполните профиль</strong>
+          <span>Для согласования заполните профиль и подтвердите номер телефона.</span>
+          <Button onClick={onOpenProfile}>Заполнить профиль</Button>
+        </Card>
+      ) : null}
+
+      {canApprove && !profileRequired ? <Card className="form-message">
+        <strong>{versionApproved ? "Вы согласовали эту версию" : "Согласуйте условия договора"}</strong>
+        <span>{versionApproved ? "Ожидаем согласования второй стороны. После этого станет доступно подписание." : "Проверьте договор и приложения выше. Согласование подтверждает условия, но ещё не подписывает договор."}</span>
+        <Button className="full-width" disabled={versionApproved || approval.isPending} onClick={() => approval.mutate()}>{approval.isPending ? "Сохраняем согласование…" : versionApproved ? "Версия согласована" : `Согласовать версию ${deal.versionNumber}`}</Button>
+      </Card> : null}
+      {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" ? <Button className="full-width" onClick={onEdit} variant="secondary">Редактировать черновик</Button> : null}
+      {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" && deal.contractDraft && deal.counterparty ? <Button className="full-width" disabled={startAgreement.isPending} onClick={() => startAgreement.mutate()}>Передать итоговые условия на согласование</Button> : null}
+      {startAgreement.error ? <p role="alert">{startAgreement.error.message}</p> : null}
+
+      {approval.error && !profileRequired ? (
+        <Card className="form-message is-error" role="alert">
+          <strong>Согласование не сохранено</strong>
+          <span>{approval.error instanceof ApiError ? approval.error.message : "Повторите попытку"}</span>
+        </Card>
+      ) : null}
+
+      {signingVisible ? <SigningFlow key={deal.versionId} dealId={dealId} /> : null}
+      {deal.currentUserRole === "INITIATOR" && !["DRAFT", "SIGNED_BY_ONE", "SIGNED", "COMPLETED", "CANCELED"].includes(deal.status) ? <DealRevisionEditor deal={deal} onSaved={() => { void refreshWorkspace(queryClient, dealId); }} /> : null}
+      </section>
 
 
       {deal.counterparty ? (

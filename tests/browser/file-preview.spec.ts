@@ -77,11 +77,95 @@ async function openFiles(page: Page, options: { status?: string; role?: string; 
   return reads;
 }
 
+for (const role of ["INITIATOR", "COUNTERPARTY"]) test(`signing starts on the workspace and preserves OTP after closing for ${role}`, async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 740 });
+  await openFiles(page, { role, status: "READY_TO_SIGN" });
+  let signed = false;
+  let issues = 0;
+  const state = () => ({
+    status: signed ? "SIGNED_BY_ONE" : "READY_TO_SIGN", versionId: "version", versionNumber: 1,
+    contractNumber: "TEST-001", documentHash: "a".repeat(64), currentUserSigned: signed,
+    totalSignatures: signed ? 1 : 0, requiredSignatures: 2, finalPdf: null, evidencePackage: null,
+    pepAgreement: { title: "Соглашение о простой электронной подписи", version: "1", paragraphs: ["Тестовое соглашение."] },
+    parties: [{ role, displayName: "Тест", isCurrentUser: true, signedAt: signed ? new Date().toISOString() : null }],
+  });
+  await page.route("**/deal/signing", route => route.fulfill({ json: state() }));
+  await page.route("**/deal/signing/otp", route => {
+    issues++;
+    expect(route.request().postDataJSON()).toEqual({ pepAccepted: true, versionId: "version" });
+    return route.fulfill({ json: { channel: "SMS", maskedPhone: "+7 *** 1234", resendAvailableAt: new Date(Date.now() + 60000).toISOString(), expiresAt: new Date(Date.now() + 300000).toISOString() } });
+  });
+  await page.route("**/deal/signing/confirm", route => {
+    expect(route.request().postDataJSON()).toEqual({ code: "1234", versionId: "version" });
+    signed = true;
+    return route.fulfill({ json: state() });
+  });
+  await page.getByRole("button", { name: "Сделки", exact: true }).click();
+  await page.getByRole("button", { name: /Тестовые материалы/ }).click();
+  await expect(page.getByRole("button", { name: "Подписать договор", exact: true })).toBeVisible();
+  await expect(page.getByRole("checkbox")).toHaveCount(0);
+  await page.getByRole("button", { name: /^Договор Версия/ }).click();
+  await expect(page.getByRole("dialog").getByRole("button", { name: /Подписать|Согласовать|Получить код/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  expect(issues).toBe(0);
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 740 });
+    await page.getByRole("button", { name: "Подписать договор", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Подписание договора", exact: true });
+    await expect(dialog.getByRole("button", { name: "Получить код подписи" })).toBeDisabled();
+    expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.keyboard.press("Escape");
+  }
+  await page.setViewportSize({ width: 390, height: 740 });
+  await page.getByRole("button", { name: "Подписать договор", exact: true }).click();
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Получить код подписи" }).click();
+  await page.getByRole("textbox", { name: "Код подписи из 4 цифр" }).fill("123");
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Подписать договор", exact: true })).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Подписать договор", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "Код подписи из 4 цифр" })).toHaveValue("123");
+  expect(issues).toBe(1);
+  await page.getByRole("textbox", { name: "Код подписи из 4 цифр" }).fill("1234");
+  await page.getByRole("dialog").getByRole("button", { name: "Подписать договор", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Ждём вторую сторону" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Подписать договор", exact: true })).toHaveCount(0);
+  await page.screenshot({ path: `test-results/signing-workspace-${role}.png`, fullPage: true });
+});
+
+for (const scenario of ["other-signed", "self-signed", "completed"] as const) test(`workspace shows the next action for ${scenario}`, async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  await openFiles(page, { status: scenario === "completed" ? "COMPLETED" : "SIGNED_BY_ONE" });
+  await page.route("**/deal/signing", route => route.fulfill({ json: {
+    status: scenario === "completed" ? "COMPLETED" : "SIGNED_BY_ONE", versionId: "version", versionNumber: 1,
+    contractNumber: "TEST-001", documentHash: "a".repeat(64), currentUserSigned: scenario !== "other-signed",
+    totalSignatures: scenario === "completed" ? 2 : 1, requiredSignatures: 2,
+    finalPdf: scenario === "completed" ? { id: "final", originalName: "Договор.pdf", mimeType: "application/pdf", sizeBytes: 100, downloadUrl: "/api/v1/files/final/content" } : null,
+    evidencePackage: scenario === "completed" ? { downloadUrl: "/api/v1/files/package/content" } : null,
+    pepAgreement: { title: "Соглашение о ПЭП", version: "1", paragraphs: [] }, parties: [],
+  } }));
+  await page.getByRole("button", { name: "Сделки", exact: true }).click();
+  await page.getByRole("button", { name: /Тестовые материалы/ }).click();
+  if (scenario === "other-signed") {
+    await expect(page.locator(".deal-workspace-actions")).toContainText("Осталась ваша подпись");
+    await expect(page.getByRole("button", { name: "Подписать договор", exact: true })).toBeVisible();
+  } else {
+    await expect(page.getByRole("heading", { name: scenario === "completed" ? "Договор и материалы готовы" : "Ждём вторую сторону" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Подписать договор", exact: true })).toHaveCount(0);
+  }
+  if (scenario === "completed") {
+    await expect(page.getByRole("link", { name: "Скачать подписанный PDF" })).toHaveAttribute("href", "/api/v1/files/final/content");
+    await expect(page.getByRole("link", { name: "Скачать пакет материалов" })).toBeVisible();
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: `test-results/workspace-${scenario}.png`, fullPage: true });
+});
+
 test("revision dialog keeps its heading and description separated when resizing", async ({ page }) => {
   await openFiles(page);
   await page.getByRole("button", { name: "Сделки", exact: true }).click();
   await page.getByRole("button", { name: /Тестовые материалы/ }).click();
-  await page.getByRole("button", { name: /^Договор Версия/ }).click();
   await page.getByRole("button", { name: "Изменить условия договора", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Новая редакция договора", exact: true });
   for (const width of [390, 320, 1440, 320]) {
@@ -99,15 +183,18 @@ for (const role of ["INITIATOR", "COUNTERPARTY"]) test(`approval is visible and 
   await openFiles(page, { role });
   await page.getByRole("button", { name: "Сделки", exact: true }).click();
   await page.getByRole("button", { name: /Тестовые материалы/ }).click();
-  await page.getByRole("button", { name: /^Договор Версия/ }).click();
-  const dialog = page.getByRole("dialog", { name: "Договор", exact: true });
-  const approve = dialog.getByRole("button", { name: "Согласовать версию 1", exact: true });
+  const approve = page.getByRole("button", { name: "Согласовать версию 1", exact: true });
   await expect(approve).toBeVisible();
+  await approve.scrollIntoViewIfNeeded();
   const rect = await approve.boundingBox();
   expect(rect!.y + rect!.height).toBeLessThanOrEqual(640);
   await approve.click();
-  await expect(dialog.getByRole("button", { name: "Версия согласована", exact: true })).toBeDisabled();
-  await expect(dialog).toContainText("1 из 2 согласовано");
+  await expect(page.getByRole("button", { name: "Версия согласована", exact: true })).toBeDisabled();
+  await expect(page.locator(".deal-workspace-actions")).toContainText("Ожидаем согласования второй стороны");
+  await page.getByRole("button", { name: /^Договор Версия/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Договор", exact: true });
+  await expect(dialog.getByRole("button", { name: /Согласовать|Подписать|Изменить условия/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
   await page.screenshot({ path: `test-results/approval-${role}.png` });
 });
 
@@ -115,25 +202,21 @@ for (const status of ["DOCUMENTS_PENDING", "DOCUMENTS_REVIEW"]) test(`contract e
   await openFiles(page, { status });
   await page.getByRole("button", { name: "Сделки", exact: true }).click();
   await page.getByRole("button", { name: /Тестовые материалы/ }).click();
-  await page.getByRole("button", { name: /^Договор Версия/ }).click();
-  const dialog = page.getByRole("dialog", { name: "Договор", exact: true });
-  await expect(dialog.getByRole("button", { name: "Согласовать версию 1", exact: true })).toHaveCount(0);
-  await expect(dialog.locator(".deal-panel-footer")).toContainText(status === "DOCUMENTS_REVIEW" ? "на проверке" : "нужны принятые");
-  await dialog.getByRole("button", { name: "Проверить документы", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Согласовать версию 1", exact: true })).toHaveCount(0);
+  await expect(page.locator(".deal-workspace-actions")).toContainText(status === "DOCUMENTS_REVIEW" ? "на проверке" : "нужны принятые");
+  await page.getByRole("button", { name: "Документы сделки", exact: true }).click();
   await expect(page.locator(".documents-screen")).toBeVisible();
   await page.getByRole("button", { name: "Назад", exact: true }).click();
   await expect(page.locator(".deal-workspace-screen")).toBeVisible();
 });
 
-test("contract explains profile prerequisite instead of an empty footer", async ({ page }) => {
+test("workspace explains profile prerequisite next to actions", async ({ page }) => {
   await openFiles(page, { profileCompleted: false });
   await page.getByRole("button", { name: "Сделки", exact: true }).click();
   await page.getByRole("button", { name: /Тестовые материалы/ }).click();
-  await page.getByRole("button", { name: /^Договор Версия/ }).click();
-  const dialog = page.getByRole("dialog", { name: "Договор", exact: true });
-  await expect(dialog).toContainText("Для согласования заполните профиль");
-  await expect(dialog.getByRole("button", { name: "Заполнить профиль", exact: true })).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Согласовать версию 1", exact: true })).toHaveCount(0);
+  await expect(page.locator(".deal-workspace-actions")).toContainText("Для согласования заполните профиль");
+  await expect(page.getByRole("button", { name: "Заполнить профиль", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Согласовать версию 1", exact: true })).toHaveCount(0);
 });
 
 for (const width of [320, 390, 1440]) test(`image and multipage PDF preview at ${width}px`, async ({ page }) => {
@@ -230,8 +313,7 @@ for (const width of [320, 390, 1440]) test(`compact deal panels, nested preview 
   const contract = page.getByRole("dialog", { name: "Договор", exact: true });
   await expect(contract.getByRole("region", { name: "Текст договора" })).toBeVisible();
   expect(await contract.locator(".deal-contract-preview").evaluate(el => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
-  await contract.getByRole("button", { name: "Согласовать версию 1" }).click();
-  await expect(contract.getByRole("button", { name: "Версия согласована", exact: true })).toBeDisabled();
+  await expect(contract.locator(".deal-panel-footer")).toHaveCount(0);
   await page.screenshot({ path: `test-results/contract-modal-${width}.png` });
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: /^Приложения к договору Фото/ }).click();

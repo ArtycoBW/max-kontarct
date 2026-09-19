@@ -9,6 +9,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
@@ -22,6 +23,7 @@ export function SigningFlow({ dealId }: { dealId: string }) {
   const [accepted, setAccepted] = useState(false);
   const [delivery, setDelivery] = useState<IssueSigningOtpResponse | null>(null);
   const [code, setCode] = useState("");
+  const [open, setOpen] = useState(false);
   const signing = useQuery({
     queryFn: () => getDealSigningState(dealId),
     queryKey: queryKeys.deals.signing(dealId),
@@ -67,8 +69,16 @@ export function SigningFlow({ dealId }: { dealId: string }) {
     return <SigningState title="Подписание недоступно" copy={apiMessage(signing.error)} action={<Button onClick={() => void signing.refetch()}><RefreshCw size={17} /> Повторить</Button>} />;
   }
   if (signing.data.currentUserSigned) return <SignedState state={signing.data} />;
-  if (delivery) {
-    return (
+  return <>
+    <Card className="form-message">
+      <strong>Договор готов к подписанию</strong>
+      <span>{signing.data.totalSignatures > 0 ? "Вторая сторона уже подписала договор. Осталась ваша подпись." : "Обе стороны согласовали условия. Подпишите эту версию одноразовым кодом."}</span>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild><Button className="full-width"><LockKeyhole size={17} />Подписать договор</Button></DialogTrigger>
+        <DialogContent className="deal-panel-dialog">
+          <DialogHeader className="deal-panel-header"><DialogTitle>Подписание договора</DialogTitle><DialogDescription>Версия {signing.data.versionNumber} · договор № {signing.data.contractNumber}</DialogDescription></DialogHeader>
+          <div className="deal-panel-body">
+          {delivery ? (
       <OtpStep
         delivery={delivery}
         code={code}
@@ -79,9 +89,12 @@ export function SigningFlow({ dealId }: { dealId: string }) {
         onCode={setCode}
         onResend={() => issue.mutate()}
       />
-    );
-  }
-  return <AgreementStep accepted={accepted} onAccepted={setAccepted} onIssue={() => issue.mutate()} pending={issue.isPending} state={signing.data} />;
+          ) : <AgreementStep accepted={accepted} onAccepted={setAccepted} onIssue={() => issue.mutate()} pending={issue.isPending} state={signing.data} />}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  </>;
 }
 
 function AgreementStep({ accepted, onAccepted, onIssue, pending, state }: {
