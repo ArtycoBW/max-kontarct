@@ -1,15 +1,15 @@
 import { expect, test, type Page } from "@playwright/test";
 
 // Generated test documents only. All API calls are intercepted; nothing is uploaded.
-function syntheticPdf(singlePage = false) {
-  const stream = (label: string) => singlePage
+function syntheticPdf(singlePage = false, portrait = false) {
+  const stream = (label: string) => singlePage || portrait
     ? `BT /F1 22 Tf 40 790 Td (${label}) Tj ET\n${Array.from({ length: 34 }, (_, i) => `BT /F1 12 Tf 40 ${740 - i * 19} Td (Section ${i + 1}. Test contract terms and conditions.) Tj ET`).join("\n")}\n`
     : `BT /F1 24 Tf 40 230 Td (${label}) Tj ET\n0.2 0.5 0.6 rg 40 80 210 90 re f\n`;
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
     singlePage ? "<< /Type /Pages /Kids [3 0 R] /Count 1 >>" : "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${singlePage ? "595 842" : "300 300"}] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R >>`,
-    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 300] /Resources << /Font << /F1 5 0 R >> >> /Contents 7 0 R >>",
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${singlePage || portrait ? "595 842" : "300 300"}] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R >>`,
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${portrait ? "595 842" : "300 300"}] /Resources << /Font << /F1 5 0 R >> >> /Contents 7 0 R >>`,
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     ...["TEST PAGE 1", "TEST PAGE 2"].map(label => `<< /Length ${Buffer.byteLength(stream(label))} >>\nstream\n${stream(label)}endstream`),
   ];
@@ -472,6 +472,67 @@ test("chat offers keyboard dictation when browser speech is unavailable", async 
   await chat.getByRole("textbox").fill("Можно написать вручную");
   await expect(chat.getByRole("button", { name: "Отправить сообщение", exact: true })).toBeEnabled();
   expect(await chat.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+});
+
+for (const width of [390, 900]) test(`portrait PDF zoom stays visible and preserves reading position at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 740 });
+  await openFiles(page);
+  await page.route("**/files/pdf/content", route => route.fulfill({ contentType: "application/pdf", body: syntheticPdf(false, true) }));
+  await page.getByRole("button", { name: "Просмотреть Техническое задание с очень длинным названием.pdf" }).click();
+  const viewer = page.locator(".file-preview-dialog");
+  const viewport = viewer.locator(".file-preview-viewport");
+  const canvas = viewer.getByRole("img", { name: "Страница 1" });
+  await expect(viewport).toHaveAttribute("aria-busy", "false");
+  const initialWidth = await canvas.evaluate(el => el.getBoundingClientRect().width);
+  await viewer.getByRole("button", { name: "Увеличить", exact: true }).click();
+  await expect(viewport).toHaveAttribute("aria-busy", "false");
+  await expect.poll(() => canvas.evaluate(el => el.getBoundingClientRect().width)).toBeGreaterThan(initialWidth * 1.15);
+  await viewer.getByRole("button", { name: "Увеличить", exact: true }).click();
+  await expect(viewport).toHaveAttribute("aria-busy", "false");
+  await viewport.evaluate(el => { el.scrollTop = 160; el.scrollLeft = 60; });
+  const position = await viewport.evaluate(el => ({ top: el.scrollTop, left: el.scrollLeft }));
+  expect(position.top).toBeGreaterThan(0);
+  await viewer.getByRole("button", { name: "Увеличить", exact: true }).click();
+  await expect(viewport).toHaveAttribute("aria-busy", "false");
+  expect(await viewport.evaluate(el => el.scrollTop)).toBeGreaterThanOrEqual(position.top);
+  await expect(canvas).toBeVisible();
+  await canvas.evaluate(el => {
+    const events: string[] = [];
+    (window as Window & { pdfZoomEvents?: string[] }).pdfZoomEvents = events;
+    const observer = new MutationObserver(() => {
+      if (getComputedStyle(el).visibility !== "visible") events.push("hidden");
+      if (el.parentElement?.querySelector('[role="status"]')) events.push("loading");
+    });
+    observer.observe(el.parentElement!, { childList: true, subtree: true, attributes: true });
+  });
+  // Do not wait for a render between clicks: reproduce repeated toolbar input.
+  for (let i = 0; i < 5; i++) await viewer.getByRole("button", { name: "Увеличить", exact: true }).click();
+  await expect(viewer.getByRole("button", { name: "Сбросить масштаб" })).toHaveText("300%");
+  await expect(viewport).toHaveAttribute("aria-busy", "false");
+  await expect.poll(() => canvas.evaluate(el => el.getBoundingClientRect().width)).toBeGreaterThan(initialWidth * 2.9);
+  expect(await page.evaluate(() => (window as Window & { pdfZoomEvents?: string[] }).pdfZoomEvents)).toEqual([]);
+  const stableWidth = await canvas.evaluate(el => el.getBoundingClientRect().width);
+  // Sample multiple frames, including scrollbar layout, rather than only the label.
+  const frames = await viewport.evaluate(async el => {
+    const values = [];
+    for (let i = 0; i < 20; i++) {
+      await new Promise(requestAnimationFrame);
+      values.push({ busy: el.getAttribute("aria-busy"), width: el.querySelector("canvas")!.getBoundingClientRect().width });
+    }
+    return values;
+  });
+  expect(frames.every(frame => frame.busy === "false" && frame.width === stableWidth)).toBe(true);
+  await viewer.getByRole("button", { name: "Следующая страница" }).click();
+  await expect(viewer.getByRole("img", { name: "Страница 2" })).toBeVisible();
+  await expect(viewport).toHaveAttribute("aria-busy", "false");
+  expect(await viewport.evaluate(el => el.scrollTop)).toBe(0);
+  await viewer.getByRole("button", { name: "Повернуть", exact: true }).click();
+  await viewer.getByRole("button", { name: "Сбросить масштаб" }).click();
+  await expect(viewport).toHaveAttribute("aria-busy", "false");
+  await viewer.getByRole("button", { name: "Показать страницу целиком" }).click();
+  await expect(viewport).toHaveAttribute("aria-busy", "false");
+  expect(await viewport.evaluate(el => el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1)).toBe(true);
+  await page.screenshot({ path: `test-results/pdf-zoom-stable-${width}.png` });
 });
 
 for (const [width, height] of [[320, 568], [390, 640], [844, 390], [1440, 900]]) test(`single-page viewer layout at ${width}x${height}`, async ({ page }) => {

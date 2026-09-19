@@ -5078,6 +5078,8 @@ button.service-status {
 .file-preview-viewport { position: relative; flex: 1; min-height: 0; min-width: 0; overflow: auto; overscroll-behavior: contain; background: #f0eeeb; padding: 16px; scrollbar-width: thin; scrollbar-color: #bdb5af transparent; }
 .file-preview-viewport canvas { display: block; margin: 0 auto; background: white; box-shadow: 0 2px 10px #21171314; }
 .pdf-preview { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.pdf-preview-surface { position: relative; flex: 1; min-height: 0; min-width: 0; }
+.pdf-preview-surface > .file-preview-viewport { position: absolute; inset: 0; scrollbar-gutter: stable both-edges; overflow-anchor: none; }
 .pdf-preview-pages { display: flex; flex: none; align-items: center; justify-content: center; gap: 12px; padding: 4px 16px; font-size: 13px; border-top: 1px solid var(--border); }
 .pdf-preview-pages .button { border: 0; background: transparent; }
 .pdf-preview-pages .button:not(:disabled):hover { background: #f5f3f1; }
