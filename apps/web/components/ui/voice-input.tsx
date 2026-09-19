@@ -6,8 +6,9 @@ import { Button } from "./button";
 import { Modal } from "./modal";
 import { speechDraft, speechConstructor, speechError, type BrowserSpeechRecognition } from "@/lib/voice/speech-recognition";
 
-export function VoiceInput({ value, onChange, inputId, disabled, maxLength = 500 }: {
+export function VoiceInput({ value, onChange, inputId, disabled, maxLength = 500, iconOnly = false, onActiveChange }: {
   value: string; onChange: (value: string) => void; inputId: string; disabled?: boolean; maxLength?: number;
+  iconOnly?: boolean; onActiveChange?: (active: boolean) => void;
 }) {
   const current = useRef({ value, onChange });
   const recognition = useRef<BrowserSpeechRecognition | null>(null);
@@ -19,6 +20,7 @@ export function VoiceInput({ value, onChange, inputId, disabled, maxLength = 500
   const [consentOpen, setConsentOpen] = useState(false);
   const allowed = useRef(false);
   const active = status !== "idle";
+  useEffect(() => { onActiveChange?.(active); }, [active, onActiveChange]);
   // A newly created parent callback must not overwrite text from the current recognition event.
   useEffect(() => { current.current.value = value; }, [value]);
   useEffect(() => { current.current.onChange = onChange; }, [onChange]);
@@ -105,15 +107,15 @@ export function VoiceInput({ value, onChange, inputId, disabled, maxLength = 500
     // Synchronous start inside the click handler preserves the browser's user activation.
     try { engine.start(); } catch { abort(); setNotice("Не удалось включить микрофон. Проверьте разрешения браузера / MAX или используйте голосовой ввод клавиатуры."); }
   };
-  return <div className="voice-input">
-    {active ? <p role="status">{status === "starting" ? "Подключаю микрофон…" : preview || "Слушаю… Говорите по-русски."}</p> : null}
+  return <div className={iconOnly ? "voice-input voice-input-icon" : "voice-input"}>
+    {active ? <p role="status">{status === "starting" ? "Подключаю микрофон…" : iconOnly ? "Слушаю… Нажмите стоп, чтобы закончить диктовку." : preview || "Слушаю… Говорите по-русски."}</p> : null}
     {notice ? <p role="status">{notice}</p> : null}
     <Modal open={consentOpen} onClose={() => setConsentOpen(false)} title="Голосовой ввод"
-      trigger={<Button type="button" variant="ghost" disabled={disabled && !active} aria-pressed={active} onClick={() => {
+      trigger={<Button type="button" variant="ghost" size={iconOnly ? "icon" : "default"} aria-label={iconOnly ? active ? "Остановить диктовку" : "Продиктовать сообщение" : undefined} title={iconOnly ? active ? "Остановить диктовку" : "Продиктовать сообщение" : undefined} disabled={disabled && !active} aria-pressed={active} onClick={() => {
         if (active) { stopSession.current?.(); return; }
         if (!speechConstructor()) { start(); return; }
         if (allowed.current) start(); else setConsentOpen(true);
-      }}>{active ? <><Square size={14} /> Остановить диктовку</> : <><Mic size={16} /> Продиктовать</>}</Button>}
+      }}>{active ? <><Square size={iconOnly ? 18 : 14} />{!iconOnly && " Остановить диктовку"}</> : <><Mic size={iconOnly ? 20 : 16} />{!iconOnly && " Продиктовать"}</>}</Button>}
       footer={<Button className="full-width" type="button" onClick={() => { allowed.current = true; setConsentOpen(false); start(); }}>Включить микрофон</Button>}>
       <p>Речь распознаёт браузер. В зависимости от браузера аудио может передаваться его сервису распознавания. Макс-Контракт не записывает и не хранит аудио.</p>
       <p>Не диктуйте паспортные данные и другие личные реквизиты. Полученный текст можно исправить перед отправкой.</p>

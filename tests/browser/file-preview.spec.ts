@@ -224,6 +224,10 @@ for (const [width, height] of [[320, 568], [390, 640], [1440, 900]]) test(`chat 
   await expect(input).toHaveAttribute("rows", "3");
   await expect(input).toHaveCSS("resize", "none");
   await expect(input).toHaveCSS("height", "84px");
+  const microphone = await chat.getByRole("button", { name: "Продиктовать сообщение" }).boundingBox();
+  const sendButton = await chat.getByRole("button", { name: "Отправить сообщение", exact: true }).boundingBox();
+  expect(microphone!.y + microphone!.height).toBeLessThanOrEqual(sendButton!.y);
+  expect(microphone!.x).toBe(sendButton!.x);
   await input.fill("Первая строка\nВторая строка\nТретья строка\nЧетвёртая строка");
   const mode = chat.getByRole("group", { name: "Тип сообщения" });
   await expect(mode.getByRole("button")).toHaveCount(2);
@@ -247,6 +251,86 @@ for (const [width, height] of [[320, 568], [390, 640], [1440, 900]]) test(`chat 
   expect(await log.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   expect(await input.evaluate(el => el.getBoundingClientRect().bottom <= window.innerHeight)).toBe(true);
   await page.screenshot({ path: `test-results/chat-compact-${width}.png` });
+});
+
+async function openVoiceChat(page: Page, supported = true) {
+  await page.addInitScript(({ supported }) => {
+    class Recognition {
+      onstart: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      onerror: ((event: { error: string }) => void) | null = null;
+      onresult: ((event: { resultIndex: number; results: { isFinal: boolean; 0: { transcript: string } }[] }) => void) | null = null;
+      constructor() {
+        window.addEventListener("test-speech", event => {
+          const detail = (event as CustomEvent<{ text?: string; error?: string }>).detail;
+          if (detail.error) this.onerror?.({ error: detail.error });
+          else this.onresult?.({ resultIndex: 0, results: [{ isFinal: false, 0: { transcript: detail.text ?? "" } }] });
+        });
+      }
+      start() { this.onstart?.(); }
+      stop() { this.onend?.(); }
+      abort() { document.documentElement.dataset.speechAborted = "true"; this.onend?.(); }
+    }
+    Object.defineProperty(window, "SpeechRecognition", { configurable: true, value: supported ? Recognition : undefined });
+    Object.defineProperty(window, "webkitSpeechRecognition", { configurable: true, value: undefined });
+  }, { supported });
+  await page.setViewportSize({ width: 320, height: 568 });
+  await openFiles(page);
+  await page.getByRole("button", { name: "Сделки", exact: true }).click();
+  await page.getByRole("button", { name: /Тестовые материалы/ }).click();
+  await page.getByRole("button", { name: /^Чат сделки Обсудить/ }).click();
+  return page.getByRole("dialog", { name: "Чат сделки", exact: true });
+}
+
+test("chat dictation appends editable text, stops before send and releases microphone on close", async ({ page }) => {
+  const chat = await openVoiceChat(page);
+  const input = chat.getByRole("textbox");
+  await input.fill("Условия:");
+  await chat.getByRole("button", { name: "Продиктовать сообщение" }).click();
+  await page.getByRole("button", { name: "Включить микрофон", exact: true }).click();
+  await expect(chat.getByRole("button", { name: "Остановить диктовку" })).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("test-speech", { detail: { text: "Оплата при получении" } })));
+  await expect(input).toHaveValue("Условия: оплата при получении");
+  await expect(chat.getByRole("button", { name: "Отправить сообщение", exact: true })).toBeDisabled();
+  await expect(chat.getByRole("log").locator("article")).toHaveCount(24);
+  expect(await chat.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/chat-voice-active.png" });
+  await chat.getByRole("button", { name: "Остановить диктовку" }).click();
+  await expect(chat.getByRole("button", { name: "Отправить сообщение", exact: true })).toBeEnabled();
+  await input.fill("Условия: оплата при получении, без аванса");
+  await chat.getByRole("button", { name: "Отправить сообщение", exact: true }).click();
+  await expect(input).toHaveValue("");
+  await expect(chat.getByRole("log")).toContainText("Условия: оплата при получении, без аванса");
+  await chat.getByRole("button", { name: "Продиктовать сообщение" }).click();
+  await expect(chat.getByRole("button", { name: "Остановить диктовку" })).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("test-speech", { detail: { text: "Новый черновик" } })));
+  await expect(input).toHaveValue("Новый черновик");
+  await chat.getByRole("button", { name: "Закрыть окно" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-speech-aborted", "true");
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("test-speech", { detail: { text: "Позднее событие" } })));
+  await page.getByRole("button", { name: /^Чат сделки Обсудить/ }).click();
+  await expect(chat.getByRole("textbox")).toHaveValue("Новый черновик");
+});
+
+test("chat explains denied microphone access and preserves draft", async ({ page }) => {
+  const chat = await openVoiceChat(page);
+  await chat.getByRole("textbox").fill("Мой текст");
+  await chat.getByRole("button", { name: "Продиктовать сообщение" }).click();
+  await page.getByRole("button", { name: "Включить микрофон", exact: true }).click();
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("test-speech", { detail: { error: "not-allowed" } })));
+  await expect(chat.getByRole("status")).toContainText("Доступ к микрофону или распознаванию запрещён");
+  await expect(chat.getByRole("textbox")).toHaveValue("Мой текст");
+  await expect(chat.getByRole("button", { name: "Отправить сообщение", exact: true })).toBeEnabled();
+});
+
+test("chat offers keyboard dictation when browser speech is unavailable", async ({ page }) => {
+  const chat = await openVoiceChat(page, false);
+  await chat.getByRole("button", { name: "Продиктовать сообщение" }).click();
+  await expect(chat.getByRole("status")).toContainText("Используйте микрофон на клавиатуре");
+  await expect(page.getByRole("dialog", { name: "Голосовой ввод", exact: true })).toHaveCount(0);
+  await chat.getByRole("textbox").fill("Можно написать вручную");
+  await expect(chat.getByRole("button", { name: "Отправить сообщение", exact: true })).toBeEnabled();
+  expect(await chat.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
 });
 
 for (const [width, height] of [[320, 568], [390, 640], [844, 390], [1440, 900]]) test(`single-page viewer layout at ${width}x${height}`, async ({ page }) => {

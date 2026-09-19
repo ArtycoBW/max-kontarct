@@ -5142,7 +5142,13 @@ button.service-status {
 .deal-chat-mode .button[aria-pressed="true"] { background: #fff; color: var(--ink-deep); box-shadow: 0 1px 4px #21171312; }
 .deal-chat-mode .button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .deal-chat-composer .field-description { margin: 0; font-size: 11px; line-height: 1.4; }
-.deal-chat-input-row { display: flex; align-items: flex-end; gap: 10px; min-width: 0; }
+.deal-chat-input-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; grid-template-rows: 44px 44px; gap: 4px 10px; min-width: 0; align-items: end; }
+.deal-chat-input-row > .deal-chat-input { grid-column: 1; grid-row: 1 / 3; }
+.deal-chat-input-row > .voice-input-icon { display: contents; }
+.deal-chat-input-row .voice-input-icon > .button { grid-column: 2; grid-row: 1; width: 44px; height: 44px; padding: 0; border-radius: 13px; background: #f5f2ef; }
+.deal-chat-input-row .voice-input-icon > .button[aria-pressed="true"] { color: var(--accent); background: #fff0e9; }
+.deal-chat-input-row .voice-input-icon > p { grid-column: 1 / -1; margin-top: 4px; }
+.deal-chat-input-row > .deal-chat-send { grid-column: 2; grid-row: 2; margin: 0; }
 .deal-chat-composer .textarea.deal-chat-input { flex: 1; min-width: 0; height: 84px; min-height: 84px; max-height: 84px; line-height: 20px; padding: 11px 12px; font-size: 14px; resize: none; overflow-y: auto; border-radius: 14px; }
 .deal-chat-send { flex: 0 0 44px; height: 44px; width: 44px; margin-bottom: 1px; border-radius: 13px; }
 .deal-chat-send:disabled { opacity: .45; }
