@@ -197,7 +197,7 @@ export function DealWorkspaceScreen({
 
       {!signingVisible ? <section className="deal-workspace-section">
         <h2>Стороны и приглашение</h2>
-        {deal.status === "DRAFT" ? <Card className="form-message"><strong>Условия ещё готовятся</strong><p>{deal.draft.description}</p><span>Вы можете заполнить свой профиль сейчас. После подготовки договора обе стороны согласуют одну итоговую версию.</span><Button variant="secondary" onClick={onOpenProfile}>Мои данные для договора</Button></Card> : null}
+        {deal.status === "DRAFT" ? <Card className="form-message"><strong>{deal.draft.currentStep === "INITIATOR" && deal.contractDraft ? "Проект договора готов" : "Условия ещё готовятся"}</strong><p>{deal.draft.description}</p><span>{deal.draft.currentStep === "INITIATOR" && deal.contractDraft ? "Проверьте проект и передайте итоговые условия обеим сторонам на согласование." : "Вы можете заполнить свой профиль сейчас. После подготовки договора обе стороны согласуют одну итоговую версию."}</span><Button variant="secondary" onClick={onOpenProfile}>Мои данные для договора</Button></Card> : null}
         {visibleParty ? (
           <Card className="deal-party-card">
             <UserRound size={21} />
@@ -279,7 +279,8 @@ export function DealWorkspaceScreen({
         <Button className="full-width" disabled={versionApproved || approval.isPending} onClick={() => approval.mutate()}>{approval.isPending ? "Сохраняем согласование…" : versionApproved ? "Версия согласована" : `Согласовать версию ${deal.versionNumber}`}</Button>
       </Card> : null}
       {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" ? <Button className="full-width" onClick={onEdit} variant="secondary">Редактировать черновик</Button> : null}
-      {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" && deal.contractDraft && deal.counterparty ? <Button className="full-width" disabled={startAgreement.isPending} onClick={() => startAgreement.mutate()}>Передать итоговые условия на согласование</Button> : null}
+      {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" && deal.contractDraft && deal.sourceGenerationId && deal.draft.currentStep === "INITIATOR" && deal.counterparty ? <Button className="full-width" disabled={startAgreement.isPending} onClick={() => startAgreement.mutate()}>Передать итоговые условия на согласование</Button> : null}
+      {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" && deal.contractDraft && deal.counterparty && deal.draft.currentStep !== "INITIATOR" ? <Card className="form-message is-warning"><strong>Завершите подготовку договора</strong><span>Откройте черновик и нажмите «Проверить договор и данные», чтобы отправить условия на согласование.</span></Card> : null}
       {startAgreement.error ? <p role="alert">{startAgreement.error.message}</p> : null}
 
       {approval.error && !profileRequired ? (

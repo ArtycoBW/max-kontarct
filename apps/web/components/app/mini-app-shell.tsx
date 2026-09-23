@@ -570,10 +570,14 @@ function CreateDealScreen({
         answers: payload.answers,
       }),
   });
+  const restoredGenerationStep =
+    Boolean(draft.data?.sourceGenerationId) &&
+    (step === "generation" || step === "initiator");
   const clarification = useQuery({
     enabled:
       activeDraftId.length > 0 &&
-      Boolean(clarificationSessionId),
+      Boolean(clarificationSessionId) &&
+      !restoredGenerationStep,
     queryFn: () =>
       getAiClarification(
         effectiveSelectedSlug,
@@ -585,6 +589,11 @@ function CreateDealScreen({
   });
   const activeClarificationSession =
     clarificationSession ?? clarification.data ?? null;
+  const generationId =
+    activeClarificationSession?.id ??
+    (step === "generation" || step === "initiator"
+      ? draft.data?.sourceGenerationId ?? null
+      : null);
   const renderedStep =
     step === "clarification" &&
     activeClarificationSession?.status === "READY_TO_GENERATE"
@@ -595,13 +604,13 @@ function CreateDealScreen({
       startContractGeneration(effectiveSelectedSlug, sessionId),
   });
   const generation = useQuery({
-    enabled: (step === "generation" || step === "initiator") && Boolean(activeClarificationSession?.id),
+    enabled: (step === "generation" || step === "initiator") && Boolean(generationId),
     queryFn: () =>
       getContractGeneration(
         effectiveSelectedSlug,
-        activeClarificationSession?.id ?? "",
+        generationId ?? "",
       ),
-    queryKey: queryKeys.templates.generation(activeClarificationSession?.id ?? ""),
+    queryKey: queryKeys.templates.generation(generationId ?? ""),
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === "COMPLETED" || status === "FAILED" ? false : 1_200;
@@ -1327,7 +1336,7 @@ function CreateDealScreen({
     );
   }
 
-  if (renderedStep === "generation" && activeClarificationSession) {
+  if (renderedStep === "generation" && generationId) {
     return (
       <ContractGenerationScreen
         generation={generation.data ?? null}
