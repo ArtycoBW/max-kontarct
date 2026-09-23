@@ -53,6 +53,23 @@ describe("FilesService ACL", () => {
     expect(prisma.dealFile.findMany).not.toHaveBeenCalled();
   });
 
+  it("does not request a passport scan when complete passport data is in the profile", async () => {
+    const requirement = { id: "identity", title: "Документ, удостоверяющий личность", key: "identity_document", description: "Паспорт стороны", required: true };
+    const profile = {
+      birthDate: new Date("1990-01-01T00:00:00.000Z"), firstName: "Анна", lastName: "Примерова",
+      passportDetails: { series: "1234", number: "567890", issuedAt: "2020-01-02", issuer: "МВД", divisionCode: "123-456", birthPlace: "Казань", gender: "Ж" },
+    };
+    prisma.deal.findUnique.mockResolvedValue({
+      ...deal([USER_ID, OTHER_USER_ID]),
+      parties: [{ userId: USER_ID, user: { profile } }, { userId: OTHER_USER_ID, user: { profile: null } }],
+      templateVersion: { documentRequirements: [requirement] },
+    });
+
+    await expect(service.getWorkspace(USER_ID, DEAL_ID)).resolves.toMatchObject({
+      requirements: [{ canUpload: false, required: false, satisfiedByProfile: true, title: requirement.title }],
+    });
+  });
+
   it("applies the larger capacity only to evidence, before storage", async () => {
     service = new FilesService(prisma, storage, new ConfigService({
       FILE_UPLOAD_MAX_BYTES: 8, FILE_EVIDENCE_MAX_BYTES: 16, S3_BUCKET: "private",

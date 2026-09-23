@@ -79,6 +79,7 @@ const workspaceSelect = {
               firstName: true,
               lastName: true,
               middleName: true,
+              passportDetails: true,
             },
           },
         },
@@ -598,8 +599,35 @@ export class DealInvitationsService {
   }
 
   async workspace(userId: string, dealId: string): Promise<DealWorkspaceResponse> {
+    await this.reconcileDocumentStage(userId, dealId);
     const record = await this.findWorkspace(dealId, userId);
     return toWorkspace(record, userId);
+  }
+
+  private async reconcileDocumentStage(userId: string, dealId: string): Promise<void> {
+    await this.prisma.$transaction(async (transaction) => {
+      const deal = await transaction.deal.findFirst({
+        select: { status: true, updatedAt: true },
+        where: { id: dealId, parties: { some: { userId } } },
+      });
+      if (!deal || ![DealStatus.COUNTERPARTY_JOINED, DealStatus.DOCUMENTS_PENDING, DealStatus.DOCUMENTS_REVIEW].some(status => status === deal.status)) return;
+      const status = await loadDocumentStage(transaction, dealId);
+      if (status === deal.status) return;
+      const updated = await transaction.deal.updateMany({
+        data: { status, updatedAt: new Date() },
+        where: { id: dealId, status: deal.status, updatedAt: deal.updatedAt },
+      });
+      if (updated.count !== 1) return;
+      await transaction.auditEvent.create({
+        data: {
+          actorUserId: userId,
+          entityId: dealId,
+          entityType: "Deal",
+          eventType: "DEAL_DOCUMENT_STAGE_RECONCILED",
+          metadata: { documentStage: status },
+        },
+      });
+    });
   }
 
   async approve(
@@ -608,6 +636,7 @@ export class DealInvitationsService {
     versionId: string,
     input: ApproveDealVersionRequest,
   ): Promise<DealApprovalResponse> {
+    await this.reconcileDocumentStage(userId, dealId);
     const record = await this.findWorkspace(dealId, userId);
     const version = requireWorkspaceVersion(record);
     if (version.id !== versionId) throw versionConflict();

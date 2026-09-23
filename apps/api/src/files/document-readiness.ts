@@ -2,7 +2,7 @@ import { DealStatus, type Prisma } from "@prisma/client";
 import { requiredForParty } from "./document-policy";
 
 type ReadinessInput = Parameters<typeof requiredForParty>[0] & {
-  parties: Array<{ userId: string }>;
+  parties: Array<{ userId: string; user?: { profile?: { birthDate?: unknown; firstName?: unknown; lastName?: unknown; passportDetails?: unknown } | null } | null }>;
   files: Array<{ ownerUserId: string; requirementId: string | null; reviewStatus: string }>;
 };
 
@@ -24,7 +24,12 @@ export async function loadDocumentStage(transaction: Prisma.TransactionClient, d
     where: { id: dealId },
     select: {
       initiatorUserId: true,
-      parties: { select: { userId: true } },
+      parties: {
+        select: {
+          userId: true,
+          user: { select: { profile: { select: { birthDate: true, firstName: true, lastName: true, passportDetails: true } } } },
+        },
+      },
       versions: { orderBy: { versionNumber: "desc" }, take: 1, select: { terms: true } },
       templateVersion: { select: { documentRequirements: { select: { id: true, key: true, title: true, required: true } } } },
       files: { where: { category: "REQUIREMENT" }, select: { ownerUserId: true, requirementId: true, reviewStatus: true } },

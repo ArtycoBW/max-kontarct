@@ -29,6 +29,7 @@ import {
 
 import { PrismaService } from "../database/prisma.service";
 import { calculateSha256, createPrivateObjectKey } from "../storage/file-security";
+import { loadDocumentStage } from "./document-readiness";
 import {
   STORAGE_SERVICE,
   type StorageService,
@@ -40,7 +41,7 @@ import {
   validateUploadedFile,
 } from "./file-validation";
 
-import { canUploadRequirement, canUploadSubject, isPersonalRequirement, requiredForParty } from "./document-policy";
+import { canUploadRequirement, canUploadSubject, isPersonalRequirement, passportProfileSatisfiesRequirement, requiredForParty } from "./document-policy";
 
 @Injectable()
 export class FilesService {
@@ -84,10 +85,11 @@ export class FilesService {
       maxEvidenceUploadBytes: this.maxEvidenceUploadBytes,
       canUploadEvidence: canUploadSubject(deal, userId),
       requirements: deal.templateVersion.documentRequirements.map((requirement) => ({
-        canUpload: canUploadRequirement(deal, userId, requirement),
+        canUpload: !passportProfileSatisfiesRequirement(deal, userId, requirement) && canUploadRequirement(deal, userId, requirement),
         description: requirement.description,
         id: requirement.id,
-        required: requirement.required,
+        required: requirement.required && !passportProfileSatisfiesRequirement(deal, userId, requirement),
+        satisfiedByProfile: passportProfileSatisfiesRequirement(deal, userId, requirement),
         title: requirement.title,
         uploads: files.filter((file) => file.requirementId === requirement.id).map(format),
       })),
@@ -276,7 +278,7 @@ export class FilesService {
           requestId,
         },
       });
-      await syncInternalReviewTrust(transaction, file.ownerUserId, file.dealId, file.reviewStatus);
+      await syncInternalReviewTrust(transaction, file.ownerUserId, file.dealId, file.requirementId, file.reviewStatus);
       await syncDealReviewStatus(transaction, file.dealId, reviewerUserId);
       return toAdminFileReviewItem(file);
     });
@@ -285,7 +287,16 @@ export class FilesService {
   private async loadDealForParticipant(userId: string, dealId: string) {
     const deal = await this.prisma.deal.findUnique({
       include: {
-        parties: { select: { userId: true } },
+        parties: {
+          select: {
+            userId: true,
+            user: {
+              select: {
+                profile: { select: { birthDate: true, firstName: true, lastName: true, passportDetails: true } },
+              },
+            },
+          },
+        },
         versions: { orderBy: { versionNumber: "desc" }, take: 1, select: { terms: true } },
         templateVersion: {
           include: { documentRequirements: { orderBy: [{ sortOrder: "asc" }, { title: "asc" }] } },
@@ -305,11 +316,19 @@ async function syncInternalReviewTrust(
   transaction: Prisma.TransactionClient,
   userId: string,
   dealId: string,
+  reviewedRequirementId: string | null,
   latestStatus: DealFileReviewStatus,
 ): Promise<void> {
   const deal = await transaction.deal.findUnique({
     select: {
       initiatorUserId: true,
+      parties: {
+        where: { userId },
+        select: {
+          userId: true,
+          user: { select: { profile: { select: { birthDate: true, firstName: true, lastName: true, passportDetails: true } } } },
+        },
+      },
       versions: { orderBy: { versionNumber: "desc" }, take: 1, select: { terms: true } },
       templateVersion: {
         select: { documentRequirements: { select: { id: true, required: true, key: true, title: true } } },
@@ -331,7 +350,7 @@ async function syncInternalReviewTrust(
         },
       })
     : [];
-  const status = latestStatus === DealFileReviewStatus.REJECTED
+  const status = latestStatus === DealFileReviewStatus.REJECTED && (!reviewedRequirementId || requiredIds.includes(reviewedRequirementId))
     ? TrustCheckStatus.REJECTED
     : accepted.length === requiredIds.length
       ? TrustCheckStatus.CONFIRMED
@@ -360,48 +379,26 @@ async function syncDealDocumentsStatus(
 ): Promise<void> {
   const deal = await transaction.deal.findUnique({
     select: {
-      initiatorUserId: true,
-      versions: { orderBy: { versionNumber: "desc" }, take: 1, select: { terms: true } },
       parties: { select: { userId: true } },
       status: true,
-      templateVersion: {
-        select: { documentRequirements: { select: { id: true, required: true, key: true, title: true } } },
-      },
     },
     where: { id: dealId },
   });
   if (!deal || deal.parties.length !== 2 || (deal.status !== DealStatus.DOCUMENTS_PENDING && deal.status !== DealStatus.COUNTERPARTY_JOINED)) return;
-  const requiredIds = deal.templateVersion.documentRequirements
-    .filter(({ required }) => required)
-    .map(({ id }) => id);
-  const uploads = await transaction.dealFile.findMany({
-    select: { ownerUserId: true, requirementId: true },
-    where: {
-      category: DealFileCategory.REQUIREMENT,
-      dealId,
-      requirementId: { in: requiredIds },
-    },
-  });
-  const complete = deal.parties.every((party) =>
-    requiredForParty(deal, party.userId).every((requirementId) =>
-      uploads.some((file) =>
-        file.ownerUserId === party.userId && file.requirementId === requirementId,
-      ),
-    ),
-  );
-  if (!complete) return;
+  const status = await loadDocumentStage(transaction, dealId);
+  if (status === deal.status) return;
   const updated = await transaction.deal.updateMany({
-    data: { status: DealStatus.DOCUMENTS_REVIEW, updatedAt: new Date() },
+    data: { status, updatedAt: new Date() },
     where: { id: dealId, status: { in: [DealStatus.DOCUMENTS_PENDING, DealStatus.COUNTERPARTY_JOINED] } },
   });
-  if (updated.count !== 1) return;
+  if (updated.count !== 1 || status === DealStatus.DOCUMENTS_PENDING) return;
   await transaction.auditEvent.create({
     data: {
       actorUserId,
       entityId: dealId,
       entityType: "Deal",
       eventType: "DEAL_DOCUMENTS_SUBMITTED",
-      metadata: { requiredDocumentsPerParty: requiredIds.length },
+      metadata: { documentStage: status },
     },
   });
 }
@@ -414,7 +411,12 @@ async function syncDealReviewStatus(
   const deal = await transaction.deal.findUnique({
     select: {
       initiatorUserId: true,
-      parties: { select: { userId: true } },
+      parties: {
+        select: {
+          userId: true,
+          user: { select: { profile: { select: { birthDate: true, firstName: true, lastName: true, passportDetails: true } } } },
+        },
+      },
       status: true,
       templateVersion: {
         select: { documentRequirements: { select: { id: true, required: true, key: true, title: true } } },

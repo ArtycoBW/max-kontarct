@@ -475,6 +475,7 @@ export interface DealDocumentRequirementResponse {
   description: string | null;
   id: string;
   required: boolean;
+  satisfiedByProfile?: boolean;
   title: string;
   uploads: DealFileResponse[];
 }

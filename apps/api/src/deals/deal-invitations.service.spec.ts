@@ -21,7 +21,7 @@ describe("DealInvitationsService", () => {
   const transaction = {
     $executeRaw: jest.fn(),
     auditEvent: { create: jest.fn() },
-    deal: { updateMany: jest.fn(), findUniqueOrThrow: jest.fn() },
+    deal: { updateMany: jest.fn(), findFirst: jest.fn().mockResolvedValue(null), findUniqueOrThrow: jest.fn() },
     dealFile: { findMany: jest.fn() },
     dealApproval: { create: jest.fn(), upsert: jest.fn() },
     dealVersion: { updateMany: jest.fn() },
@@ -71,6 +71,7 @@ describe("DealInvitationsService", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    transaction.deal.findFirst.mockResolvedValue(null);
     transaction.$executeRaw.mockResolvedValue(1);
     dealFindFirst.mockResolvedValue(workspaceRecord());
     transaction.deal.updateMany.mockResolvedValue({ count: 1 });
@@ -230,6 +231,37 @@ describe("DealInvitationsService", () => {
         where: { id: dealId, parties: { some: { userId: counterpartyId } } },
       }),
     );
+  });
+
+  it("moves an existing deal to terms review when both profiles already contain passport data", async () => {
+    const updatedAt = new Date("2026-08-31T12:00:00.000Z");
+    const profile = {
+      addressValue: "г. Москва", birthDate: new Date("1990-01-01T00:00:00.000Z"), email: null,
+      firstName: "Анна", lastName: "Примерова", middleName: null,
+      passportDetails: { series: "1234", number: "567890", issuedAt: "2020-01-02", issuer: "МВД", divisionCode: "123-456", birthPlace: "Казань", gender: "Ж" },
+    };
+    transaction.deal.findFirst.mockResolvedValue({ status: DealStatus.DOCUMENTS_PENDING, updatedAt });
+    transaction.deal.findUniqueOrThrow.mockResolvedValue({
+      ...workspaceRecord(),
+      parties: [
+        { ...initiatorParty(), user: { ...initiatorParty().user, profile } },
+        { ...counterpartyParty(), user: { ...counterpartyParty().user, profile } },
+      ],
+      templateVersion: { documentRequirements: [{ id: "identity", key: "identity_document", title: "Документ, удостоверяющий личность", required: true }] },
+      files: [],
+    });
+    dealFindFirst.mockResolvedValue(workspaceRecord({
+      parties: [initiatorParty(), counterpartyParty()],
+      status: DealStatus.TERMS_REVIEW,
+    }));
+
+    const result = await service.workspace(initiatorId, dealId);
+
+    expect(result.status).toBe(DealStatus.TERMS_REVIEW);
+    expect(transaction.deal.updateMany).toHaveBeenCalledWith({
+      data: { status: DealStatus.TERMS_REVIEW, updatedAt: expect.any(Date) },
+      where: { id: dealId, status: DealStatus.DOCUMENTS_PENDING, updatedAt },
+    });
   });
 
   it("joins atomically with required consents even when notifications were declined", async () => {

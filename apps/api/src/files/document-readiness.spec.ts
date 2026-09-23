@@ -29,6 +29,17 @@ describe("document stage when entering agreement", () => {
   it("opens approval without mandatory requirements", () => {
     expect(documentStage({ ...deal([]), templateVersion: { documentRequirements: [{ ...subject, required: false }] } })).toBe("TERMS_REVIEW");
   });
+  it("opens approval when both parties have complete passport data without identity scans", () => {
+    const passportProfile = {
+      birthDate: new Date("1990-01-01T00:00:00.000Z"), firstName: "Имя", lastName: "Фамилия",
+      passportDetails: { series: "1234", number: "567890", issuedAt: "2020-01-02", issuer: "МВД", divisionCode: "123-456", birthPlace: "Казань", gender: "М" },
+    };
+    const data = {
+      ...deal([]),
+      parties: [{ userId: "seller", user: { profile: passportProfile } }, { userId: "buyer", user: { profile: passportProfile } }],
+    };
+    expect(documentStage(data)).toBe("TERMS_REVIEW");
+  });
   it.each(["INITIATOR", "COUNTERPARTY"])("requires subject files only from %s, identity from both", responsible => {
     const data = { ...deal(), versions: [{ terms: { subjectDocumentsParty: responsible } }], templateVersion: { documentRequirements: [identity, subject] } };
     expect(documentStage(data)).toBe("DOCUMENTS_PENDING");

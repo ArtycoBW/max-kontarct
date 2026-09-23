@@ -1,4 +1,4 @@
-import { canUploadSubject, requiredForParty } from "./document-policy";
+import { canUploadSubject, hasCompletePassportProfile, requiredForParty } from "./document-policy";
 
 describe("document responsibilities", () => {
   const templateVersion = { documentRequirements: [
@@ -15,5 +15,24 @@ describe("document responsibilities", () => {
   });
   it("does not silently reinterpret roles in old deals", () => {
     expect(requiredForParty({ templateVersion }, "first")).toEqual(["passport", "property"]);
+  });
+
+  it("uses complete passport data in the profile instead of requiring an identity scan", () => {
+    const profile = {
+      birthDate: new Date("1990-01-01T00:00:00.000Z"), firstName: "Анна", lastName: "Примерова",
+      passportDetails: { series: "12 34", number: "567890", issuedAt: "2020-01-02", issuer: "МВД", divisionCode: "123-456", birthPlace: "Казань", gender: "Ж" },
+    };
+    const deal = { initiatorUserId: "first", parties: [{ userId: "first", user: { profile } }], templateVersion };
+    expect(hasCompletePassportProfile(profile)).toBe(true);
+    expect(requiredForParty(deal, "first")).toEqual(["property"]);
+  });
+
+  it("still requires an identity scan when passport details are incomplete", () => {
+    const deal = {
+      parties: [{ userId: "first", user: { profile: { firstName: "Анна", lastName: "Примерова", birthDate: "1990-01-01", passportDetails: { series: "1234", number: "567890" } } } }],
+      templateVersion,
+    };
+    expect(hasCompletePassportProfile(deal.parties[0]?.user.profile)).toBe(false);
+    expect(requiredForParty(deal, "first")).toEqual(["passport", "property"]);
   });
 });

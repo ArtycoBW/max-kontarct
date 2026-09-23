@@ -208,9 +208,9 @@ function RequirementCard({
 }) {
   return (
     <Card className="requirement-upload-card">
-      <header><span><FileCheck2 size={17} /></span><i><strong>{requirement.title}</strong><small>{requirement.description ?? "Документ по условиям сделки"}</small></i><em>{requirement.required ? "Обязательно" : "Дополнительно"}</em></header>
+      <header><span><FileCheck2 size={17} /></span><i><strong>{requirement.title}</strong><small>{requirement.satisfiedByProfile ? "Паспортные данные указаны в профиле" : requirement.description ?? "Документ по условиям сделки"}</small></i><em>{requirement.satisfiedByProfile ? "Из профиля" : requirement.required ? "Обязательно" : "Дополнительно"}</em></header>
       <DealFileList dealId={dealId} files={requirement.uploads} showReview />
-      {requirement.canUpload !== false ? <UploadButton accept={accept} disabled={disabled} label={requirement.uploads.length ? "Загрузить ещё" : "Выбрать файл"} onSelect={onUpload} /> : <p className="field-description">Загружает другая сторона. От вас этот документ не требуется.</p>}
+      {requirement.satisfiedByProfile ? <p className="field-description">Скан загружать не нужно — реквизиты для договора возьмём из вашего профиля.</p> : requirement.canUpload !== false ? <UploadButton accept={accept} disabled={disabled} label={requirement.uploads.length ? "Загрузить ещё" : "Выбрать файл"} onSelect={onUpload} /> : <p className="field-description">Загружает другая сторона. От вас этот документ не требуется.</p>}
     </Card>
   );
 }
