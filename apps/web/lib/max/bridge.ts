@@ -29,6 +29,8 @@ export function notifyMaxWebAppReady(): boolean {
 
   try {
     webApp.ready();
+    // The native X and back gestures belong to MAX, not the page.
+    try { webApp.enableClosingConfirmation?.(); } catch { /* Older hosts may not support this capability. */ }
     readyWebApps.add(webApp);
     reportBootStage("ready-called");
     return true;

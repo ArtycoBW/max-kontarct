@@ -11,7 +11,7 @@ test("four-point edit supports free corners, preview, cancel, original and local
   });
   const page = await context.newPage(); await page.goto("/"); await onboarding(page);
   await page.getByRole("button", { name: "Профиль", exact: true }).click();
-  await page.getByRole("button", { name: "Считать данные паспорта", exact: true }).click();
+  await page.getByRole("button", { name: "Считать данные паспорта или загрузить скриншот", exact: true }).click();
   const base64 = await page.evaluate(() => {
     const canvas = document.createElement("canvas"); canvas.width = 1500; canvas.height = 1100;
     const ctx = canvas.getContext("2d")!; ctx.fillStyle = "#faf3de"; ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -86,7 +86,7 @@ test("invalid editor image reports an error and cancel restores usable scanner",
   const context = await actor(browser, 76011, "+79997006011");
   const page = await context.newPage(); await page.goto("/"); await onboarding(page);
   await page.getByRole("button", { name: "Профиль", exact: true }).click();
-  await page.getByRole("button", { name: "Считать данные паспорта", exact: true }).click();
+  await page.getByRole("button", { name: "Считать данные паспорта или загрузить скриншот", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Фото: Фото и личные данные", { exact: true }).setInputFiles({ name: "broken.png", mimeType: "image/png", buffer: Buffer.from("invalid pixels") });
   await dialog.getByRole("button", { name: "Редактировать: Фото и личные данные", exact: true }).click();

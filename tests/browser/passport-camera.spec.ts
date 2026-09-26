@@ -68,7 +68,7 @@ async function cameraMock(context: BrowserContext, stubOcr = true) {
 async function openScanner(page: Page) {
   await page.goto("/"); await onboarding(page);
   await page.getByRole("button", { name: "Профиль", exact: true }).click();
-  await page.getByRole("button", { name: "Считать данные паспорта", exact: true }).click();
+  await page.getByRole("button", { name: "Считать данные паспорта или загрузить скриншот", exact: true }).click();
 }
 async function counters(page: Page) {
   return page.evaluate(() => { const state = (window as unknown as TestWindow).cameraTest; return { calls: state.calls.length, stopped: state.stopped }; });
@@ -122,7 +122,7 @@ test("passport camera is opt-in, checks light locally, crops a preview and never
   expect(writes).toEqual([]); expect(external).toEqual([]);
   expect(await (await page.request.get("/api/v1/profile")).json()).toEqual(before);
   await dialog.getByRole("button", { name: "Закрыть окно" }).click();
-  await page.getByRole("button", { name: "Считать данные паспорта", exact: true }).click();
+  await page.getByRole("button", { name: "Считать данные паспорта или загрузить скриншот", exact: true }).click();
   await expect(page.getByRole("dialog").locator(".passport-photo-preview")).toHaveCount(0);
   await context.close();
 });
@@ -264,7 +264,7 @@ test("passport camera stops on cancel, modal close, hidden page and late permiss
   await expect(dialog.getByRole("button", { name: "Сделать снимок", exact: true })).toBeEnabled();
   await dialog.getByRole("button", { name: "Закрыть окно" }).click();
   await expect.poll(() => counters(page)).toEqual({ calls: 2, stopped: 2 });
-  await page.getByRole("button", { name: "Считать данные паспорта", exact: true }).click();
+  await page.getByRole("button", { name: "Считать данные паспорта или загрузить скриншот", exact: true }).click();
   await page.getByRole("button", { name: "Снять: Регистрация", exact: true }).click();
   await expect(dialog.getByRole("button", { name: "Сделать снимок", exact: true })).toBeEnabled();
   await page.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, value: true }); document.dispatchEvent(new Event("visibilitychange")); });

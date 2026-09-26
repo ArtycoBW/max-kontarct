@@ -30,7 +30,7 @@ test("short and long deal lists, profile and documents keep space above navigati
     await expect(page.locator(".deal-list-card")).toHaveCount(count);
     for (const [width, height] of [[320, 320], [390, 844], [1440, 900]]) {
       await page.setViewportSize({ width, height });
-      await checkBottomGap(page, "Создать ещё сделку");
+      await checkBottomGap(page, "Создать новую сделку");
       await page.screenshot({ path: `test-results/deals-${count}-${width}.png`, fullPage: true });
     }
     await page.getByRole("button", { name: "Документы", exact: true }).click();

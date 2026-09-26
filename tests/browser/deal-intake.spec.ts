@@ -29,6 +29,7 @@ test("free description prefills a matching template and survives draft reload", 
   await page.getByRole("button", { name: "Подобрать договор с ИИ" }).click();
   const proposal = page.getByRole("region", { name: "Предложение ИИ" });
   await expect(proposal).toContainText("Оказание услуг");
+  await proposal.getByRole("button", { name: "Что определил ИИ" }).click();
   await expect(proposal).toContainText("15000");
   await expect(proposal).toContainText("20.09.2099");
   for (const width of [320, 390, 1440]) {
@@ -45,11 +46,11 @@ test("free description prefills a matching template and survives draft reload", 
   }
   expect(intakeRequests).toBe(1);
   await page.route("**/api/v1/deals", route => route.request().method() === "POST" ? route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "Не удалось создать черновик" }) }) : route.continue());
-  await page.getByRole("button", { name: "Проверить и продолжить" }).click();
+  await page.getByRole("button", { name: "Заполнить реквизиты" }).click();
   await expect(page.getByText("Не удалось создать черновик", { exact: true })).toBeVisible();
   await expect(proposal).toContainText("15000");
   await page.unroute("**/api/v1/deals");
-  await page.getByRole("button", { name: "Проверить и продолжить" }).click();
+  await page.getByRole("button", { name: "Заполнить реквизиты" }).click();
   await selectSupplierRole(page);
   await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
   await expect(page.getByRole("textbox", { name: "Стоимость услуги, ₽", exact: true })).toHaveValue("15000");
@@ -78,7 +79,7 @@ test("no catalog match leads to an individual project and generation", async ({ 
   await expect(page.getByRole("textbox", { name: "Что хотите оформить?" })).toHaveValue(description);
   await page.getByRole("button", { name: "Подобрать договор с ИИ" }).click();
   await expect(page.getByRole("region", { name: "Предложение ИИ" })).toContainText("Индивидуальный проект");
-  await page.getByRole("button", { name: "Проверить и продолжить" }).click();
+  await page.getByRole("button", { name: "Заполнить реквизиты" }).click();
   await selectSupplierRole(page);
   await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
   await page.getByRole("textbox", { name: "Обязанности инициатора", exact: true }).fill("Передать свой фотоаппарат в исправном состоянии");

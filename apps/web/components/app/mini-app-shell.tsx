@@ -29,7 +29,6 @@ import {
   FileCheck2,
   FileClock,
   Files,
-  FolderOpen,
   Handshake,
   Home,
   PenLine,
@@ -48,6 +47,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { StartScreen } from "@/components/app/start-screen";
 import { Card } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -60,7 +60,7 @@ import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { ProfileScreen } from "@/components/profile/profile-screen";
 import { DealWorkspaceScreen } from "@/components/deals/deal-workspace-screen";
 import { PartyResponsibility } from "@/components/deals/party-responsibility";
-import { EarlyDealData } from "@/components/deals/early-deal-data";
+import { DealRequisites } from "@/components/deals/deal-requisites";
 import { ContractPreview } from "@/components/deals/contract-preview";
 import { SharedDealAttachments } from "@/components/deals/shared-deal-attachments";
 import { DealPanel } from "@/components/deals/deal-panel";
@@ -116,13 +116,13 @@ function ScreenHeader({
   title,
 }: {
   action?: React.ReactNode;
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
 }) {
   return (
     <header className="screen-header">
       <div>
-        <p className="screen-eyebrow">{eyebrow}</p>
+        {eyebrow ? <p className="screen-eyebrow">{eyebrow}</p> : null}
         <h1>{title}</h1>
       </div>
       {action}
@@ -181,7 +181,6 @@ function DealsScreen({
   onNavigate: (tab: AppTab) => void;
   onOpenDraft: (dealId: string) => void;
 }) {
-  const [showInviteHint, setShowInviteHint] = useState(false);
   const deals = useQuery({
     queryFn: getDeals,
     queryKey: queryKeys.deals.list(),
@@ -199,19 +198,6 @@ function DealsScreen({
       )}
     >
       <ScreenHeader
-        action={
-          <Button
-            aria-label="Создать сделку"
-            className="jeton-header-action"
-            onClick={() => onNavigate("create")}
-            size="icon"
-            type="button"
-            variant="unstyled"
-          >
-            <Plus size={20} />
-          </Button>
-        }
-        eyebrow="Рабочее пространство"
         title="Мои сделки"
       />
 
@@ -232,43 +218,13 @@ function DealsScreen({
       {!hasDeals && !deals.isPending && !deals.isError ? (
         <>
           <div className="dashboard-empty-content">
-        <span className="state-icon dashboard-empty-icon">
-          <span>
-            <FolderOpen size={38} />
-            <PenLine size={18} />
-          </span>
-        </span>
-        <h2>У вас пока нет сделок</h2>
-        <p>
-          Создайте первую сделку — соберём договор, документы и подписи в одном
-          процессе.
-        </p>
-        <Card className="empty-flow-hint">
-          <CheckCircle2 size={17} />
-          <span>
-            <strong>До готового договора — несколько шагов</strong>
-            <small>Подскажем, что заполнить и какие документы приложить</small>
-          </span>
-        </Card>
+        <h2>Пока нет сделок</h2>
           </div>
 
           <div className="dashboard-empty-actions">
         <Button className="full-width" onClick={() => onNavigate("create")}>
           <Plus size={18} /> Создать сделку
         </Button>
-        <Button
-          className="full-width"
-          onClick={() => setShowInviteHint((visible) => !visible)}
-          type="button"
-          variant="secondary"
-        >
-          Принять приглашение
-        </Button>
-        {showInviteHint ? (
-          <p className="invitation-hint" role="status">
-            Откройте ссылку приглашения из сообщения MAX.
-          </p>
-        ) : null}
           </div>
         </>
       ) : null}
@@ -279,6 +235,7 @@ function DealsScreen({
             {deals.data?.items.map((deal) => (
               <Button
                 className="deal-list-card"
+                data-status={deal.status}
                 key={deal.id}
                 onClick={() => onOpenDraft(deal.id)}
                 type="button"
@@ -290,6 +247,7 @@ function DealsScreen({
                 <span className="deal-list-copy">
                   <small>{deal.templateTitle}</small>
                   <strong>{deal.title}</strong>
+                  {deal.counterpartyLastName ? <span className="deal-counterparty">С кем: {deal.counterpartyLastName}</span> : null}
                   <span>
                     {formatDealStatus(deal.status)} · версия {deal.versionNumber}
                     {" · обновлён "}{formatDealUpdatedAt(deal.updatedAt)}
@@ -306,7 +264,7 @@ function DealsScreen({
               onClick={() => onNavigate("create")}
               type="button"
             >
-              <Plus size={18} /> Создать ещё сделку
+              <Plus size={18} /> Создать новую сделку
             </Button>
           </div>
         </div>
@@ -466,14 +424,19 @@ function CreateDealScreen({
   const [query, setQuery] = useState("");
   const [creationMode, setCreationMode] = useState<"ai" | "catalog">("ai");
   const [intakeDescription, setIntakeDescription] = useState({ text: "", revision: 0 });
+  const [acceptedIntake, setAcceptedIntake] = useState(false);
   const [saveState, setSaveState] = useState<DraftSaveState>("idle");
   const [selectedSlug, setSelectedSlug] = useState("");
   const [step, setStep] = useState<CreateDealStep>("type");
   useEffect(() => {
     // Substeps share one mounted screen; do not inherit the previous form's
     // scroll position and hide the next heading or validation message.
-    document.querySelector<HTMLElement>(".mini-app-scroll")?.scrollTo({ top: 0, behavior: "instant" });
-  }, [step, questionIndex]);
+    if (step === "description" && acceptedIntake) {
+      document.querySelector<HTMLElement>(".deal-requisites")?.scrollIntoView({ block: "start", behavior: "smooth" });
+    } else {
+      document.querySelector<HTMLElement>(".mini-app-scroll")?.scrollTo({ top: 0, behavior: "instant" });
+    }
+  }, [step, questionIndex, acceptedIntake]);
   const [title, setTitle] = useState("");
   const hydratedDraftId = useRef("");
   const lastSavedFingerprint = useRef("");
@@ -781,6 +744,7 @@ function CreateDealScreen({
         templateVersionId: chosenTemplate.currentVersion.id,
         title: proposal?.title ?? getTemplateDisplayTitle(chosenTemplate.title),
       });
+      setAcceptedIntake(Boolean(proposal));
       setActiveDraftId(created.id);
       setAnswers(proposal?.answers ?? created.draft.answers);
       setSubjectDocumentsParty(created.draft.subjectDocumentsParty ?? null);
@@ -1001,7 +965,71 @@ function CreateDealScreen({
     );
   }
 
-  if (step === "type") {
+  const descriptionForm = (
+        <div className="deal-form deal-form-flow">
+          <Collapsible className="deal-description-details" defaultOpen={!description.trim()}>
+          <CollapsibleTrigger asChild><Button type="button" variant="unstyled" className="collapsible-trigger">Описание сделки: {title}</Button></CollapsibleTrigger>
+          <CollapsibleContent>
+          <label className="form-field">
+            <span>Название сделки</span>
+            <Input
+              aria-invalid={Boolean(descriptionError && !title.trim())}
+              maxLength={160}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                setDescriptionError("");
+              }}
+              placeholder="Например, аренда квартиры"
+              value={title}
+            />
+          </label>
+          <label className="form-field">
+            <span>Краткое описание</span>
+            <Textarea
+              aria-invalid={Boolean(descriptionError && description.trim().length < 10)}
+              id="deal-description"
+              className="deal-description-textarea"
+              maxLength={500}
+              onChange={(event) => {
+                setDescription(event.target.value);
+                setDescriptionError("");
+              }}
+              placeholder="Что передаётся, на какой срок и какие условия важны"
+              value={description}
+            />
+            <small className="field-meta">{description.length}/500</small>
+          </label>
+          <VoiceInput inputId="deal-description" value={description} onChange={value => { setDescription(value); setDescriptionError(""); }} />
+          </CollapsibleContent>
+          </Collapsible>
+          <DealRequisites onSaved={() => { void queryClient.invalidateQueries({ queryKey: queryKeys.deals.all }); }} />
+          <PartyResponsibility slug={effectiveSelectedSlug} value={subjectDocumentsParty} onChange={value => { setSubjectDocumentsParty(value); setDescriptionError(""); }} />
+          {descriptionError ? (
+            <span className="field-error" role="alert">
+              <CircleAlert size={13} /> {descriptionError}
+            </span>
+          ) : null}
+          <EarlyInvitationPanel dealId={activeDraftId} beforeCreate={() => enqueueDraftSave()} disabled={!title.trim() || description.trim().length < 10} />
+          {saveState === "error" ? (
+            <RequestErrorCard
+              message={draftSave.error?.message ?? "Не удалось сохранить черновик"}
+              onRetry={() => void enqueueDraftSave().catch(() => undefined)}
+            />
+          ) : null}
+          <div className="create-flow-action">
+            <Button
+              className="full-width"
+              disabled={saveState === "saving"}
+              onClick={() => void continueDescription()}
+              type="button"
+            >
+              Сохранить и продолжить
+            </Button>
+          </div>
+        </div>
+  );
+
+  if (step === "type" || (step === "description" && acceptedIntake)) {
     return (
       <div className="screen-content create-deal-screen">
         <FlowHeader
@@ -1009,12 +1037,11 @@ function CreateDealScreen({
           onBack={() => {
             void enqueueDraftSave().then(onBack).catch(() => undefined);
           }}
-          title="Выберите тип сделки"
+          title="Опишите свою сделку"
         />
         <p className="screen-copy">
           Опишите задачу своими словами или выберите готовый шаблон.
         </p>
-        <EarlyDealData roleChosen={false} beforeOpen={async () => {}} onProfileSaved={() => { void queryClient.invalidateQueries({ queryKey: queryKeys.profile.all }); }} />
 
         <Tabs value={creationMode} onValueChange={value => setCreationMode(value as "ai" | "catalog")}>
         <TabsList className="deal-creation-tabs" aria-label="Способ создания договора">
@@ -1022,7 +1049,7 @@ function CreateDealScreen({
             <TabsTrigger
               key={mode}
               value={mode}
-              disabled={draftCreation.isPending}
+              disabled={draftCreation.isPending || acceptedIntake}
             >
               {label}
             </TabsTrigger>
@@ -1039,7 +1066,9 @@ function CreateDealScreen({
           active={creationMode === "ai"}
           isCreating={draftCreation.isPending}
           onAccept={proposal => void beginDraft(proposal)}
-        />
+        >
+          {acceptedIntake ? descriptionForm : null}
+        </DealIntakePanel>
         </TabsContent>
 
         <TabsContent value="catalog" forceMount
@@ -1152,74 +1181,12 @@ function CreateDealScreen({
           action={<DraftSaveStatus state={saveState} />}
           eyebrow="Шаг 2 из 5"
           onBack={onBack}
-          title="Опишите сделку"
+          title="Реквизиты для договора"
         />
         <p className="screen-copy">
-          Пишите своими словами — юридические формулировки предложит помощник.
+          Тип договора выбран. Условия можно отредактировать на следующем шаге. Теперь заполните свои реквизиты одним из трёх способов.
         </p>
-        <div className="deal-form deal-form-flow">
-          <label className="form-field">
-            <span>Название сделки</span>
-            <Input
-              aria-invalid={Boolean(descriptionError && !title.trim())}
-              maxLength={160}
-              onChange={(event) => {
-                setTitle(event.target.value);
-                setDescriptionError("");
-              }}
-              placeholder="Например, аренда квартиры"
-              value={title}
-            />
-          </label>
-          <label className="form-field">
-            <span>Краткое описание</span>
-            <Textarea
-              aria-invalid={Boolean(descriptionError && description.trim().length < 10)}
-              id="deal-description"
-              className="deal-description-textarea"
-              maxLength={500}
-              onChange={(event) => {
-                setDescription(event.target.value);
-                setDescriptionError("");
-              }}
-              placeholder="Что передаётся, на какой срок и какие условия важны"
-              value={description}
-            />
-            <small className="field-meta">{description.length}/500</small>
-          </label>
-          <VoiceInput inputId="deal-description" value={description} onChange={value => { setDescription(value); setDescriptionError(""); }} />
-          <PartyResponsibility slug={effectiveSelectedSlug} value={subjectDocumentsParty} onChange={value => { setSubjectDocumentsParty(value); setDescriptionError(""); }} />
-          {activeDraftId ? <EarlyDealData dealId={activeDraftId} roleChosen={Boolean(subjectDocumentsParty)} beforeOpen={() => enqueueDraftSave()} onProfileSaved={() => { void enqueueDraftSave().catch(() => undefined); }} /> : null}
-          {descriptionError ? (
-            <span className="field-error" role="alert">
-              <CircleAlert size={13} /> {descriptionError}
-            </span>
-          ) : null}
-          <Card className="description-helper-card">
-            <PenLine size={18} />
-            <span>
-              <strong>Можно без юридических терминов</strong>
-              <small>Каждый пункт договора можно будет проверить до согласования.</small>
-            </span>
-          </Card>
-          <EarlyInvitationPanel dealId={activeDraftId} beforeCreate={() => enqueueDraftSave()} disabled={!title.trim() || description.trim().length < 10} />
-          {saveState === "error" ? (
-            <RequestErrorCard
-              message={draftSave.error?.message ?? "Не удалось сохранить черновик"}
-              onRetry={() => void enqueueDraftSave().catch(() => undefined)}
-            />
-          ) : null}
-          <div className="create-flow-action">
-            <Button
-              className="full-width"
-              disabled={saveState === "saving"}
-              onClick={() => void continueDescription()}
-              type="button"
-            >
-              Сохранить и продолжить
-            </Button>
-          </div>
-        </div>
+        {descriptionForm}
       </div>
     );
   }

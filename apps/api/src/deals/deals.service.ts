@@ -78,6 +78,7 @@ export class DealsService {
     const records = await this.deals.listOwned(userId);
     return {
       items: records.map((record) => ({
+        counterpartyLastName: record.parties.find(party => party.userId !== userId)?.user.profile?.lastName ?? null,
         id: record.id,
         status: record.status,
         templateTitle: record.templateVersion.template.title,

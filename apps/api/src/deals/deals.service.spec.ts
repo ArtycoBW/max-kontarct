@@ -77,6 +77,23 @@ describe("DealsService", () => {
     repository.findVersionHistory.mockResolvedValue([]);
   });
 
+  it("lists the other participant surname without exposing profile data", async () => {
+    const record = { id: dealId, title: "Сделка", status: DealStatus.DRAFT,
+      updatedAt: new Date("2026-09-26T12:00:00Z"), versions: [{ versionNumber: 1 }],
+      templateVersion: { template: { title: "Купля-продажа" } },
+      parties: [{ userId, user: { profile: { lastName: "Продавцов" } } },
+        { userId: "buyer", user: { profile: { lastName: "Покупателев" } } }],
+    };
+    repository.listOwned.mockResolvedValue([record]);
+    const result = await service.list(userId);
+    expect(result.items[0]?.counterpartyLastName).toBe("Покупателев");
+    expect(result.items[0]).not.toHaveProperty("parties");
+    expect(repository.listOwned).toHaveBeenCalledWith(userId);
+    expect((await service.list("buyer")).items[0]?.counterpartyLastName).toBe("Продавцов");
+    repository.listOwned.mockResolvedValue([{ ...record, parties: [record.parties[0]] }]);
+    expect((await service.list(userId)).items[0]?.counterpartyLastName).toBeNull();
+  });
+
   it("creates the deal, initiator snapshot and first draft version", async () => {
     const result = await service.createDraft(userId, {
       creationPath: "AI_ASSISTED",

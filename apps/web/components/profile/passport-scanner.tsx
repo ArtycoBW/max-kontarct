@@ -29,7 +29,7 @@ const dateFields = new Set(["birthDate", "issuedAt"]);
 export function PassportScanner({ onApply }: { onApply: (data: PassportData) => void }) {
   const [open, setOpen] = useState(false);
   return <Dialog open={open} onOpenChange={setOpen}>
-    <DialogTrigger asChild><Button type="button" variant="outline" className="full-width"><ScanLine size={18} /> Считать данные паспорта</Button></DialogTrigger>
+    <DialogTrigger asChild><Button type="button" variant="outline" className="full-width passport-scan-trigger"><ScanLine size={18} /> Считать данные паспорта или загрузить скриншот</Button></DialogTrigger>
     {open ? <PassportScanDialog onApply={data => { onApply(data); setOpen(false); }} /> : null}
   </Dialog>;
 }
@@ -89,7 +89,7 @@ function PassportScanDialog({ onApply }: { onApply: (data: PassportData) => void
       : cameraPage ? <PassportCamera key={cameraPage} page={cameraPage} onCancel={() => setCameraPage(null)} onCapture={(file, corners) => { if (replace(cameraPage, file, { source: file, rotation: 0, corners: corners ?? fullPhoto() })) setEditingPage(cameraPage); setCameraPage(null); }} /> : <div className="app-modal-body">
     <p className="ocr-privacy"><ShieldCheck size={16} aria-hidden="true" /> Фото обрабатываются только на вашем устройстве. Данные сохранятся после отдельного нажатия «Сохранить профиль».</p>
     {!data ? <>
-      <p>Добавьте до трёх фотографий. Каждый готовый снимок проверится автоматически; результат появится под ним. Разворот с выдачей и личными данными можно загрузить в «Фото и личные данные».</p>
+      <p>Сфотографируйте паспорт или загрузите до трёх фото / скриншотов в JPEG, PNG или WebP. Каждый снимок проверится автоматически. Разворот с выдачей и личными данными можно загрузить в «Фото и личные данные».</p>
       <div className="passport-photo-list">{pages.map(({ key, title, hint }) => <section className="passport-photo" key={key}>
         <div><strong>{title}</strong><small>{hint}</small></div>
         {photos[key] ? <>
@@ -100,7 +100,7 @@ function PassportScanDialog({ onApply }: { onApply: (data: PassportData) => void
             <Button type="button" variant="ghost" aria-label={`Удалить: ${title}`} onClick={() => replace(key)}><Trash2 size={16} /></Button></div>
           <PassportPhotoResult check={photoChecks.checks[key]} title={title} stopped={photoChecks.stopped} onRetry={() => photoChecks.retry(key)} />
         </> : null}
-        <div className="passport-photo-source-actions"><label className="passport-photo-upload"><Upload size={18} /> {photos[key] ? "Заменить фото" : "Загрузить фото"}
+        <div className="passport-photo-source-actions"><label className="passport-photo-upload"><Upload size={18} /> {photos[key] ? "Заменить фото" : "Фото / скриншот"}
           <Input form="passport-ocr-review" type="file" accept="image/jpeg,image/png,image/webp" aria-label={`Фото: ${title}`}
             onChange={event => { const file = event.target.files?.[0]; if (file) replace(key, file); event.target.value = ""; }} />
         </label><Button type="button" variant="outline" onClick={() => { setError(""); setCameraPage(key); }} aria-label={`Снять: ${title}`}><Camera size={18} /> Снять</Button></div>

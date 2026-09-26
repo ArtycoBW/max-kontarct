@@ -264,6 +264,28 @@ textarea:focus-visible {
   color: #321c18;
 }
 
+.start-welcome { padding: clamp(12px, 3dvh, 24px) 18px max(16px, env(safe-area-inset-bottom)); gap: clamp(12px, 3dvh, 24px); }
+.welcome-brand { flex: none; padding-inline: 6px; }
+.welcome-scene { position: relative; display: flex; flex: 1; min-height: 0; align-items: flex-end; padding: 12px; border-radius: 28px; overflow: hidden; background: #d9d1c8; }
+.welcome-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+.welcome-panel { position: relative; width: 100%; padding: clamp(16px, 3dvh, 24px) 18px; border: 1px solid #fff9; border-radius: 23px; background: #faf7f3f2; }
+.welcome-steps { display: grid; gap: clamp(12px, 2.5dvh, 22px); margin: 16px 0 22px; padding-left: 17px; list-style: disc; }
+.welcome-steps li::marker { color: #55746c; font-size: 17px; }
+.welcome-steps h1, .welcome-steps h2 { margin: 0; font-size: clamp(25px, 7.2vw, 32px); font-weight: 500; letter-spacing: -.055em; line-height: 1.08; }
+.welcome-panel .button { gap: 12px; }
+@media (max-height: 590px) {
+  .start-welcome { padding: 10px 14px; gap: 10px; }
+  .welcome-brand .start-story-logo { width: 28px; height: 28px; }
+  .welcome-panel { padding: 14px 16px; }
+  .welcome-steps { gap: 10px; margin-block: 12px 16px; }
+  .welcome-steps h1, .welcome-steps h2 { font-size: clamp(20px, 5.4dvh, 27px); }
+}
+@media (max-height: 400px) {
+  .welcome-brand { display: none; }
+  .welcome-panel { padding: 10px 16px; }
+  .welcome-steps { gap: 6px; margin-block: 8px; }
+}
+
 .start-screen-scroll {
   height: 100%;
   overflow-x: hidden;
@@ -3325,6 +3347,18 @@ button.service-status {
   flex: 1;
   flex-direction: column;
 }
+.dashboard-empty-screen { min-height: 100%; }
+.dashboard-empty-screen .dashboard-empty-content h2 { margin: 0; color: var(--muted); font-size: 17px; letter-spacing: normal; line-height: 1.5; }
+.deal-requisites { display: grid; gap: 12px; padding: 18px; }
+.deal-requisites h2 { margin: 0 0 4px; font-size: 18px; font-weight: 500; }
+.screen-content.profile-screen-embedded { min-height: 0; padding: 0; }
+.deal-requisites p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.deal-requisites .button, .passport-scan-trigger { height: auto; min-height: 48px; white-space: normal; text-align: center; }
+.deal-requisites .button svg, .passport-scan-trigger svg { flex-shrink: 0; }
+.deal-description-details { border: 1px solid var(--border); border-radius: 16px; padding: 14px; }
+.deal-description-details .collapsible-trigger { white-space: normal; text-align: left; font-size: 13px; line-height: 1.5; }
+.deal-description-details .form-field { margin-top: 16px; }
+.intake-result-details { margin-block: 12px; }
 
 .dashboard-empty-content {
   display: flex;
@@ -3469,6 +3503,14 @@ button.service-status {
   border-color: var(--border-strong);
   background: var(--surface-soft);
 }
+.deal-list-card[data-status="DRAFT"] { background: #f6f6f6; border-color: #e2e2e2; box-shadow: none; }
+.deal-list-card[data-status="DRAFT"] .deal-list-icon { background: #eaeaea; color: #737373; }
+.deal-list-card[data-status="DRAFT"] .deal-list-copy small { color: #737373; }
+.deal-list-card[data-status="COMPLETED"] { background: #effaf4; border-color: #bfdfce; box-shadow: none; }
+.deal-list-card[data-status="COMPLETED"] .deal-list-icon { background: #dcefe4; color: #168153; }
+.deal-list-card[data-status="COMPLETED"] .deal-list-copy small,
+.deal-list-card[data-status="COMPLETED"] .deal-list-copy > span { color: #236747; }
+.deal-list-copy .deal-counterparty { color: var(--ink-deep); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .deal-list-icon {
   display: grid;

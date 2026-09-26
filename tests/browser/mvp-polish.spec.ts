@@ -7,9 +7,9 @@ test("vertical start shows every stage and legal modal chrome stays visible on s
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("/");
   const steps = page.getByRole("list", { name: "Этапы оформления договора" }).getByRole("listitem");
-  await expect(steps).toHaveCount(4);
+  await expect(steps).toHaveCount(3);
   await expect(page.locator(".start-screen-chapters, .legal-document-link")).toHaveCount(0);
-  await expect(page.locator(".start-story-canvas")).toHaveCount(1);
+  await expect(page.locator("canvas")).toHaveCount(0);
   for (const width of [320, 390, 1440]) {
     await page.setViewportSize({ width, height: 640 });
     await noOverflow(page);
@@ -21,10 +21,8 @@ test("vertical start shows every stage and legal modal chrome stays visible on s
       previousBottom = box.y + box.height;
     }
     const action = page.getByRole("button", { name: "Начать работу с Макс-Контракт" });
-    await expect(steps.last().getByRole("button", { name: "Начать работу с Макс-Контракт" })).toHaveCount(1);
-    const lastCopy = (await steps.last().getByRole("paragraph").boundingBox())!;
-    expect((await action.boundingBox())!.y).toBeGreaterThan(lastCopy.y + lastCopy.height);
-    expect((await action.boundingBox())!.y + (await action.boundingBox())!.height).toBeLessThanOrEqual(previousBottom);
+    await expect(action).toBeInViewport();
+    expect((await action.boundingBox())!.y).toBeGreaterThan(previousBottom);
   }
   await page.screenshot({ path: "test-results/start-without-legal-link.png" });
   await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
@@ -120,7 +118,7 @@ test("real local passport OCR: three images, review before persistence, private 
   const page = await context.newPage(); await page.goto("/"); await onboarding(page);
   await page.getByRole("button", { name: "Профиль", exact: true }).click();
   const before = await (await page.request.get("/api/v1/profile")).json();
-  await page.getByRole("button", { name: "Считать данные паспорта", exact: true }).click();
+  await page.getByRole("button", { name: "Считать данные паспорта или загрузить скриншот", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Фото: Фото и личные данные", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ", "ФАМИЛИЯ ПРИМЕРОВ", "ИМЯ ИВАН", "ОТЧЕСТВО ИВАНОВИЧ", "ДАТА РОЖДЕНИЯ 01.02.1990", "ПОЛ МУЖ.", "МЕСТО РОЖДЕНИЯ Г. ПРИМЕР", "СЕРИЯ НОМЕР", "00 00 000000"]));
   await dialog.getByLabel("Фото: Кем выдан паспорт", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ", "ПАСПОРТ ВЫДАН", "ТЕСТОВЫМ ОТДЕЛОМ", "ДАТА ВЫДАЧИ 02.03.2010", "КОД ПОДРАЗДЕЛЕНИЯ 000-000"]));
@@ -160,7 +158,7 @@ test("real local passport OCR: three images, review before persistence, private 
   await page.reload(); await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
   await page.getByRole("button", { name: "Профиль", exact: true }).click();
   await expect(page.getByLabel("Имя", { exact: true })).toHaveValue("Иван");
-  await page.getByRole("button", { name: "Считать данные паспорта", exact: true }).click();
+  await page.getByRole("button", { name: "Считать данные паспорта или загрузить скриншот", exact: true }).click();
   await dialog.getByLabel("Фото: Фото и личные данные", { exact: true }).setInputFiles({ name: "bad.png", mimeType: "image/png", buffer: Buffer.from("not an image") });
   await expect(dialog.getByRole("alert")).toBeVisible({ timeout: 30_000 });
   await dialog.getByRole("button", { name: "Удалить: Фото и личные данные" }).click();
@@ -185,7 +183,7 @@ test("real local OCR handles 90/180/270 degree photos after four-point editing",
   const context = await actor(browser, 73018, "+79997003018");
   const page = await context.newPage(); await page.goto("/"); await onboarding(page);
   await page.getByRole("button", { name: "Профиль", exact: true }).click();
-  await page.getByRole("button", { name: "Считать данные паспорта", exact: true }).click();
+  await page.getByRole("button", { name: "Считать данные паспорта или загрузить скриншот", exact: true }).click();
   const dialog = page.getByRole("dialog"), writes: string[] = [], external: string[] = [];
   page.on("request", request => {
     if (["POST", "PUT", "PATCH"].includes(request.method())) writes.push(request.url());
@@ -218,7 +216,7 @@ test("real local passport OCR combines uncropped sideways photos without saving 
   const page = await context.newPage(); await page.goto("/"); await onboarding(page);
   await page.getByRole("button", { name: "Профиль", exact: true }).click();
   const before = await (await page.request.get("/api/v1/profile")).json();
-  await page.getByRole("button", { name: "Считать данные паспорта", exact: true }).click();
+  await page.getByRole("button", { name: "Считать данные паспорта или загрузить скриншот", exact: true }).click();
   const dialog = page.getByRole("dialog"), writes: string[] = [], external: string[] = [];
   page.on("request", req => { if (["POST", "PUT", "PATCH"].includes(req.method())) writes.push(req.url()); if (/^https?:/.test(req.url()) && new URL(req.url()).origin !== "http://127.0.0.1:4300") external.push(req.url()); });
   await dialog.getByLabel("Фото: Фото и личные данные", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ", "ФАМИЛИЯ ПРИМЕРОВ", "ИМЯ ИВАН", "ОТЧЕСТВО ИВАНОВИЧ", "ДАТА РОЖДЕНИЯ 01.02.1990", "ПОЛ МУЖ.", "МЕСТО РОЖДЕНИЯ Г. ПРИМЕР", "СЕРИЯ НОМЕР", "00 00 000000"], 90, true));
@@ -244,7 +242,7 @@ test("OCR releases the worker on a model failure and on cancellation during load
   const context = await actor(browser, 73014, "+79997003014");
   const page = await context.newPage(); await page.goto("/"); await onboarding(page);
   await page.getByRole("button", { name: "Профиль", exact: true }).click();
-  await page.getByRole("button", { name: "Считать данные паспорта", exact: true }).click();
+  await page.getByRole("button", { name: "Считать данные паспорта или загрузить скриншот", exact: true }).click();
   const dialog = page.getByRole("dialog");
   // Install failure routes before upload, since photo checking is now automatic.
   await context.route("**/ocr/lang/*.traineddata.gz", route => route.fulfill({ status: 503, body: "model unavailable" }));
@@ -271,7 +269,7 @@ test("passport OCR review groups inline issues and clears them after manual corr
   const context = await actor(browser, 73016, "+79997003016");
   const page = await context.newPage(); await page.goto("/"); await onboarding(page);
   await page.getByRole("button", { name: "Профиль", exact: true }).click();
-  await page.getByRole("button", { name: "Считать данные паспорта", exact: true }).click();
+  await page.getByRole("button", { name: "Считать данные паспорта или загрузить скриншот", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Фото: Фото и личные данные", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ", "ИМЯ ИВАН", "ДАТА РОЖДЕНИЯ 01.02.1990", "ПОЛ МУЖ."]));
   await dialog.getByLabel("Фото: Регистрация", { exact: true }).setInputFiles(await specimen(page, ["ОБРАЗЕЦ ДЛЯ ТЕСТИРОВАНИЯ", "ЗАРЕГИСТРИРОВАН", "Г. ПРИМЕР"]));

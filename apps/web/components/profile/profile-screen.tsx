@@ -94,17 +94,19 @@ const emptyProfile: ProfileFormValues = {
 export function ProfileScreen({
   fallbackPhone,
   embedded = false,
+  initialDetails,
   onSaved,
 }: {
   fallbackPhone?: VerifiedPhone;
   embedded?: boolean;
+  initialDetails?: Partial<PassportData>;
   onSaved?: () => void;
 }) {
   const auth = useAuth();
   const queryClient = useQueryClient();
   const [saved, setSaved] = useState(false);
-  const [scanned, setScanned] = useState(false);
-  const [passportOpen, setPassportOpen] = useState(false);
+  const [scanned, setScanned] = useState(Boolean(initialDetails && Object.keys(initialDetails).length));
+  const [passportOpen, setPassportOpen] = useState(embedded);
   const profile = useQuery({
     queryFn: getProfile,
     queryKey: queryKeys.profile.current(),
@@ -146,8 +148,16 @@ export function ProfileScreen({
   useEffect(() => {
     if (profile.data) {
       form.reset(toFormValues(profile.data));
+      if (initialDetails) {
+        for (const key of ["firstName", "lastName", "middleName", "birthDate", "address"] as const) {
+          if (initialDetails[key]) form.setValue(key, initialDetails[key], { shouldDirty: true, shouldValidate: true });
+        }
+        for (const key of passportKeys) {
+          if (initialDetails[key]) form.setValue(`passport.${key}`, initialDetails[key], { shouldDirty: true, shouldValidate: true });
+        }
+      }
     }
-  }, [form, profile.data]);
+  }, [form, profile.data, initialDetails]);
 
   useEffect(() => {
     if (!saved) return;
@@ -199,7 +209,7 @@ export function ProfileScreen({
   };
 
   return (
-    <div className="screen-content profile-screen">
+    <div className={`screen-content profile-screen${embedded ? " profile-screen-embedded" : ""}`}>
       {!embedded ? <header className="screen-header">
         <div>
           <p className="screen-eyebrow">Личные данные</p>
@@ -207,14 +217,14 @@ export function ProfileScreen({
         </div>
       </header> : null}
 
-      <Card className="profile-card">
+      {!embedded ? <Card className="profile-card">
         <span className="profile-avatar"><UserRound size={27} /></span>
         <div>
           <span className="profile-connection"><Check size={12} /> MAX подключён</span>
           <h2>{displayName || "Пользователь MAX"}</h2>
           <p>{identity}</p>
         </div>
-      </Card>
+      </Card> : null}
 
       {!embedded && (auth.user?.role === "ADMIN" || auth.user?.role === "SUPPORT") ? (
         <Button asChild className="profile-admin-link" variant="outline">
@@ -246,8 +256,7 @@ export function ProfileScreen({
           <ShieldCheck size={20} />
         </div>
 
-        <PasteProfileDetails onApply={applyDetails} />
-        <PassportScanner onApply={applyDetails} />
+        {!initialDetails ? <><PasteProfileDetails onApply={applyDetails} /><PassportScanner onApply={applyDetails} /></> : null}
         {scanned ? <p className="validation-success" role="status">Данные перенесены в форму. Проверьте их и нажмите «Сохранить профиль».</p> : null}
 
         <ProfileField error={form.formState.errors.lastName?.message} inputId="profile-last-name" label="Фамилия">

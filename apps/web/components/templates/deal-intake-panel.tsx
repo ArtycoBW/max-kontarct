@@ -2,15 +2,17 @@
 
 import type { DealIntakeResponse } from "@max-contract/contracts";
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
 import { VoiceInput } from "@/components/ui/voice-input";
 import { suggestDeal } from "@/lib/api/templates";
 
-export function DealIntakePanel({ initialDescription = "", isCreating, active = true, onAccept }: {
+export function DealIntakePanel({ initialDescription = "", isCreating, active = true, onAccept, children }: {
+  children?: ReactNode;
   initialDescription?: string;
   isCreating: boolean;
   active?: boolean;
@@ -28,11 +30,11 @@ export function DealIntakePanel({ initialDescription = "", isCreating, active = 
   }, [initialDescription]);
   const intake = useMutation({ mutationFn: suggestDeal });
   const proposal = intake.data;
-  const busy = intake.isPending || isCreating;
+  const busy = intake.isPending || isCreating || Boolean(children);
   return (
-    <Card className="deal-intake-panel">
+    <><Card className="deal-intake-panel">
       <h2><Sparkles size={18} aria-hidden="true" /> Договор по вашему описанию</h2>
-      <p>Опишите задачу — ИИ предложит тип договора и перенесёт известные условия в анкету. Если шаблона нет, подготовим индивидуальный проект.</p>
+      <p>Опишите задачу — ИИ предложит тип договора и перенесёт известные условия в шаблон.</p>
       <label className="form-field" ref={inputRef}>
         <span>Что хотите оформить?</span>
         <Textarea
@@ -50,17 +52,19 @@ export function DealIntakePanel({ initialDescription = "", isCreating, active = 
       <VoiceInput inputId={descriptionId} value={description} disabled={busy || !active} onChange={value => { setDescription(value); setValidationError(""); intake.reset(); }} />
       {validationError ? <p className="field-error" role="alert">{validationError}</p> : null}
       {intake.isError ? <p className="field-error" role="alert">{intake.error.message}</p> : null}
-      <Button className="full-width" disabled={busy} onClick={() => {
+      {!children ? <Button className="full-width" disabled={busy} onClick={() => {
         if (description.trim().length < 10) { setValidationError("Опишите задачу хотя бы в нескольких словах — от 10 символов."); return; }
         intake.mutate({ description: description.trim() });
       }} type="button">
         {intake.isPending ? "ИИ анализирует описание…" : proposal ? "Проанализировать повторно" : "Подобрать договор с ИИ"}
-      </Button>
+      </Button> : null}
       {proposal ? (
         <section className="deal-intake-result" aria-label="Предложение ИИ" aria-live="polite">
           <strong>{proposal.mode === "INDIVIDUAL" ? "Индивидуальный проект" : proposal.template.title}</strong>
-          <p>{proposal.reason}</p>
-          <p>Название: {proposal.title}</p>
+          <p>Основа договора готова. Условия можно будет проверить и отредактировать на следующих шагах. Теперь заполните реквизиты для договора.</p>
+          {proposal.mode === "INDIVIDUAL" ? <p className="deal-intake-warning">Это индивидуальный проект ИИ, а не проверенный шаблон. Проверьте условия перед подписанием.</p> : null}
+          <Collapsible className="intake-result-details"><CollapsibleTrigger asChild><Button type="button" variant="ghost">Что определил ИИ</Button></CollapsibleTrigger><CollapsibleContent>
+          <p>{proposal.reason}</p><p>Название: {proposal.title}</p>
           <dl>
             {Object.entries(proposal.answers).map(([key, value]) => {
               const fields = proposal.template.currentVersion.questionnaireSchema.properties as Record<string, { title?: string; format?: string }>;
@@ -71,12 +75,12 @@ export function DealIntakePanel({ initialDescription = "", isCreating, active = 
           </dl>
           {!Object.keys(proposal.answers).length ? <p>Недостающие условия можно заполнить на следующем шаге.</p> : null}
           {proposal.warnings.map((warning, index) => <p className="deal-intake-warning" key={index}>{warning}</p>)}
-          <p>Это предложение ИИ. Проверьте тип договора и значения: на следующих шагах их можно исправить.</p>
-          <Button className="full-width" disabled={busy} onClick={() => onAccept(proposal)} type="button">
-            {isCreating ? "Сохраняем…" : "Проверить и продолжить"}
-          </Button>
+          </CollapsibleContent></Collapsible>
+          {!children ? <Button className="full-width" disabled={busy} onClick={() => onAccept(proposal)} type="button">
+            {isCreating ? "Сохраняем…" : "Заполнить реквизиты"}
+          </Button> : null}
         </section>
       ) : null}
-    </Card>
+    </Card>{children}</>
   );
 }

@@ -6,6 +6,7 @@ interface MaxWebApp {
   shareMaxContent?: (params: { link?: string; text?: string }) => void | Promise<void>;
   platform?: "android" | "desktop" | "ios" | "web" | string;
   ready?: () => void;
+  enableClosingConfirmation?: () => void;
   requestContact?: () => Promise<
     | {
         authDate: string;

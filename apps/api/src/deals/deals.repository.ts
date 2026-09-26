@@ -40,6 +40,7 @@ const dealDraftSelect = {
 
 const dealListSelect = {
   id: true,
+  parties: { select: { userId: true, user: { select: { profile: { select: { lastName: true } } } } } },
   status: true,
   templateVersion: { select: { template: { select: { title: true } } } },
   title: true,

@@ -12,6 +12,18 @@ function setWindow(value: Partial<Window>): void {
 }
 
 describe("MAX Bridge startup", () => {
+  it("enables the native close confirmation once when the SDK is ready", () => {
+    const enableClosingConfirmation = jest.fn();
+    setWindow({ WebApp: { initData: "", ready: jest.fn(), enableClosingConfirmation } });
+    expect(notifyMaxWebAppReady()).toBe(true);
+    expect(notifyMaxWebAppReady()).toBe(true);
+    expect(enableClosingConfirmation).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps startup working when close confirmation is unsupported", () => {
+    setWindow({ WebApp: { initData: "", ready: jest.fn(), enableClosingConfirmation: () => { throw new Error("unsupported"); } } });
+    expect(notifyMaxWebAppReady()).toBe(true);
+  });
   beforeEach(() => {
     jest.useFakeTimers();
   });

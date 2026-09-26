@@ -113,6 +113,7 @@ export interface DealDraftResponse {
 }
 
 export interface DealListItem {
+  counterpartyLastName?: string | null;
   id: string;
   status: DealStatus;
   templateTitle: string;
