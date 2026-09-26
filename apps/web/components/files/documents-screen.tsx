@@ -42,14 +42,16 @@ export function DocumentsScreen({
   onBack,
   onSelectDeal,
   materialsOnly = false,
+  beforeUpload,
 }: {
   dealId: string | null;
   onBack: () => void;
   onSelectDeal: (dealId: string) => void;
   materialsOnly?: boolean;
+  beforeUpload?: () => Promise<void>;
 }) {
   if (!dealId) return <DealDocumentPicker onSelectDeal={onSelectDeal} />;
-  return <DealDocuments key={dealId} dealId={dealId} onBack={onBack} materialsOnly={materialsOnly} />;
+  return <DealDocuments key={dealId} dealId={dealId} onBack={onBack} materialsOnly={materialsOnly} beforeUpload={beforeUpload} />;
 }
 
 function DealDocumentPicker({ onSelectDeal }: { onSelectDeal: (dealId: string) => void }) {
@@ -77,7 +79,7 @@ function DealDocumentPicker({ onSelectDeal }: { onSelectDeal: (dealId: string) =
   );
 }
 
-function DealDocuments({ dealId, onBack, materialsOnly }: { dealId: string; onBack: () => void; materialsOnly: boolean }) {
+function DealDocuments({ dealId, onBack, materialsOnly, beforeUpload }: { dealId: string; onBack: () => void; materialsOnly: boolean; beforeUpload?: () => Promise<void> }) {
   const queryClient = useQueryClient();
   const [upload, setUpload] = useState<{ label: string; progress: number } | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -108,6 +110,7 @@ function DealDocuments({ dealId, onBack, materialsOnly }: { dealId: string; onBa
     setFailures([]);
     const data = workspace.data;
     const result = await runUploadQueue(files, async (file, index) => {
+      await beforeUpload?.();
       setUpload({ label: `${index + 1} из ${files.length} · ${file.name}`, progress: 0 });
       const maxBytes = category === "EVIDENCE" ? data.maxEvidenceUploadBytes ?? data.maxUploadBytes : data.maxUploadBytes;
       const issue = validateUploadCandidate(file, maxBytes, data.allowedMimeTypes);
@@ -131,18 +134,18 @@ function DealDocuments({ dealId, onBack, materialsOnly }: { dealId: string; onBa
     }
   };
 
-  if (workspace.isPending) return <DocumentsLoading onBack={onBack} />;
+  if (workspace.isPending) return materialsOnly ? <p role="status">Загружаем материалы…</p> : <DocumentsLoading onBack={onBack} />;
   if (workspace.error || !workspace.data) {
-    return <div className="screen-content documents-screen"><BackTitle onBack={onBack} title="Документы" /><DocumentsError onRetry={() => void workspace.refetch()} /></div>;
+    return <div>{!materialsOnly ? <BackTitle onBack={onBack} title="Документы" /> : null}<DocumentsError onRetry={() => void workspace.refetch()} /></div>;
   }
   const data = workspace.data;
   return (
-    <div className="screen-content documents-screen">
-      <BackTitle onBack={onBack} title={data.dealTitle} />
+    <div className={materialsOnly ? "subject-materials" : "screen-content documents-screen"}>
+      {!materialsOnly ? <><BackTitle onBack={onBack} title={data.dealTitle} />
       <Card className="documents-summary">
         <span><ShieldCheck size={20} /></span>
         <i><small>Защищённая сделка</small><strong>Документы и материалы</strong><em>{data.requirements.length} требований</em></i>
-      </Card>
+      </Card></> : null}
 
       {upload ? (
         <Card className="upload-progress-card" role="status">
@@ -165,7 +168,7 @@ function DealDocuments({ dealId, onBack, materialsOnly }: { dealId: string; onBa
       {!materialsOnly ? <section className="documents-section">
         <header><span><Files size={18} /><strong>Обязательные документы</strong></span><small>PDF, JPEG, PNG, WebP</small></header>
         <div className="requirement-list">
-          {data.requirements.map((requirement) => (
+          {data.requirements.filter(requirement => requirement.required || requirement.uploads.some(file => file.visibility !== "DEAL_PARTICIPANTS")).map((requirement) => (
             <RequirementCard
               accept={data.allowedMimeTypes.join(",")}
               disabled={Boolean(upload)}
@@ -179,14 +182,15 @@ function DealDocuments({ dealId, onBack, materialsOnly }: { dealId: string; onBa
       </section> : null}
 
       <section className="documents-section">
-        <header><span><FileImage size={18} /><strong>Материалы и доказательства</strong></span><small>Фото, акты и дополнительные файлы</small></header>
+        <header><span><FileImage size={18} /><strong>{materialsOnly ? "Фото предмета сделки" : "Все материалы сделки"}</strong></span></header>
+        <p className="field-description">Добавьте фото предмета сделки. Эти фото видны второй стороне. Здесь также можно загрузить документы на имущество, акты и другие общие файлы. Не добавляйте паспорта и личные документы.</p>
         {data.canUploadEvidence !== false ? <UploadButton
           accept={data.allowedMimeTypes.join(",")}
           disabled={Boolean(upload)}
-          label="Добавить материалы"
+          label="Загрузить фото или файл"
           onSelect={(file) => void handleUpload(file, "EVIDENCE")}
         /> : <p className="screen-copy">Материалы загружает сторона, передающая предмет сделки. Здесь вы можете их просмотреть.</p>}
-        <DealFileList dealId={dealId} files={data.evidenceFiles} showReview />
+        <DealFileList dealId={dealId} files={[...data.evidenceFiles, ...data.requirements.flatMap(requirement => requirement.uploads).filter(file => file.visibility === "DEAL_PARTICIPANTS")]} showReview />
       </section>
       {!materialsOnly ? <PrivacyNote /> : null}
     </div>

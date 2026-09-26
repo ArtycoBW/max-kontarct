@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { pepAgreement } from "../../apps/api/src/signing/pep-agreement";
 
 // Entirely local fixtures; no real MAX, passport data, API or database writes.
 async function mockApp(page: Page) {
@@ -17,6 +18,135 @@ async function mockApp(page: Page) {
   await page.goto("/");
   await authenticated;
   return writes;
+}
+
+const workspaceFixture = (status = "DRAFT", ready = false) => ({
+  id: "review-deal", title: "Тестовая сделка", status, versionNumber: 2, versionId: "version", sourceGenerationId: "generation",
+  currentUserRole: "COUNTERPARTY", updatedAt: "2026-09-26T12:00:00Z", createdAt: "2026-09-26T12:00:00Z",
+  template: { slug: "movable-property-sale", title: "Купля-продажа", versionId: "template", versionNumber: 1 },
+  initiator: { displayName: "Примеров Иван Петрович", role: "INITIATOR", profileCompleted: ready },
+  counterparty: { displayName: "Тестова Анна Ивановна", role: "COUNTERPARTY", profileCompleted: ready },
+  approvals: { currentUserApproved: false, totalApproved: 0, required: 2 }, invitation: null,
+  draft: { description: "Продажа тестового предмета", subjectDocumentsParty: "INITIATOR", currentStep: "DESCRIPTION", answers: {}, clarificationSessionId: null, creationPath: "AI", initiator: null },
+  contractDraft: { title: "Договор", preamble: "Стороны договорились", sections: [{ heading: "Предмет", clauses: ["Тестовый предмет"] }], warnings: [] },
+});
+
+test("generation waits for both profiles and submits the actual deal id", async ({ page }) => {
+  await mockApp(page);
+  const workspace = { ...workspaceFixture(), currentUserRole: "INITIATOR", contractDraft: null, sourceGenerationId: null };
+  workspace.draft.currentStep = "AI_CLARIFICATION";
+  const draft = { ...workspace, draft: { ...workspace.draft, clarificationSessionId: "session" } };
+  const template = { slug: workspace.template.slug, title: "Купля-продажа", summary: "Имущество", currentVersion: { id: "template", versionNumber: 1, documentRequirements: [], questionnaireSchema: { type: "object", properties: {} } } };
+  await page.route("**/api/v1/deals", route => route.fulfill({ json: { items: [{ ...workspace, templateTitle: template.title }] } }));
+  await page.route("**/api/v1/deals/review-deal/workspace", route => route.fulfill({ json: workspace }));
+  await page.route(/\/api\/v1\/deals\/review-deal(?:\/draft)?$/, route => route.fulfill({ json: draft }));
+  await page.route("**/api/v1/templates**", route => route.fulfill({ json: route.request().url().endsWith("/templates") ? { items: [template] } : template }));
+  await page.route("**/clarifications/session", route => route.fulfill({ json: { id: "session", status: "READY_TO_GENERATE", questions: [], answers: {}, round: 0 } }));
+  let posted: unknown = null;
+  await page.route("**/clarifications/session/generation", route => {
+    if (route.request().method() === "POST") posted = route.request().postDataJSON();
+    return route.fulfill({ json: { id: "session", status: "QUEUED", progress: 15, draft: null, clarificationAnswers: {} } });
+  });
+  await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
+  await page.getByRole("button", { name: /Тестовая сделка/ }).click();
+  await page.getByRole("button", { name: "Редактировать черновик" }).click();
+  const action = page.getByRole("button", { name: "Подготовить договор", exact: true });
+  await expect(action).toBeDisabled();
+  workspace.initiator.profileCompleted = true;
+  await expect(action).toBeDisabled();
+  expect(posted).toBeNull();
+  workspace.counterparty.profileCompleted = true;
+  await expect(action).toBeEnabled();
+  await action.click();
+  expect(posted).toEqual({ dealId: "review-deal" });
+});
+
+async function openMockDeal(page: Page, workspace: ReturnType<typeof workspaceFixture>) {
+  await mockApp(page);
+  await page.route("**/api/v1/deals", route => route.fulfill({ json: { items: [{ ...workspace, templateTitle: "Купля-продажа" }] } }));
+  await page.route("**/api/v1/deals/review-deal/workspace", route => route.fulfill({ json: workspace }));
+  await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
+  await page.getByRole("button", { name: /Тестовая сделка/ }).click();
+}
+
+test("all shared materials appear in one list and the documents header sticks", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await openMockDeal(page, workspaceFixture());
+  const file = (id: string) => ({ id, originalName: `Материал-${id}.jpg`, mimeType: "image/jpeg", sizeBytes: 5000,
+    reviewStatus: "PENDING", reviewComment: null, visibility: "DEAL_PARTICIPANTS", owner: { isCurrentUser: true, displayName: "Тест" } });
+  await page.route("**/api/v1/deals/review-deal/files", route => route.fulfill({ json: {
+    dealId: "review-deal", dealTitle: "Тестовая сделка", dealStatus: "DRAFT", allowedMimeTypes: ["image/jpeg", "application/pdf"],
+    maxUploadBytes: 10000000, canUploadEvidence: true,
+    evidenceFiles: Array.from({ length: 5 }, (_, i) => file(`extra-${i}`)),
+    requirements: [{ id: "property", required: false, title: "Документ на имущество", uploads: [file("ownership")] },
+      { id: "photos", required: false, title: "Фотографии имущества", uploads: [file("photo")] }],
+  } }));
+  await page.getByRole("button", { name: "Документы сделки", exact: true }).click();
+  await expect(page.getByText("Все материалы сделки", { exact: true })).toBeVisible();
+  await expect(page.locator(".deal-file-row")).toHaveCount(7);
+  await expect(page.locator(".requirement-upload-card")).toHaveCount(0);
+  await page.locator(".mini-app-scroll").evaluate(el => { el.scrollTop = 700; });
+  await expect(page.locator(".documents-screen > .flow-header")).toBeInViewport({ ratio: 1 });
+  await expect(page.locator(".documents-screen > .flow-header")).toHaveCSS("position", "sticky");
+  await page.screenshot({ path: "test-results/documents-sticky-all-materials.png" });
+});
+
+test("draft recipient sees all three entry methods and cannot open a premature contract", async ({ page }) => {
+  await openMockDeal(page, workspaceFixture());
+  await expect(page.getByRole("heading", { name: "Стороны и приглашения" })).toBeVisible();
+  await expect(page.getByText("Обеим сторонам нужно заполнить реквизиты.").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Вставить из Цифрового ID / Госуслуг" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Считать данные паспорта или загрузить скриншот" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Заполнить реквизиты вручную" })).toBeVisible();
+  await expect(page.locator(".deal-panel-trigger").filter({ hasText: /^Договор/ })).toHaveCount(0);
+  await expect(page.getByText(/Ваша роль:/)).toHaveCount(0);
+  await expect(page.locator(".deal-version-label")).toHaveCSS("background-color", "rgb(255, 242, 191)");
+});
+
+test("profile link opens the expanded passport section, not the top", async ({ page }) => {
+  await openMockDeal(page, workspaceFixture("DOCUMENTS_PENDING"));
+  await page.getByRole("button", { name: "Заполнить профиль", exact: true }).click();
+  await expect(page.getByLabel("Серия паспорта", { exact: true })).toBeInViewport();
+  await expect.poll(() => page.locator(".mini-app-scroll").evaluate(el => el.scrollTop)).toBeGreaterThan(100);
+});
+
+test("changing the calendar year then closing retains the selected day", async ({ page }) => {
+  await mockApp(page);
+  await page.route("**/api/v1/profile", route => route.fulfill({ json: { firstName: "Тест", lastName: "Примеров", middleName: null, birthDate: "2000-02-29", address: null, passport: null, phone: null, email: null, updatedAt: null } }));
+  await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
+  await page.getByRole("button", { name: "Профиль", exact: true }).click();
+  await page.locator("#profile-birth-date").click();
+  await page.getByRole("combobox", { name: "Год", exact: true }).click();
+  await page.getByRole("option", { name: "2001", exact: true }).click();
+  await page.locator(".date-picker-actions").getByRole("button", { name: "Закрыть", exact: true }).click();
+  await expect(page.locator("#profile-birth-date")).toContainText("28.02.2001");
+});
+
+for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 650 }, { width: 430, height: 844 }]) {
+  test(`signing consent and OTP fit ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await openMockDeal(page, workspaceFixture("READY_TO_SIGN", true));
+    await page.route("**/api/v1/deals/review-deal/signing", route => route.fulfill({ json: {
+      contractNumber: "MK-20260926-ABCDEF12-V2", currentUserSigned: false, dealId: "review-deal", documentHash: "a".repeat(64),
+      evidencePackage: null, finalPdf: null, parties: [], pepAgreement: pepAgreement("v1"), requiredSignatures: 2,
+      status: "READY_TO_SIGN", totalSignatures: 0, versionId: "version", versionNumber: 2,
+    } }));
+    await page.route("**/api/v1/deals/review-deal/signing/otp", route => route.fulfill({ json: {
+      channel: "MAX_TEST", expiresAt: new Date(Date.now() + 300_000).toISOString(), resendAvailableAt: new Date(Date.now() + 60_000).toISOString(), maskedPhone: "+7***0000",
+    } }));
+    await page.getByRole("button", { name: "Подписать договор", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Подписание договора" });
+    await expect(dialog.getByRole("button", { name: "Получить код подписи" })).toBeDisabled();
+    await expect(dialog.getByRole("button", { name: "Получить код подписи" })).toBeInViewport({ ratio: 1 });
+    expect(await dialog.locator(".deal-panel-body").evaluate(el => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
+    await page.screenshot({ path: `test-results/signing-consent-${viewport.width}.png` });
+    await dialog.getByRole("checkbox").check();
+    await dialog.getByRole("button", { name: "Получить код подписи" }).click();
+    await expect(dialog.getByRole("heading", { name: "Введите код" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Вернуться к соглашению" })).toBeInViewport({ ratio: 1 });
+    expect(await dialog.locator(".deal-panel-body").evaluate(el => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
+    await page.screenshot({ path: `test-results/signing-otp-${viewport.width}.png` });
+  });
 }
 
 for (const width of [320, 390, 768, 1024, 1440]) {
@@ -121,6 +251,11 @@ test("description leads to three requisites methods; import is reviewed before e
     template: { slug: template.slug, title: template.title, versionId: "template-version", versionNumber: 1 }, contractDraft: null, sourceGenerationId: null,
     draft: { answers: {}, creationPath: "AI_ASSISTED", currentStep: "DESCRIPTION", description: "Продам стол за 1000 рублей", clarificationSessionId: null, subjectDocumentsParty: null } };
   let profileWrites = 0;
+  let uploads = 0;
+  await page.route("**/api/v1/deals/draft/files", route => {
+    if (route.request().method() === "POST") { uploads++; return route.fulfill({ json: { id: "uploaded" } }); }
+    return route.fulfill({ json: { dealId: "draft", dealTitle: draft.title, dealStatus: "DRAFT", allowedMimeTypes: ["image/png"], maxUploadBytes: 1000000, evidenceFiles: [], requirements: [], canUploadEvidence: true } });
+  });
   await page.route("**/api/v1/templates**", route => route.fulfill({ json: route.request().url().endsWith("/templates") ? { items: [template] } : template }));
   await page.route("**/api/v1/deal-intake", route => route.fulfill({ json: { template, mode: "TEMPLATE", description: draft.draft.description, title: draft.title, reason: "Определена продажа", answers: { price: 1000 }, warnings: [] } }));
   await page.route("**/api/v1/deals", route => route.request().method() === "POST" ? route.fulfill({ json: draft }) : route.fallback());
@@ -164,6 +299,10 @@ test("description leads to three requisites methods; import is reviewed before e
   await expect(page.getByText("Реквизиты сохранены", { exact: true })).toBeVisible();
   await page.getByRole("combobox", { name: "Ваша роль в сделке" }).click();
   await page.getByRole("option").first().click();
+  await expect(page.getByRole("button", { name: "Загрузить фото или файл" })).toBeVisible();
+  await page.locator('.subject-materials input[type="file"]').setInputFiles({ name: "test.png", mimeType: "image/png", buffer: Buffer.from("test-image") });
+  await expect.poll(() => uploads).toBe(1);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.screenshot({ path: "test-results/requisites-ready.png" });
   await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
   await expect(page.getByRole("textbox", { name: "Цена", exact: true })).toHaveValue("1000");

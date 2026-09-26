@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { ConflictException, Injectable } from "@nestjs/common";
 import {
   AiGenerationStatus,
   DealApprovalStatus,
@@ -10,6 +10,7 @@ import {
 
 import { PrismaService } from "../database/prisma.service";
 import { loadDocumentStage } from "../files/document-readiness";
+import { hasCompletePassportProfile } from "../files/document-policy";
 
 const dealDraftSelect = {
   createdAt: true,
@@ -184,12 +185,13 @@ export class DealsRepository {
     });
   }
 
-  findCompletedGeneration(input: {
+  async findCompletedGeneration(input: {
+    dealId: string;
     id: string;
     templateVersionId: string;
     userId: string;
   }) {
-    return this.prisma.aiGeneration.findFirst({
+    const generation = await this.prisma.aiGeneration.findFirst({
       select: { id: true, inputAnswers: true, structuredDraft: true, providerMetadata: true },
       where: {
         id: input.id,
@@ -198,6 +200,16 @@ export class DealsRepository {
         userId: input.userId,
       },
     });
+    if (!generation) return null;
+    const metadata = generation.providerMetadata as Record<string, unknown> | null;
+    if (metadata?.dealId && metadata.dealId !== input.dealId) throw new ConflictException({ code: "DEAL_GENERATION_MISMATCH", message: "Проект подготовлен для другой сделки" });
+    const parties = await this.prisma.dealParty.findMany({ where: { dealId: input.dealId }, select: { role: true, user: { select: { profile: true } } } });
+    if (parties.length !== 2 || parties.some(party => !hasCompletePassportProfile(party.user.profile))) throw new ConflictException({ code: "CONTRACT_PARTIES_NOT_READY", message: "Сначала обе стороны должны заполнить реквизиты" });
+    const names = metadata?.partyNames as Record<string, string> | undefined;
+    if (names && parties.some(party => names[party.role] !== [party.user.profile!.lastName, party.user.profile!.firstName, party.user.profile!.middleName].filter(Boolean).join(" "))) {
+      throw new ConflictException({ code: "DEAL_PARTY_DETAILS_CHANGED", message: "ФИО участника изменилось. Сформируйте договор заново" });
+    }
+    return generation;
   }
 
   startAgreement(input: {

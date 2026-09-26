@@ -382,6 +382,16 @@ describe("DealInvitationsService", () => {
     expect(transaction.dealApproval.upsert).not.toHaveBeenCalled();
   });
 
+  it("requires a new version if the named party profile changed after generation", async () => {
+    const record = workspaceRecord({ parties: [initiatorParty(), counterpartyParty()], status: DealStatus.TERMS_REVIEW });
+    dealFindFirst.mockResolvedValue({ ...record, versions: record.versions.map(version => ({ ...version,
+      sourceGeneration: { providerMetadata: { partyNames: { INITIATOR: "Другое ФИО", COUNTERPARTY: "Иванова Мария" } } },
+    })) });
+    await expect(service.approve(initiatorId, dealId, versionId, { expectedDealUpdatedAt: "2026-08-31T12:00:00.000Z" }))
+      .rejects.toMatchObject({ response: { code: "DEAL_PARTY_DETAILS_CHANGED" } });
+    expect(transaction.dealApproval.upsert).not.toHaveBeenCalled();
+  });
+
   it("checks accepted documents of both parties even when the status says terms review", async () => {
     const record = workspaceRecord({ parties: [initiatorParty(), counterpartyParty()], status: DealStatus.TERMS_REVIEW });
     dealFindFirst.mockResolvedValue({ ...record, templateVersion: { ...record.templateVersion, documentRequirements: [{ id: "required-identity", required: true }] } });

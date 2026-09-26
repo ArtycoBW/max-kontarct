@@ -32,7 +32,7 @@ export function DealRequisites({ onSaved }: { onSaved: () => void }) {
           <DialogDescription>Проверьте данные. Изменения сохраняются только по кнопке в форме.</DialogDescription>
         </DialogHeader>
         <div className="app-modal-body">
-          {details !== null ? <ProfileScreen embedded initialDetails={details} onSaved={() => { setDetails(null); setSaved(true); onSaved(); }} /> : null}
+          {details !== null ? <ProfileScreen embedded focusPassport={Object.keys(details).length === 0} initialDetails={details} onSaved={() => { setDetails(null); setSaved(true); onSaved(); }} /> : null}
         </div>
       </DialogContent>
     </Dialog>

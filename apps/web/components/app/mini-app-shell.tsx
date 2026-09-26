@@ -79,7 +79,7 @@ import {
   updateDealDraft,
 } from "@/lib/api/deals";
 import { getOnboardingState } from "@/lib/api/onboarding";
-import { joinDealInvitation } from "@/lib/api/invitations";
+import { getDealWorkspace, joinDealInvitation } from "@/lib/api/invitations";
 import { queryKeys } from "@/lib/api/query-keys";
 import {
   answerAiClarification,
@@ -236,6 +236,7 @@ function DealsScreen({
               <Button
                 className="deal-list-card"
                 data-status={deal.status}
+                data-revised={deal.versionNumber > 1 && !["COMPLETED", "SIGNED", "SIGNED_BY_ONE"].includes(deal.status)}
                 key={deal.id}
                 onClick={() => onOpenDraft(deal.id)}
                 type="button"
@@ -564,8 +565,16 @@ function CreateDealScreen({
       : step;
   const generationStart = useMutation({
     mutationFn: (sessionId: string) =>
-      startContractGeneration(effectiveSelectedSlug, sessionId),
+      startContractGeneration(effectiveSelectedSlug, sessionId, activeDraftId),
   });
+  const partyReadiness = useQuery({
+    enabled: Boolean(activeDraftId) && renderedStep === "ready",
+    queryKey: queryKeys.deals.workspace(activeDraftId),
+    queryFn: () => getDealWorkspace(activeDraftId),
+    refetchInterval: 5_000,
+    staleTime: 0,
+  });
+  const bothProfilesReady = Boolean(partyReadiness.data?.initiator.profileCompleted && partyReadiness.data?.counterparty?.profileCompleted);
   const generation = useQuery({
     enabled: (step === "generation" || step === "initiator") && Boolean(generationId),
     queryFn: () =>
@@ -1004,6 +1013,7 @@ function CreateDealScreen({
           </Collapsible>
           <DealRequisites onSaved={() => { void queryClient.invalidateQueries({ queryKey: queryKeys.deals.all }); }} />
           <PartyResponsibility slug={effectiveSelectedSlug} value={subjectDocumentsParty} onChange={value => { setSubjectDocumentsParty(value); setDescriptionError(""); }} />
+          {activeDraftId && subjectDocumentsParty ? <DocumentsScreen key={subjectDocumentsParty} materialsOnly beforeUpload={() => enqueueDraftSave()} dealId={activeDraftId} onBack={() => undefined} onSelectDeal={() => undefined} /> : null}
           {descriptionError ? (
             <span className="field-error" role="alert">
               <CircleAlert size={13} /> {descriptionError}
@@ -1278,19 +1288,27 @@ function CreateDealScreen({
           <span className="state-icon">
             <CheckCircle2 size={31} />
           </span>
-          <h2>Можно готовить договор</h2>
+          <h2>{bothProfilesReady ? "Можно готовить договор" : "Ждём реквизиты обеих сторон"}</h2>
           <p>
-            Анкета и уточнения сохранены. Данных достаточно для подготовки
-            проекта договора.
+            Анкета и уточнения сохранены. Договор будет сформирован только после заполнения реквизитов обоими участниками.
           </p>
         </div>
+        {!bothProfilesReady ? <>
+          <Card className="form-message" role="status"><strong>{partyReadiness.isPending ? "Проверяем реквизиты…" : "Что осталось заполнить"}</strong>
+            <span>{partyReadiness.data?.initiator.profileCompleted ? "Ваши реквизиты заполнены." : "Заполните свои реквизиты для договора."}</span>
+            <span>{!partyReadiness.data?.counterparty ? "Пригласите вторую сторону — она сможет заполнить данные параллельно с вами." : partyReadiness.data.counterparty.profileCompleted ? "Реквизиты второй стороны заполнены." : `${partyReadiness.data.counterparty.displayName} ещё заполняет реквизиты.`}</span>
+          </Card>
+          <DealRequisites onSaved={() => { void partyReadiness.refetch(); }} />
+          <EarlyInvitationPanel dealId={activeDraftId} beforeCreate={() => enqueueDraftSave()} disabled={false} />
+          {partyReadiness.isError ? <RequestErrorCard message={partyReadiness.error.message} onRetry={() => partyReadiness.refetch()} /> : null}
+        </> : null}
         <div className="create-flow-action">
           {generationStart.isError ? (
             <RequestErrorCard message={generationStart.error.message} />
           ) : null}
           <Button
             className="full-width"
-            disabled={generationStart.isPending}
+            disabled={generationStart.isPending || !bothProfilesReady}
             onClick={() => void beginGeneration()}
             type="button"
           >
@@ -2055,16 +2073,18 @@ function ActiveScreen({
   onOpenDocuments,
   onClearDocumentDeal,
   phone,
+  profileFocus,
 }: {
   active: AppTab;
   draftId: string | null;
   selectedDealId: string | null;
-  onNavigate: (tab: AppTab) => void;
+  onNavigate: (tab: AppTab, focusPassport?: boolean) => void;
   onEditDeal: (dealId: string) => void;
   onOpenDraft: (dealId: string) => void;
   onOpenDocuments: (dealId: string) => void;
   onClearDocumentDeal: () => void;
   phone: VerifiedPhone;
+  profileFocus: boolean;
 }) {
   if (active === "home") {
     return <HomeScreen onNavigate={onNavigate} onOpenDraft={onOpenDraft} />;
@@ -2087,7 +2107,7 @@ function ActiveScreen({
         dealId={selectedDealId}
         onBack={() => onNavigate("deals")}
         onEdit={() => onEditDeal(selectedDealId)}
-        onOpenProfile={() => onNavigate("profile")}
+        onOpenProfile={() => onNavigate("profile", true)}
         onOpenDocuments={() => onOpenDocuments(selectedDealId)}
       />
     );
@@ -2101,7 +2121,7 @@ function ActiveScreen({
       />
     );
   }
-  return <ProfileScreen fallbackPhone={phone} />;
+  return <ProfileScreen fallbackPhone={phone} focusPassport={profileFocus} />;
 }
 
 
@@ -2333,9 +2353,11 @@ function AppWorkspace({
     initialDealId,
   );
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [profileFocus, setProfileFocus] = useState(false);
   const [documentsReturnDealId, setDocumentsReturnDealId] = useState<string | null>(null);
 
-  const navigate = (tab: AppTab) => {
+  const navigate = (tab: AppTab, focusPassport = false) => {
+    setProfileFocus(focusPassport);
     setDocumentsReturnDealId(null);
     if (tab === "documents") setSelectedDealId(null);
     if (tab === "create") setDraftId(null);
@@ -2401,6 +2423,7 @@ function AppWorkspace({
                 onOpenDocuments={openDocuments}
                 onClearDocumentDeal={clearDocumentDeal}
                 phone={phone}
+                profileFocus={profileFocus}
               />
             </motion.div>
           </AnimatePresence>

@@ -57,6 +57,7 @@ describe("ContractGenerationProcessor", () => {
   const processor = new ContractGenerationProcessor(
     { generateStructured } as unknown as AiService,
     {
+      requireReadyParties: jest.fn().mockResolvedValue({ dealId: "deal-1", names: { INITIATOR: "Иванов Иван Иванович", COUNTERPARTY: "Петрова Анна Олеговна" } }),
       findForProcessing,
       markCompleted,
       markFailed,
@@ -90,6 +91,9 @@ describe("ContractGenerationProcessor", () => {
     const completed = markCompleted.mock.calls[0]?.[0];
     expect(completed?.draft).toMatchObject({ title: "Договор оказания услуг" });
     expect(completed?.id).toBe(generationId);
+    expect(JSON.stringify(request?.userData)).not.toContain("Иванов Иван Иванович");
+    expect(JSON.stringify(completed?.draft)).toContain("Иванов Иван Иванович");
+    expect(JSON.stringify(completed?.draft)).toContain("Петрова Анна Олеговна");
     expect(completed?.metadata).toMatchObject({
       generation: { provider: "fake" },
     });
@@ -120,7 +124,7 @@ describe("ContractGenerationProcessor", () => {
     expect(generateStructured.mock.calls[0]?.[0].userData.sourceDescription).toBe("Хочу обменяться вещами");
     const saved = markCompleted.mock.calls[0]?.[0] as unknown as { draft: { warnings: string[]; sections: Array<{ clauses: string[] }> } };
     expect(saved.draft.warnings.join(" ")).toContain("Индивидуальный проект");
-    expect(saved.draft.sections[0]?.clauses).toContain("Предмет: Обмен фотоаппарата на велосипед.");
+    expect(saved.draft.sections.flatMap(section => section.clauses)).toContain("Предмет: Обмен фотоаппарата на велосипед.");
   });
 
   it.each(cases)(

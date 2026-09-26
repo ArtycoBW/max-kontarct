@@ -78,6 +78,9 @@ describe("DealArtifactsService", () => {
     const transaction = {
       auditEvent: { create: jest.fn(async () => ({})) },
       deal: { findUnique: jest.fn(), updateMany: jest.fn(async () => ({ count: 1 })) },
+      dealParty: { findMany: jest.fn(async () => [{ userId: "one" }, { userId: "two" }]) },
+      dealArtifact: { findMany: jest.fn(async () => [{ id: "pdf" }, { id: "zip" }]) },
+      artifactDelivery: { createMany: jest.fn() },
     };
     const prisma = { $transaction: jest.fn(async (callback) => callback(transaction)) };
     const service = new DealArtifactsService(
@@ -93,6 +96,10 @@ describe("DealArtifactsService", () => {
     await expect(service.completeDeal("deal-1")).resolves.toBe(true);
 
     expect(packageCheck).toHaveBeenCalledWith("deal-1");
+    expect(transaction.artifactDelivery.createMany).toHaveBeenCalledWith({ skipDuplicates: true, data: [
+      { artifactId: "pdf", userId: "one" }, { artifactId: "pdf", userId: "two" },
+      { artifactId: "zip", userId: "one" }, { artifactId: "zip", userId: "two" },
+    ] });
     expect(transaction.deal.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ status: DealStatus.COMPLETED }),
       where: { id: "deal-1", status: DealStatus.SIGNED },

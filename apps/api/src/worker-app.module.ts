@@ -7,6 +7,9 @@ import { PrismaModule } from "./database/prisma.module";
 import { ContractGenerationProcessor } from "./templates/contract-generation.processor";
 import { ContractGenerationWorker } from "./templates/contract-generation.worker";
 import { ContractGenerationsRepository } from "./templates/contract-generations.repository";
+import { ArtifactDeliveryWorker } from "./artifacts/artifact-delivery.worker";
+import { MaxBotModule } from "./max-bot/max-bot.module";
+import { StorageModule } from "./storage/storage.module";
 
 @Module({
   imports: [
@@ -18,8 +21,11 @@ import { ContractGenerationsRepository } from "./templates/contract-generations.
     }),
     PrismaModule,
     AiModule,
+    MaxBotModule,
+    StorageModule,
   ],
   providers: [
+    ArtifactDeliveryWorker,
     ContractGenerationProcessor,
     ContractGenerationWorker,
     ContractGenerationsRepository,

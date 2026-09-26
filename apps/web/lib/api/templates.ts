@@ -67,10 +67,11 @@ export function getAiClarification(
 export function startContractGeneration(
   slug: string,
   sessionId: string,
+  dealId: string,
 ): Promise<ContractGenerationResponse> {
   return apiRequest<ContractGenerationResponse>(
     `templates/${encodeURIComponent(slug)}/clarifications/${encodeURIComponent(sessionId)}/generation`,
-    { method: "POST" },
+    { method: "POST", body: JSON.stringify({ dealId }), headers: { "Content-Type": "application/json" } },
   );
 }
 

@@ -17,8 +17,9 @@ describe("ContractGenerationsService", () => {
   const markFailed = jest.fn<Promise<ContractGenerationRecord>, [string, string]>();
   const markQueued = jest.fn<Promise<ContractGenerationRecord>, [string]>();
   const enqueue = jest.fn<Promise<void>, [string]>();
+  const requireReadyParties = jest.fn().mockResolvedValue({ dealId: "deal-1", names: {} });
   const service = new ContractGenerationsService(
-    { findOwned, markFailed, markQueued } as unknown as ContractGenerationsRepository,
+    { findOwned, markFailed, markQueued, requireReadyParties } as unknown as ContractGenerationsRepository,
     { enqueue } as unknown as ContractGenerationQueue,
   );
 
@@ -39,7 +40,7 @@ describe("ContractGenerationsService", () => {
       status: "QUEUED",
     });
 
-    expect(markQueued).toHaveBeenCalledWith(generationId);
+    expect(markQueued).toHaveBeenCalledWith(generationId, expect.objectContaining({ dealId: "deal-1" }));
     expect(enqueue).toHaveBeenCalledWith(generationId);
   });
 
@@ -52,6 +53,14 @@ describe("ContractGenerationsService", () => {
 
     expect(markQueued).not.toHaveBeenCalled();
     expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it("never queues a contract when participant readiness fails", async () => {
+    findOwned.mockResolvedValue(record(AiGenerationStatus.READY_TO_GENERATE));
+    requireReadyParties.mockRejectedValueOnce(new Error("CONTRACT_PARTIES_NOT_READY"));
+    await expect(service.start("property-rental", generationId, userId, "deal-1")).rejects.toThrow("CONTRACT_PARTIES_NOT_READY");
+    expect(enqueue).not.toHaveBeenCalled();
+    expect(markQueued).not.toHaveBeenCalled();
   });
 
   it("stores a safe failure state when Redis cannot accept the job", async () => {

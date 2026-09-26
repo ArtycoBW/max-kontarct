@@ -75,7 +75,7 @@ export function SigningFlow({ dealId }: { dealId: string }) {
       <span>{signing.data.totalSignatures > 0 ? "Вторая сторона уже подписала договор. Осталась ваша подпись." : "Обе стороны согласовали условия. Подпишите эту версию одноразовым кодом."}</span>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger asChild><Button className="full-width"><LockKeyhole size={17} />Подписать договор</Button></DialogTrigger>
-        <DialogContent className="deal-panel-dialog">
+        <DialogContent className="deal-panel-dialog signing-dialog">
           <DialogHeader className="deal-panel-header"><DialogTitle>Подписание договора</DialogTitle><DialogDescription>Версия {signing.data.versionNumber} · договор № {signing.data.contractNumber}</DialogDescription></DialogHeader>
           <div className="deal-panel-body">
           {delivery ? (
@@ -106,12 +106,9 @@ function AgreementStep({ accepted, onAccepted, onIssue, pending, state }: {
 }) {
   return (
     <section className="signing-flow" aria-label="Подписание договора">
-      <div className="signing-state-icon"><KeyRound size={32} /></div>
-      <div className="signing-title"><p>Соглашение о ПЭП</p><h2>Простая электронная подпись</h2><span>Одноразовый код подпишет только договор № {state.contractNumber}.</span></div>
       <Card className="signing-agreement">
         <strong>{state.pepAgreement.title}</strong>
         {state.pepAgreement.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
-        <dl><dt>Подписываемая редакция</dt><dd>Версия № {state.versionNumber}</dd></dl>
         <Collapsible className="signing-fingerprint"><CollapsibleTrigger asChild><Button variant="unstyled" className="collapsible-trigger" type="button">Контрольный отпечаток (SHA-256)<ChevronDown className="collapsible-chevron" size={16} aria-hidden="true" /></Button></CollapsibleTrigger><CollapsibleContent><p>Этот отпечаток связывает подпись с неизменным текстом и данными договора. Это не код из сообщения.</p><code>{state.documentHash}</code><small>Версия соглашения: {state.pepAgreement.version}</small></CollapsibleContent></Collapsible>
       </Card>
       <label className="signing-consent">
@@ -148,7 +145,7 @@ function OtpStep({ delivery, code, isConfirming, isResending, onBack, onConfirm,
       <div className="signing-state-icon"><KeyRound size={32} /></div>
       <div className="signing-title"><p>Подписание договора</p><h2>Введите код</h2><span>{delivery.channel === "MAX_TEST" ? "Отправили 4 цифры в личное сообщение MAX" : `Отправили 4 цифры на номер ${delivery.maskedPhone}`}</span></div>
       <div className="signing-otp-inputs">
-        <InputOTP aria-label="Код подписи из 4 цифр" autoFocus maxLength={4} pattern={REGEXP_ONLY_DIGITS}
+        <InputOTP aria-label="Код подписи из 4 цифр" maxLength={4} pattern={REGEXP_ONLY_DIGITS}
           value={code} onChange={onCode} disabled={isConfirming || isResending || expiresSeconds === 0}>
           <InputOTPGroup>{[0, 1, 2, 3].map(index => <InputOTPSlot key={index} index={index} />)}</InputOTPGroup>
         </InputOTP>
@@ -180,6 +177,7 @@ function SignedState({ state }: { state: DealSigningStateResponse }) {
       {state.finalPdf ? <Button asChild className="full-width"><a href={state.finalPdf.downloadUrl}><Download size={17} /> Скачать подписанный PDF</a></Button> : null}
       {state.evidencePackage ? <Button asChild className="full-width" variant="secondary"><a href={state.evidencePackage.downloadUrl}><Download size={17} /> Скачать пакет материалов</a></Button> : null}
       {state.evidencePackage ? <p className="signing-package-note">В архиве — подписанный договор, общие вложения, история сделки и сведения о подписях.</p> : null}
+      {dealCompleted ? <p className="signing-package-note">При разрешённых уведомлениях отправим PDF и архив обоим участникам в личные сообщения MAX. Файлы также всегда доступны для скачивания здесь.</p> : null}
       <p className="signing-integrity"><ShieldCheck size={16} />Подписи связаны с версией {state.versionNumber} и SHA-256 {shortHash(state.documentHash)}.</p>
     </section>
   );

@@ -1,7 +1,8 @@
-import { Injectable } from "@nestjs/common";
+import { ConflictException, Injectable } from "@nestjs/common";
 import { AiGenerationStatus, Prisma } from "@prisma/client";
 
 import { PrismaService } from "../database/prisma.service";
+import { hasCompletePassportProfile } from "../files/document-policy";
 
 const generationSelect = {
   attemptCount: true,
@@ -40,6 +41,32 @@ export type ContractGenerationRecord = Prisma.AiGenerationGetPayload<{
 export class ContractGenerationsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  async requireReadyParties(generation: ContractGenerationRecord, requestedDealId?: string) {
+    const metadata = generation.providerMetadata as Record<string, unknown> | null;
+    if (requestedDealId && metadata?.dealId && requestedDealId !== metadata.dealId) throw new ConflictException({ code: "DEAL_GENERATION_MISMATCH", message: "Сессия подготовки связана с другой сделкой" });
+    const dealId = requestedDealId ?? (typeof metadata?.dealId === "string" ? metadata.dealId : undefined);
+    const deal = await this.prisma.deal.findFirst({
+      where: {
+        ...(dealId ? { id: dealId } : { versions: { some: { OR: [
+          { sourceGenerationId: generation.id },
+          { terms: { path: ["clarificationSessionId"], equals: generation.id } },
+        ] } } }),
+        initiatorUserId: generation.userId,
+        templateVersion: { aiGenerations: { some: { id: generation.id } } },
+        status: { notIn: ["SIGNED_BY_ONE", "SIGNED", "COMPLETED", "CANCELED"] },
+      },
+      select: { id: true, parties: { select: { role: true, user: { select: {
+        profile: { select: { firstName: true, lastName: true, middleName: true, birthDate: true, addressValue: true, passportDetails: true } },
+      } } } } },
+    });
+    if (!deal || deal.parties.length !== 2 || deal.parties.some(party => !hasCompletePassportProfile(party.user.profile))) {
+      throw new ConflictException({ code: "CONTRACT_PARTIES_NOT_READY", message: "Договор можно сформировать только после присоединения и заполнения реквизитов обеими сторонами" });
+    }
+    return { dealId: deal.id, names: Object.fromEntries(deal.parties.map(party => [party.role,
+      [party.user.profile!.lastName, party.user.profile!.firstName, party.user.profile!.middleName].filter(Boolean).join(" "),
+    ])) };
+  }
+
   findOwned(
     id: string,
     templateSlug: string,
@@ -62,7 +89,7 @@ export class ContractGenerationsRepository {
     });
   }
 
-  async markQueued(id: string): Promise<ContractGenerationRecord> {
+  async markQueued(id: string, metadata: Prisma.InputJsonObject): Promise<ContractGenerationRecord> {
     return this.prisma.aiGeneration.update({
       data: {
         completedAt: null,
@@ -71,6 +98,7 @@ export class ContractGenerationsRepository {
         queuedAt: new Date(),
         startedAt: null,
         status: AiGenerationStatus.QUEUED,
+        providerMetadata: metadata,
         structuredDraft: Prisma.DbNull,
       },
       select: generationSelect,

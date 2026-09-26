@@ -42,6 +42,8 @@ export class ContractGenerationProcessor {
     await this.generations.markGenerating(generation.id, job.attemptsMade + 1);
 
     try {
+      // Recheck after queueing. Only the server reads profiles; no identity data is sent to AI.
+      const parties = await this.generations.requireReadyParties(generation);
       if (
         isCompletenessSession(generation.providerMetadata) &&
         missingContractTerms(
@@ -117,10 +119,22 @@ export class ContractGenerationProcessor {
       if (generation.templateVersion.template.slug === INDIVIDUAL_TEMPLATE_SLUG) {
         draft.warnings = [...new Set([INDIVIDUAL_WARNING, ...draft.warnings])];
       }
+      draft.sections.unshift({ heading: "Стороны договора", clauses: [
+        `${parties.names.INITIATOR} — инициатор сделки.`,
+        `${parties.names.COUNTERPARTY} — контрагент.`,
+      ] });
+      // The role mapping is deterministic and keeps the full names in the actual signed text.
+      if (roleTerm) {
+        const namedRoleTerm = roleTerm.replace(/Инициатор/gu, parties.names.INITIATOR!)
+          .replace(/контрагент/gu, parties.names.COUNTERPARTY!);
+        for (const section of draft.sections) section.clauses = section.clauses.map(clause => clause === roleTerm ? namedRoleTerm : clause);
+      }
       await this.generations.markCompleted({
         draft: toPrismaObject(draft),
         id: generation.id,
         metadata: toPrismaObject({
+          dealId: parties.dealId,
+          partyNames: parties.names,
           clarification: generation.providerMetadata,
           generation: result.metadata,
           ...(confirmedTerms.length ? { confirmedTermsVersion: "1.0.0" } : {}),

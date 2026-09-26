@@ -134,6 +134,46 @@ export class MaxBotService {
     return false;
   }
 
+  async canSendDocuments(maxUserId: string): Promise<boolean> {
+    if (!/^\d{1,20}$/.test(maxUserId)) return false;
+    return Boolean(await this.prisma.maxAccount.findFirst({ select: { id: true }, where: {
+      maxUserId, user: { consents: { some: { type: "STATUS_NOTIFICATIONS", granted: true,
+        documentVersion: this.config.getOrThrow<string>("CONSENT_STATUS_NOTIFICATIONS_VERSION"),
+      } } },
+    } }));
+  }
+
+  async uploadDocument(body: Buffer, mimeType: string, filename: string): Promise<string> {
+    const upload = await fetch(`${this.apiUrl}/uploads?type=file`, {
+      method: "POST", headers: { Authorization: this.token },
+      signal: AbortSignal.timeout(MAX_API_TIMEOUT_MS), redirect: "error",
+    });
+    if (!upload.ok) throw new Error("MAX_FILE_UPLOAD_UNAVAILABLE");
+    const location = await upload.json() as { url?: string };
+    const url = new URL(location.url ?? "");
+    // MAX file uploads use fu.oneme.ru. Never forward the bot token to an upload host.
+    if (url.protocol !== "https:" || url.username || url.password || (url.port && url.port !== "443") ||
+        !(url.hostname === "fu.oneme.ru" || url.hostname.endsWith(".max.ru"))) throw new Error("MAX_UPLOAD_HOST_REJECTED");
+    const form = new FormData();
+    form.append("data", new Blob([new Uint8Array(body)], { type: mimeType }), filename);
+    const response = await fetch(url, { method: "POST", body: form, redirect: "error", signal: AbortSignal.timeout(120_000) });
+    if (!response.ok) throw new Error("MAX_FILE_UPLOAD_FAILED");
+    const result = await response.json() as { token?: unknown };
+    if (typeof result.token !== "string" || !result.token) throw new Error("MAX_FILE_TOKEN_MISSING");
+    return result.token;
+  }
+
+  async sendDocument(maxUserId: string, token: string, text: string): Promise<void> {
+    if (!/^\d{1,20}$/.test(maxUserId)) throw new Error("MAX_RECIPIENT_INVALID");
+    const response = await fetch(`${this.apiUrl}/messages?user_id=${encodeURIComponent(maxUserId)}`, {
+      method: "POST", headers: { Authorization: this.token, "Content-Type": "application/json" },
+      body: JSON.stringify({ text, attachments: [{ type: "file", payload: { token } }] }),
+      signal: AbortSignal.timeout(MAX_API_TIMEOUT_MS), redirect: "error",
+    });
+    // attachment.not.ready is retried by the durable outbox using the same token.
+    if (!response.ok) throw new Error("MAX_DOCUMENT_NOT_DELIVERED");
+  }
+
   private readChatId(value: unknown): string | null {
     if (typeof value === "number") {
       return Number.isSafeInteger(value) && value !== 0 ? String(value) : null;

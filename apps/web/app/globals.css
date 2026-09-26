@@ -5213,6 +5213,34 @@ button.service-status {
 .invitation-entry-action { position: static; margin-top: 22px; padding-bottom: 0; }
 .invitation-entry-action small { display: block; margin-top: 9px; text-align: center; color: var(--app-muted); font-size: 9px; }
 
+.documents-screen > .flow-header { position: sticky; top: 0; z-index: 12; background: #fff; padding: 14px 0; box-shadow: 0 6px 12px #fff; }
+.subject-materials { display: grid; gap: 12px; min-width: 0; padding: 16px; border: 1px solid var(--app-border); border-radius: 18px; }
+.subject-materials .documents-section { margin: 0; }
+.passport-profile-fields { scroll-margin-top: 12px; }
+.deal-version-label.is-revised { width: fit-content; color: #785100; background: #fff2bf; border-radius: 8px; padding: 6px 9px; }
+.deal-list-card[data-revised="true"] .deal-list-icon { color: #785100; background: #fff2bf; }
+.dialog-content.signing-dialog { height: auto; max-width: 460px; }
+.signing-dialog .deal-panel-header { padding: 16px 52px 12px 18px; }
+.signing-dialog .deal-panel-body { padding: 14px 18px; }
+.signing-dialog .signing-flow { gap: 10px; }
+.signing-dialog .signing-agreement { max-height: none; overflow: visible; padding: 12px; }
+.signing-dialog .signing-agreement p { font-size: 12px; line-height: 1.4; margin-bottom: 8px; }
+.signing-dialog .signing-agreement dl { margin-top: 8px; padding-top: 8px; font-size: 11px; }
+.signing-dialog .signing-consent { padding: 10px; font-size: 12px; }
+.signing-dialog .signing-fingerprint .collapsible-trigger { font-size: 11px; }
+.signing-dialog .signing-otp .signing-state-icon { display: none; }
+.signing-dialog .signing-title h2 { font-size: 24px; }
+.signing-dialog .signing-title p { display: none; }
+.signing-dialog .signing-title span { font-size: 12px; }
+.signing-dialog .signing-otp-inputs { margin: 8px 0; }
+@media (max-height: 650px) {
+  .signing-dialog .deal-panel-body { padding: 10px 14px; }
+  .signing-dialog .signing-flow { gap: 8px; }
+  .signing-dialog .signing-agreement p { font-size: 11px; }
+  .signing-dialog .signing-consent { font-size: 11px; padding: 8px; }
+  .signing-dialog .signing-flow > .button { min-height: 42px; }
+}
+
 @media (max-width: 360px) {
   .file-preview-download { width: 44px; padding: 0; }
   .file-preview-download span { display: none; }

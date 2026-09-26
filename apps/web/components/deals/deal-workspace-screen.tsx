@@ -40,6 +40,7 @@ import { ContractPreview } from "./contract-preview";
 import { DealRevisionEditor } from "./deal-revision-editor";
 import { DealVersionHistory } from "./deal-version-history";
 import { DealPanel } from "./deal-panel";
+import { DealRequisites } from "./deal-requisites";
 
 export function DealWorkspaceScreen({
   dealId,
@@ -150,6 +151,12 @@ export function DealWorkspaceScreen({
   const visibleParty =
     deal.currentUserRole === "COUNTERPARTY" ? deal.initiator : deal.counterparty;
   const signingVisible = ["READY_TO_SIGN", "SIGNED_BY_ONE", "SIGNED", "COMPLETED"].includes(deal.status);
+  const profilesReady = deal.initiator.profileCompleted && deal.counterparty?.profileCompleted;
+  const contractAvailable = Boolean(deal.contractDraft) && (signingVisible || Boolean(profilesReady));
+  const waitingFor = !deal.counterparty ? "Пригласите вторую сторону в сделку."
+    : !deal.initiator.profileCompleted && !deal.counterparty.profileCompleted ? "Обеим сторонам нужно заполнить реквизиты."
+    : !profilesReady ? `${!deal.initiator.profileCompleted ? deal.initiator.displayName : deal.counterparty.displayName} ещё заполняет реквизиты.`
+    : `Ожидайте: ${participantRoleLabel(deal.template.slug, deal.draft.subjectDocumentsParty ?? null, "INITIATOR").toLocaleLowerCase("ru-RU")} заполняет договор.`;
 
   const shareInvitation = async () => {
     if (!issuedInvitation?.shareUrl || !issuedInvitation.shareText) return;
@@ -173,7 +180,7 @@ export function DealWorkspaceScreen({
   return (
     <div className="screen-content deal-workspace-screen">
       <header className="flow-header deal-workspace-header">
-        <p className="screen-eyebrow">{statusLabel(deal.status)} · версия {deal.versionNumber}</p>
+        <p className={`screen-eyebrow deal-version-label ${deal.versionNumber > 1 && !signingVisible ? "is-revised" : ""}`}>{statusLabel(deal.status)} · версия {deal.versionNumber}</p>
         <div className="flow-header-row">
           <div className="flow-header-title">
             <Button aria-label="Назад" className="flow-back-button" onClick={onBack} size="icon" variant="ghost">
@@ -190,14 +197,16 @@ export function DealWorkspaceScreen({
         <ShieldCheck size={19} />
       </Card>
 
-      {deal.draft.subjectDocumentsParty ? <p className="screen-copy">Ваша роль: {participantRoleLabel(deal.template.slug, deal.draft.subjectDocumentsParty, deal.currentUserRole)}. Материалы предмета сделки: {deal.draft.subjectDocumentsParty === deal.currentUserRole ? "загружаете вы" : "загружает другая сторона"}.</p> : null}
       {notice ? <p className="deal-workspace-notice" role="status"><Check size={15} />{notice}</p> : null}
       {!notice && deal.approvals.currentUserApproved ? <p className="deal-workspace-notice" role="status"><Check size={15} />Версия согласована · {deal.approvals.totalApproved} из {deal.approvals.required}</p> : null}
 
 
       {!signingVisible ? <section className="deal-workspace-section">
-        <h2>Стороны и приглашение</h2>
-        {deal.status === "DRAFT" ? <Card className="form-message"><strong>{deal.draft.currentStep === "INITIATOR" && deal.contractDraft ? "Проект договора готов" : "Условия ещё готовятся"}</strong><p>{deal.draft.description}</p><span>{deal.draft.currentStep === "INITIATOR" && deal.contractDraft ? "Проверьте проект и передайте итоговые условия обеим сторонам на согласование." : "Вы можете заполнить свой профиль сейчас. После подготовки договора обе стороны согласуют одну итоговую версию."}</span><Button variant="secondary" onClick={onOpenProfile}>Мои данные для договора</Button></Card> : null}
+        <h2>Стороны и приглашения</h2>
+        {deal.status === "DRAFT" ? <>
+          <Card className="form-message"><strong>{contractAvailable ? "Проект договора готов" : "Договор ещё не сформирован"}</strong><p>{deal.draft.description}</p><span>{contractAvailable ? "Проверьте проект и передайте итоговые условия обеим сторонам на согласование." : waitingFor}</span><span>Договор формируется после заполнения реквизитов обеими сторонами.</span></Card>
+          <DealRequisites onSaved={() => { void refreshWorkspace(queryClient, dealId); }} />
+        </> : null}
         {visibleParty ? (
           <Card className="deal-party-card">
             <UserRound size={21} />
@@ -242,7 +251,7 @@ export function DealWorkspaceScreen({
       </section> : null}
 
       <div className="deal-panel-grid">
-      <DealPanel title="Договор" description={`Версия ${deal.versionNumber} · ${deal.approvals.totalApproved} из ${deal.approvals.required} согласовано`} icon={<FileCheck2 size={22} />}>
+      {contractAvailable ? <DealPanel title="Договор" description={`Версия ${deal.versionNumber} · ${deal.approvals.totalApproved} из ${deal.approvals.required} согласовано`} icon={<FileCheck2 size={22} />}>
       <section className="deal-workspace-section">
         <div className="deal-workspace-section-heading">
           <h2>Условия сделки</h2>
@@ -254,8 +263,8 @@ export function DealWorkspaceScreen({
       </section>
 
       {deal.versionNumber > 1 ? <DealVersionHistory dealId={dealId} versionId={deal.versionId} /> : null}
-      </DealPanel>
-      <DealPanel title="Приложения к договору" description="Фото и общие материалы · без личных документов" icon={<Files size={22} />}>
+      </DealPanel> : <Card className="form-message" role="status"><strong>Договор пока недоступен</strong><span>{waitingFor}</span></Card>}
+      <DealPanel title="Приложения к договору" description="Фото предмета сделки, документы на имущество, акты и другие общие файлы. Без паспортов и личных документов." icon={<Files size={22} />}>
         <SharedDealAttachments dealId={dealId} />
       </DealPanel>
       {deal.counterparty ? <DealPanel title="Чат сделки" description="Обсудить детали и предложить изменения" icon={<MessageCircle size={22} />} className="deal-chat-dialog">
@@ -265,7 +274,7 @@ export function DealWorkspaceScreen({
 
       <section className="deal-workspace-actions" aria-label="Действия по сделке">
       {documentsPending ? <Card className="form-message"><strong>{deal.status === "DOCUMENTS_REVIEW" ? "Документы на проверке" : "Сначала подготовьте документы"}</strong><span>{deal.status === "DOCUMENTS_REVIEW" ? "Обязательные документы на проверке. После их принятия здесь появится кнопка согласования." : "Согласование пока недоступно: нужны принятые обязательные документы обеих сторон."}</span></Card> : null}
-      {profileRequired && !signingVisible && deal.status !== "CANCELED" ? (
+      {profileRequired && !signingVisible && deal.status !== "CANCELED" && deal.status !== "DRAFT" ? (
         <Card className="form-message is-warning">
           <strong>Сначала заполните профиль</strong>
           <span>Для согласования заполните профиль и подтвердите номер телефона.</span>
@@ -279,7 +288,7 @@ export function DealWorkspaceScreen({
         <Button className="full-width" disabled={versionApproved || approval.isPending} onClick={() => approval.mutate()}>{approval.isPending ? "Сохраняем согласование…" : versionApproved ? "Версия согласована" : `Согласовать версию ${deal.versionNumber}`}</Button>
       </Card> : null}
       {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" ? <Button className="full-width" onClick={onEdit} variant="secondary">Редактировать черновик</Button> : null}
-      {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" && deal.contractDraft && deal.sourceGenerationId && deal.draft.currentStep === "INITIATOR" && deal.counterparty ? <Button className="full-width" disabled={startAgreement.isPending} onClick={() => startAgreement.mutate()}>Передать итоговые условия на согласование</Button> : null}
+      {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" && contractAvailable && deal.sourceGenerationId && deal.draft.currentStep === "INITIATOR" && deal.counterparty ? <Button className="full-width" disabled={startAgreement.isPending} onClick={() => startAgreement.mutate()}>Передать итоговые условия на согласование</Button> : null}
       {deal.status === "DRAFT" && deal.currentUserRole === "INITIATOR" && deal.contractDraft && deal.counterparty && deal.draft.currentStep !== "INITIATOR" ? <Card className="form-message is-warning"><strong>Завершите подготовку договора</strong><span>Откройте черновик и нажмите «Проверить договор и данные», чтобы отправить условия на согласование.</span></Card> : null}
       {startAgreement.error ? <p role="alert">{startAgreement.error.message}</p> : null}
 

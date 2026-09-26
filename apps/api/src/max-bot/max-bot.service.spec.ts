@@ -35,6 +35,25 @@ describe("MaxBotService", () => {
     jest.restoreAllMocks();
   });
 
+  it("uploads a file without exposing the bot token to the upload server", async () => {
+    const request = jest.spyOn(global, "fetch")
+      .mockResolvedValueOnce(new Response(JSON.stringify({ url: "https://fu.oneme.ru/upload.do?test=1" })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: "file-token" })));
+    await expect(new MaxBotService(config, prisma).uploadDocument(Buffer.from("test"), "application/pdf", "Договор.pdf")).resolves.toBe("file-token");
+    expect(request.mock.calls[1]?.[1]).toMatchObject({ body: expect.any(FormData) as unknown, redirect: "error" });
+    expect(request.mock.calls[1]?.[1]?.headers).toBeUndefined();
+  });
+  it("refuses an untrusted upload destination", async () => {
+    const request = jest.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({ url: "https://attacker.invalid/upload" })));
+    await expect(new MaxBotService(config, prisma).uploadDocument(Buffer.from("test"), "application/pdf", "Договор.pdf")).rejects.toThrow("MAX_UPLOAD_HOST_REJECTED");
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+  it("sends a downloadable file attachment", async () => {
+    const request = jest.spyOn(global, "fetch").mockResolvedValue(new Response("{}"));
+    await new MaxBotService(config, prisma).sendDocument("123", "file-token", "Договор");
+    expect(JSON.parse(request.mock.calls[0]?.[1]?.body as string)).toEqual({ text: "Договор", attachments: [{ type: "file", payload: { token: "file-token" } }] });
+  });
+
   it("rejects requests without the configured webhook secret", async () => {
     const service = new MaxBotService(config, prisma);
 

@@ -37,7 +37,7 @@ import {
   hashFrozenSnapshot,
   type FrozenDealSnapshot,
 } from "./deal-version-freeze";
-import { requiredForParty } from "../files/document-policy";
+import { hasCompletePassportProfile, requiredForParty } from "../files/document-policy";
 import { loadDocumentStage } from "../files/document-readiness";
 
 const invitationSelect = {
@@ -108,6 +108,7 @@ const workspaceSelect = {
       id: true,
       snapshotHash: true,
       sourceGenerationId: true,
+      sourceGeneration: { select: { providerMetadata: true } },
       terms: true,
       versionNumber: true,
     },
@@ -648,6 +649,11 @@ export class DealInvitationsService {
     }
     const party = record.parties.find(({ userId: id }) => id === userId);
     if (!party) throw dealNotFound();
+    const generationMetadata = version.sourceGeneration?.providerMetadata as Record<string, unknown> | undefined;
+    const namedParties = generationMetadata?.partyNames as Record<string, string> | undefined;
+    if (namedParties && record.parties.some(item => !hasCompletePassportProfile(item.user.profile) || namedParties[item.role] !== displayName(item.user))) {
+      throw new ConflictException({ code: "DEAL_PARTY_DETAILS_CHANGED", message: "Реквизиты участника изменились. Заполните профиль и подготовьте новую редакцию договора с актуальными ФИО" });
+    }
     if (!party.user.profile || !party.user.phones[0]) {
       throw new ConflictException({
         code: "DEAL_APPROVAL_PROFILE_REQUIRED",
@@ -836,7 +842,7 @@ function toWorkspace(record: WorkspaceRecord, userId: string): DealWorkspaceResp
     counterparty: counterparty
       ? {
           displayName: displayName(counterparty.user),
-          profileCompleted: Boolean(counterparty.user.profile),
+          profileCompleted: hasCompletePassportProfile(counterparty.user.profile),
           role: counterparty.role,
         }
       : null,
@@ -846,7 +852,7 @@ function toWorkspace(record: WorkspaceRecord, userId: string): DealWorkspaceResp
     id: record.id,
     initiator: {
       displayName: displayName(initiator.user),
-      profileCompleted: Boolean(initiator.user.profile),
+      profileCompleted: hasCompletePassportProfile(initiator.user.profile),
       role: initiator.role,
     },
     invitation: record.invitations[0]
@@ -869,7 +875,7 @@ function toWorkspace(record: WorkspaceRecord, userId: string): DealWorkspaceResp
 
 function displayName(user: WorkspaceRecord["parties"][number]["user"]): string {
   const profile = user.profile ?? user.maxAccount;
-  return [profile?.lastName, profile?.firstName].filter(Boolean).join(" ") || "Участник сделки";
+  return [profile?.lastName, profile?.firstName, user.profile?.middleName].filter(Boolean).join(" ") || "Участник сделки";
 }
 
 function createFreeze(

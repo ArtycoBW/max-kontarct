@@ -233,6 +233,12 @@ export class DealArtifactsService {
         if (deal?.status === DealStatus.COMPLETED) return false;
         throw new ConflictException({ code: "DEAL_COMPLETION_CONFLICT", message: "Не удалось завершить сделку" });
       }
+      const participants = await transaction.dealParty.findMany({ where: { dealId }, select: { userId: true } });
+      const artifacts = await transaction.dealArtifact.findMany({ where: { dealId, type: { in: [DealArtifactType.FINAL_PDF, DealArtifactType.EVIDENCE_ZIP] } }, select: { id: true } });
+      await transaction.artifactDelivery.createMany({
+        data: artifacts.flatMap(artifact => participants.map(party => ({ artifactId: artifact.id, userId: party.userId }))),
+        skipDuplicates: true,
+      });
       await transaction.auditEvent.create({ data: {
         entityId: dealId,
         entityType: "Deal",

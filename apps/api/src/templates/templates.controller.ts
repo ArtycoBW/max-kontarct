@@ -37,6 +37,7 @@ import { ContractGenerationsService } from "./contract-generations.service";
 import { AiClarificationParamsDto } from "./dto/ai-clarification-params.dto";
 import { AnswerAiClarificationDto } from "./dto/answer-ai-clarification.dto";
 import { StartAiClarificationDto } from "./dto/start-ai-clarification.dto";
+import { StartGenerationDto } from "./dto/start-generation.dto";
 import { TemplateSlugParamsDto } from "./dto/template-slug-params.dto";
 import { ValidateTemplateAnswersDto } from "./dto/validate-template-answers.dto";
 import { TemplatesService } from "./templates.service";
@@ -138,12 +139,14 @@ export class TemplatesController {
   @ApiAcceptedResponse({ description: "Задача поставлена в очередь" })
   startGeneration(
     @Param() params: AiClarificationParamsDto,
+    @Body() body: StartGenerationDto,
     @Req() request: AuthenticatedRequest,
   ): Promise<ContractGenerationResponse> {
     return this.generations.start(
       params.slug,
       params.sessionId,
       request.auth.user.id,
+      body?.dealId,
     );
   }
 

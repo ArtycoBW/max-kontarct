@@ -30,6 +30,7 @@ export class ContractGenerationsService {
     templateSlug: string,
     generationId: string,
     userId: string,
+    dealId?: string,
   ): Promise<ContractGenerationResponse> {
     const generation = await this.findOwned(templateSlug, generationId, userId);
 
@@ -61,7 +62,10 @@ export class ContractGenerationsService {
           "Условия заполнены не полностью. Вернитесь к параметрам и ответьте на уточняющие вопросы",
       });
     }
-    const queued = await this.generations.markQueued(generation.id);
+    const parties = await this.generations.requireReadyParties(generation, dealId);
+    const queued = await this.generations.markQueued(generation.id, {
+      ...(generation.providerMetadata as Prisma.InputJsonObject), dealId: parties.dealId,
+    });
     try {
       await this.queue.enqueue(generation.id);
       return toResponse(queued);

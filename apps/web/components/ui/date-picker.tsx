@@ -82,12 +82,16 @@ export function DatePicker({
     [firstYear, lastYear],
   );
 
-  const setMonth = (month: number) => {
-    setVisibleMonth(new Date(visibleMonth.getFullYear(), month, 1));
+  const changeMonth = (year: number, month: number) => {
+    // Keep the selected day when changing the year/month (29 February -> 28).
+    // With an empty field, navigation alone must not invent a birth date.
+    const day = selected ? Math.min(selected.getDate(), new Date(year, month + 1, 0).getDate()) : 1;
+    const next = clampDate(new Date(year, month, day), firstAllowedDate, lastAllowedDate);
+    setVisibleMonth(next);
+    if (selected) onChange(toDateOnly(next));
   };
-  const setYear = (year: number) => {
-    setVisibleMonth(new Date(year, visibleMonth.getMonth(), 1));
-  };
+  const setMonth = (month: number) => changeMonth(visibleMonth.getFullYear(), month);
+  const setYear = (year: number) => changeMonth(year, visibleMonth.getMonth());
 
   return (
     <Popover

@@ -21,7 +21,7 @@ import {
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
-import { useDeferredValue, useEffect, useState, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useRef, useState, type ReactNode } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -95,18 +95,22 @@ export function ProfileScreen({
   fallbackPhone,
   embedded = false,
   initialDetails,
+  focusPassport = false,
   onSaved,
 }: {
   fallbackPhone?: VerifiedPhone;
   embedded?: boolean;
   initialDetails?: Partial<PassportData>;
+  focusPassport?: boolean;
   onSaved?: () => void;
 }) {
   const auth = useAuth();
   const queryClient = useQueryClient();
   const [saved, setSaved] = useState(false);
   const [scanned, setScanned] = useState(Boolean(initialDetails && Object.keys(initialDetails).length));
-  const [passportOpen, setPassportOpen] = useState(embedded);
+  const [passportOpen, setPassportOpen] = useState(embedded || focusPassport);
+  const passportRef = useRef<HTMLDivElement>(null);
+  const focusedPassport = useRef(false);
   const profile = useQuery({
     queryFn: getProfile,
     queryKey: queryKeys.profile.current(),
@@ -164,6 +168,15 @@ export function ProfileScreen({
     const timeout = window.setTimeout(() => setSaved(false), 3_000);
     return () => window.clearTimeout(timeout);
   }, [saved]);
+
+  useEffect(() => {
+    if (!focusPassport || !profile.data || focusedPassport.current) return;
+    const frame = requestAnimationFrame(() => {
+      passportRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+      focusedPassport.current = true;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusPassport, profile.data]);
 
   if (profile.isPending) {
     return <ProfileLoading />;
@@ -335,7 +348,7 @@ export function ProfileScreen({
           <p className="field-hint" role="status">Адрес сохранён вручную. Автоматическая проверка недоступна — проверьте написание самостоятельно.</p>
         ) : null}
 
-        <Collapsible className="passport-profile-fields" open={passportOpen} onOpenChange={setPassportOpen}>
+        <Collapsible ref={passportRef} className="passport-profile-fields" open={passportOpen} onOpenChange={setPassportOpen}>
           <CollapsibleTrigger asChild><Button variant="unstyled" className="collapsible-trigger" type="button">Паспортные данные<ChevronDown className="collapsible-chevron" size={16} aria-hidden="true" /></Button></CollapsibleTrigger>
           <CollapsibleContent>{passportKeys.map(key => <ProfileField key={key} inputId={`passport-${key}`} label={passportFieldLabels[key]} error={form.formState.errors.passport?.[key]?.message}>
             {key === "issuedAt" ? <Controller control={form.control} name="passport.issuedAt" render={({ field }) => <DatePicker id="passport-issuedAt" value={field.value} onChange={field.onChange} />} />

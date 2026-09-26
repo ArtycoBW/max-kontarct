@@ -148,6 +148,7 @@ export class DealsService {
     }
     const generation = await this.deals.findCompletedGeneration({
       id: version.sourceGenerationId,
+      dealId,
       templateVersionId: record.templateVersion.id,
       userId,
     });
@@ -199,6 +200,7 @@ export class DealsService {
     assertAnswersSize(input.answers);
     const generation = await this.deals.findCompletedGeneration({
       id: input.sourceGenerationId,
+      dealId,
       templateVersionId: record.templateVersion.id,
       userId,
     });
@@ -303,6 +305,7 @@ export class DealsService {
     if (input.sourceGenerationId) {
       const generation = await this.deals.findCompletedGeneration({
         id: input.sourceGenerationId,
+        dealId,
         templateVersionId: record.templateVersion.id,
         userId,
       });

@@ -12,7 +12,7 @@ export function SharedDealAttachments({ dealId }: { dealId: string }) {
   const all = documents.data ? [...documents.data.evidenceFiles, ...documents.data.requirements.flatMap(item => item.uploads)] : [];
   const shared = all.filter(file => file.visibility === "DEAL_PARTICIPANTS");
   return <Card className="deal-chat shared-deal-attachments"><h2>Приложения к договору</h2><p className="field-description">Общие материалы предмета сделки. Личные документы сюда не включаются.</p>
-    {documents.isPending ? <Skeleton className="file-list-loading" /> : <DealFileList dealId={dealId} files={shared} showDownload={false} />}
+    {documents.isPending ? <Skeleton className="file-list-loading" /> : <DealFileList dealId={dealId} files={shared} showDownload />}
     {documents.error ? <p role="alert">Не удалось загрузить приложения. <Button variant="ghost" onClick={() => void documents.refetch()}>Повторить</Button></p> : !documents.isPending && !shared.length ? <p className="field-description">Приложений пока нет.</p> : null}
   </Card>;
 }

@@ -59,7 +59,7 @@ export function PublicInvitationPage({
 
         <div className="public-invite-heading">
           <p className="screen-eyebrow">Вас приглашают в сделку</p>
-          <h1>{invitation.templateTitle}</h1>
+          <h1>Проверьте условия вместе</h1>
           <p>{invitation.templateSummary}</p>
         </div>
 

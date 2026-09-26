@@ -71,7 +71,7 @@ function RevisionForm({ deal, onSaved }: { deal: DealWorkspaceResponse; onSaved:
       }
       setSession(next);
       if (next.status === "READY_TO_GENERATE") {
-        const started = await startContractGeneration(deal.template.slug, next.id);
+        const started = await startContractGeneration(deal.template.slug, next.id, deal.id);
         setGenerationId(started.id);
       }
     },

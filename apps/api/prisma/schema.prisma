@@ -174,6 +174,7 @@ model User {
   reviewedDealFiles DealFile[]    @relation("DealFileReviewer")
   dealSignatures    DealSignature[]
   dealMessages      DealMessage[]
+  artifactDeliveries ArtifactDelivery[]
 
   @@index([role], map: "users_role_idx")
   @@map("users")
@@ -545,11 +546,32 @@ model DealArtifact {
 
   deal        Deal        @relation(fields: [dealId], references: [id], onDelete: Cascade)
   dealVersion DealVersion @relation(fields: [dealVersionId, dealId], references: [id, dealId], onDelete: Cascade)
+  deliveries ArtifactDelivery[]
 
   @@unique([dealVersionId, type], map: "deal_artifacts_version_type_key")
   @@index([dealId, createdAt], map: "deal_artifacts_deal_created_idx")
   @@index([sha256], map: "deal_artifacts_sha256_idx")
   @@map("deal_artifacts")
+}
+
+// Transactional outbox: only newly completed deals enqueue deliveries.
+model ArtifactDelivery {
+  id String @id @default(uuid()) @db.Uuid
+  artifactId String @map("artifact_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  status String @default("PENDING") @db.VarChar(16)
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+  leaseUntil DateTime? @map("lease_until") @db.Timestamptz(3)
+  uploadToken String? @map("upload_token") @db.Text
+  sentAt DateTime? @map("sent_at") @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  artifact DealArtifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([artifactId, userId], map: "artifact_deliveries_recipient_key")
+  @@index([status, nextAttemptAt], map: "artifact_deliveries_pending_idx")
+  @@map("artifact_deliveries")
 }
 
 model DealApproval {
