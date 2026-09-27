@@ -17,7 +17,11 @@ export function invitationPrice(slug: string, answers: Record<string, unknown>):
   return slug === "personal-loan" ? `Сумма займа: ${amount}` : `Стоимость: ${amount}`;
 }
 
-export function invitationMessage(input: { firstName: string; title: string; templateTitle: string; slug: string; answers: Record<string, unknown> }): string {
+export function invitationMessage(input: { firstName: string; title: string; templateTitle: string; description?: string; slug: string; answers: Record<string, unknown> }): string {
+  const subjectKey = ({ "paid-services": "serviceDescription", "work-contract": "workDescription", "movable-property-sale": "propertyDescription", "property-rental": "propertyDescription", "personal-loan": "purpose" } as Record<string, string>)[input.slug];
+  const detail = subjectKey ? input.answers[subjectKey] : undefined;
+  const subject = typeof detail === "string" && detail.trim() && !PRIVATE_TEXT.test(detail)
+    ? detail : input.title.trim().toLocaleLowerCase("ru") === input.templateTitle.trim().toLocaleLowerCase("ru") && input.description && !PRIVATE_TEXT.test(input.description) ? input.description : input.title;
   const dates = [["startDate", "Начало"], ["endDate", "Окончание"], ["completionDate", "Срок"], ["transferDate", "Передача"], ["returnDate", "Возврат"]].flatMap(([key, label]) => {
     const value = input.answers[key!];
     return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -25,7 +29,7 @@ export function invitationMessage(input: { firstName: string; title: string; tem
   });
   return [
     `${input.firstName.replace(/[\r\n]+/g, " ").trim() || "Участник"} приглашает вас в сделку «Макс-Контракт».`,
-    `Предмет: ${invitationSubject(input.title, input.templateTitle)}`,
+    `Предмет: ${invitationSubject(subject, input.templateTitle)}`,
     invitationPrice(input.slug, input.answers),
     ...dates,
     "Описание и основные условия — по защищённой ссылке. Не пересылайте приглашение посторонним.",

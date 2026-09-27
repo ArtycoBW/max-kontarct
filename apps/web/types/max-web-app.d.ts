@@ -1,7 +1,8 @@
 interface MaxWebApp {
   initData: string;
   initDataUnsafe?: { start_param?: string };
-  openMaxLink?: (url: string) => void;
+  openMaxLink?: (url: string) => void | Promise<unknown>;
+  downloadFile?: (url: string, filename: string) => Promise<unknown>;
   shareContent?: (params: { link?: string; text?: string }) => void | Promise<void>;
   shareMaxContent?: (params: { link?: string; text?: string }) => void | Promise<void>;
   platform?: "android" | "desktop" | "ios" | "web" | string;

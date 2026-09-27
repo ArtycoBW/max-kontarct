@@ -17,17 +17,17 @@ export function DealRequisites({ onSaved }: { onSaved: () => void }) {
   const [details, setDetails] = useState<Partial<PassportData> | null>(null);
   const [saved, setSaved] = useState(false);
   const profile = useQuery({ queryKey: queryKeys.profile.current(), queryFn: getProfile });
-  const hasSavedDetails = Boolean(profile.data?.passport?.number);
+  const hasSavedDetails = Boolean(profile.data?.firstName && profile.data?.lastName && profile.data?.birthDate && profile.data?.passport?.series && profile.data?.passport?.number && profile.data?.passport?.issuedAt && profile.data?.passport?.issuer && profile.data?.passport?.divisionCode && profile.data?.passport?.birthPlace && profile.data?.passport?.gender);
   const open = (data: Partial<PassportData>) => { setDetails(data); setSaved(false); };
   return <>
     <Card className="deal-requisites">
       <h2>Мои реквизиты для договора</h2>
-      {hasSavedDetails ? <div className="saved-profile-choice"><p>{[profile.data?.lastName, profile.data?.firstName, profile.data?.middleName].filter(Boolean).join(" ")}</p><Button type="button" variant="secondary" className="full-width" onClick={() => open({})}>Выбрать реквизиты из профиля</Button><small>Откроем сохранённые данные для проверки и подтверждения.</small></div> : null}
       <PasteProfileDetails onApply={open} />
       <PassportScanner onApply={open} />
       <Button type="button" variant="outline" className="full-width" onClick={() => open({})}>
         <PenLine size={18} /> Заполнить реквизиты вручную
       </Button>
+      {hasSavedDetails ? <Button type="button" variant="outline" className="full-width" onClick={() => open({})}>Выбрать реквизиты из профиля</Button> : null}
       <p>Каждый участник указывает свои реквизиты. Фото паспорта загружать не обязательно.</p>
       {saved ? <p className="validation-success" role="status">Реквизиты сохранены</p> : null}
     </Card>

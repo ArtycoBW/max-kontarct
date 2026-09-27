@@ -24,6 +24,7 @@ import { StorageModule } from "./storage/storage.module";
 import { SigningModule } from "./signing/signing.module";
 import { TemplatesModule } from "./templates/templates.module";
 import { TrustModule } from "./trust/trust.module";
+import { NativeDownloadsModule } from "./downloads/native-downloads.module";
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { TrustModule } from "./trust/trust.module";
     AdminModule,
     TemplatesModule,
     TrustModule,
+    NativeDownloadsModule,
   ],
   providers: [
     {

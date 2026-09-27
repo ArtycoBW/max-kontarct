@@ -112,8 +112,18 @@ export function getMaxStartPayload(): MaxStartPayload | null {
   return null;
 }
 
+export function maxShareUrl(text: string, link: string): string {
+  return `https://max.ru/:share?text=${encodeURIComponent(`${text}\n\n${link}`)}`;
+}
+
 export async function shareInMax(text: string, link: string): Promise<void> {
   const webApp = typeof window === "undefined" ? undefined : window.WebApp;
+  // Call synchronously from the user's click: Android requires the native gesture.
+  // The documented :share deeplink also works on hosts lacking WebAppMaxShare.
+  if ((webApp?.platform === "android" || (typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent))) && webApp?.openMaxLink) {
+    await webApp.openMaxLink(maxShareUrl(text, link));
+    return;
+  }
   if (webApp?.shareMaxContent) {
     await webApp.shareMaxContent({ link, text });
     return;

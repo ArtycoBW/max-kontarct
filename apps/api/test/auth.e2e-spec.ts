@@ -116,6 +116,12 @@ describe("MAX authentication (e2e)", () => {
   } as unknown as ConfigService;
 
   const prisma = {
+    user: { update: jest.fn(async ({ data, where }: { data: { lastSeenAt: Date }; where: { id: string } }) => {
+      const user = [...accounts.values()].find(account => account.userId === where.id)?.user;
+      if (!user) throw new Error("Missing fixture user");
+      Object.assign(user, data);
+      return user;
+    }) },
     $transaction: jest.fn(
       async (callback: (transaction: PrismaService) => Promise<unknown>) =>
         callback(prisma),
@@ -412,6 +418,9 @@ describe("MAX authentication (e2e)", () => {
       // Supertest uses HTTP; supply the opaque synthetic cookie manually here.
       // Browser policy/isolation is tested separately in real browser engines.
       await request(server).get(`/${API_PREFIX}/auth/me`).set("Cookie", sessionCookie).expect(200);
+      await request(server).post(`/${API_PREFIX}/auth/presence`).expect(401);
+      await request(server).post(`/${API_PREFIX}/auth/presence`).set("Cookie", sessionCookie).expect(204);
+      expect(prisma.user.update).toHaveBeenCalledWith({ where: { id: authenticated.body.user.id }, data: { lastSeenAt: expect.any(Date) } });
       await request(server).get(`/${API_PREFIX}/onboarding`).set("Cookie", sessionCookie).expect(200);
       const replay = await request(server).post(`/${API_PREFIX}/auth/max`).send({ initData: proof }).expect(401);
       expect(replay.body.code).toBe("MAX_INIT_DATA_REPLAYED");
@@ -423,6 +432,7 @@ describe("MAX authentication (e2e)", () => {
       expect(cleared.every(cookie => cookie.startsWith("max_contract_session=;") && cookie.includes("1970"))).toBe(true);
       const revoked = await request(server).get(`/${API_PREFIX}/auth/me`).set("Cookie", sessionCookie).expect(401);
       expect(revoked.body.code).toBe("AUTH_SESSION_INVALID");
+      await request(server).post(`/${API_PREFIX}/auth/presence`).set("Cookie", sessionCookie).expect(401);
     } finally { await production.close(); }
   });
 

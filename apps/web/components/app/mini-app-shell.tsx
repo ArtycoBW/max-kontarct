@@ -71,7 +71,7 @@ import {
   parseQuestionnaireSchema,
   TemplateQuestionnaire,
 } from "@/components/templates/template-questionnaire";
-import { ApiError } from "@/lib/api/client";
+import { ApiError, apiRequest } from "@/lib/api/client";
 import {
   createDealDraft,
   getDealDraft,
@@ -304,6 +304,7 @@ function formatDealStatus(status: DealStatus): string {
 }
 
 type CreateDealStep =
+  | "requisites"
   | "clarification"
   | "description"
   | "generation"
@@ -315,6 +316,7 @@ type CreateDealStep =
 type DraftSaveState = "error" | "idle" | "saved" | "saving";
 
 function toDraftStep(step: CreateDealStep): DealDraftStep {
+  if (step === "requisites") return "REQUISITES";
   if (step === "description") return "DESCRIPTION";
   if (step === "questionnaire") return "PARAMETERS";
   if (step === "generation") return "AI_GENERATION";
@@ -323,6 +325,7 @@ function toDraftStep(step: CreateDealStep): DealDraftStep {
 }
 
 function restoreCreateStep(step: DealDraftStep): CreateDealStep {
+  if (step === "REQUISITES") return "requisites";
   if (step === "DESCRIPTION") return "description";
   if (step === "PARAMETERS") return "questionnaire";
   if (step === "AI_GENERATION") return "generation";
@@ -409,6 +412,7 @@ function CreateDealScreen({
 }) {
   const queryClient = useQueryClient();
   const [activeDraftId, setActiveDraftId] = useState(draftId ?? "");
+  const [invitationSent, setInvitationSent] = useState(false);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [subjectDocumentsParty, setSubjectDocumentsParty] = useState<DealPartyRole | null>(null);
   const [clarificationAnswers, setClarificationAnswers] = useState<
@@ -568,7 +572,7 @@ function CreateDealScreen({
       startContractGeneration(effectiveSelectedSlug, sessionId, activeDraftId),
   });
   const partyReadiness = useQuery({
-    enabled: Boolean(activeDraftId) && renderedStep === "ready",
+    enabled: Boolean(activeDraftId) && ["ready", "requisites", "description"].includes(renderedStep),
     queryKey: queryKeys.deals.workspace(activeDraftId),
     queryFn: () => getDealWorkspace(activeDraftId),
     refetchInterval: 5_000,
@@ -779,6 +783,7 @@ function CreateDealScreen({
   };
 
   const continueDescription = async () => {
+    if (!invitationSent && !partyReadiness.data?.counterparty && !partyReadiness.data?.invitation?.sentAt) return;
     const normalizedTitle = title.trim();
     const normalizedDescription = description.trim();
     if (!normalizedTitle) {
@@ -800,12 +805,12 @@ function CreateDealScreen({
     try {
       await enqueueDraftSave({
         answers: nextAnswers,
-        currentStep: "questionnaire",
+        currentStep: "requisites",
         description: normalizedDescription,
         title: normalizedTitle,
       });
       setAnswers(nextAnswers);
-      setStep("questionnaire");
+      setStep("requisites");
     } catch {
       // Ошибка сохранения уже показана рядом с формой.
     }
@@ -1011,15 +1016,13 @@ function CreateDealScreen({
           <VoiceInput inputId="deal-description" value={description} onChange={value => { setDescription(value); setDescriptionError(""); }} />
           </CollapsibleContent>
           </Collapsible>
-          <DealRequisites onSaved={() => { void queryClient.invalidateQueries({ queryKey: queryKeys.deals.all }); }} />
           <PartyResponsibility slug={effectiveSelectedSlug} value={subjectDocumentsParty} onChange={value => { setSubjectDocumentsParty(value); setDescriptionError(""); }} />
-          {activeDraftId && subjectDocumentsParty ? <DocumentsScreen key={subjectDocumentsParty} materialsOnly beforeUpload={() => enqueueDraftSave()} dealId={activeDraftId} onBack={() => undefined} onSelectDeal={() => undefined} /> : null}
           {descriptionError ? (
             <span className="field-error" role="alert">
               <CircleAlert size={13} /> {descriptionError}
             </span>
           ) : null}
-          <EarlyInvitationPanel dealId={activeDraftId} beforeCreate={() => enqueueDraftSave()} disabled={!title.trim() || description.trim().length < 10} />
+          <EarlyInvitationPanel dealId={activeDraftId} onSent={setInvitationSent} beforeCreate={() => enqueueDraftSave()} disabled={!title.trim() || description.trim().length < 10} />
           {saveState === "error" ? (
             <RequestErrorCard
               message={draftSave.error?.message ?? "Не удалось сохранить черновик"}
@@ -1029,7 +1032,7 @@ function CreateDealScreen({
           <div className="create-flow-action">
             <Button
               className="full-width"
-              disabled={saveState === "saving"}
+              disabled={saveState === "saving" || (!invitationSent && !partyReadiness.data?.counterparty && !partyReadiness.data?.invitation?.sentAt)}
               onClick={() => void continueDescription()}
               type="button"
             >
@@ -1039,11 +1042,17 @@ function CreateDealScreen({
         </div>
   );
 
+  if (step === "requisites") return <div className="screen-content create-deal-screen">
+    <FlowHeader eyebrow="Реквизиты" title="Укажите свои данные" onBack={() => setStep("description")} />
+    <DealRequisites onSaved={() => { void partyReadiness.refetch(); }} />
+    <div className="create-flow-action"><Button className="full-width" disabled={!partyReadiness.data?.initiator.profileCompleted || saveState === "saving"} onClick={() => { void enqueueDraftSave({ currentStep: "questionnaire" }).then(() => setStep("questionnaire")).catch(() => undefined); }}>Сохранить и продолжить</Button></div>
+  </div>;
+
   if (step === "type" || (step === "description" && acceptedIntake)) {
     return (
       <div className="screen-content create-deal-screen">
         <FlowHeader
-          eyebrow="Шаг 1 из 5"
+          eyebrow="Описание сделки"
           onBack={() => {
             void enqueueDraftSave().then(onBack).catch(() => undefined);
           }}
@@ -1189,9 +1198,9 @@ function CreateDealScreen({
       <div className="screen-content create-deal-screen deal-description-screen">
         <FlowHeader
           action={<DraftSaveStatus state={saveState} />}
-          eyebrow="Шаг 2 из 5"
+          eyebrow="Описание и приглашение"
           onBack={onBack}
-          title="Реквизиты для договора"
+          title="Пригласите вторую сторону"
         />
         <p className="screen-copy">
           Тип договора выбран. Условия можно отредактировать на следующем шаге. Теперь заполните свои реквизиты одним из трёх способов.
@@ -1277,7 +1286,7 @@ function CreateDealScreen({
       <div className="screen-content create-deal-screen clarification-ready-screen">
         <FlowHeader
           action={<DraftSaveStatus state={saveState} />}
-          eyebrow="Шаг 4 из 5"
+          eyebrow="Подготовка договора"
           onBack={() => {
             resetClarification();
             setStep("questionnaire");
@@ -1298,8 +1307,8 @@ function CreateDealScreen({
             <span>{partyReadiness.data?.initiator.profileCompleted ? "Ваши реквизиты заполнены." : "Заполните свои реквизиты для договора."}</span>
             <span>{!partyReadiness.data?.counterparty ? "Пригласите вторую сторону — она сможет заполнить данные параллельно с вами." : partyReadiness.data.counterparty.profileCompleted ? "Реквизиты второй стороны заполнены." : `${partyReadiness.data.counterparty.displayName} ещё заполняет реквизиты.`}</span>
           </Card>
-          <DealRequisites onSaved={() => { void partyReadiness.refetch(); }} />
-          <EarlyInvitationPanel dealId={activeDraftId} beforeCreate={() => enqueueDraftSave()} disabled={false} />
+          {!partyReadiness.data?.initiator.profileCompleted ? <Button variant="secondary" onClick={() => setStep("requisites")}>Вернуться к реквизитам</Button> : null}
+          {!partyReadiness.data?.counterparty ? <EarlyInvitationPanel dealId={activeDraftId} beforeCreate={() => enqueueDraftSave()} disabled={false} /> : null}
           {partyReadiness.isError ? <RequestErrorCard message={partyReadiness.error.message} onRetry={() => partyReadiness.refetch()} /> : null}
         </> : null}
         <div className="create-flow-action">
@@ -1347,7 +1356,7 @@ function CreateDealScreen({
       <div className="screen-content create-deal-screen initiator-review-screen">
         <FlowHeader
           action={<DraftSaveStatus state={saveState} />}
-          eyebrow="Шаг 5 из 5"
+          eyebrow="Проверка договора"
           onBack={() => setStep("generation")}
           title="Договор и приложения"
         />
@@ -1421,8 +1430,8 @@ function CreateDealScreen({
     <div className="screen-content create-deal-screen">
       <FlowHeader
         action={<DraftSaveStatus state={saveState} />}
-        eyebrow="Шаг 3 из 5"
-        onBack={() => setStep("description")}
+        eyebrow="Условия сделки"
+        onBack={() => setStep("requisites")}
         title="Параметры сделки"
       />
       <p className="screen-copy">
@@ -1465,6 +1474,7 @@ function CreateDealScreen({
                 template.data.currentVersion.documentRequirements
               }
             />
+            {activeDraftId && subjectDocumentsParty === "INITIATOR" ? <DocumentsScreen materialsOnly beforeUpload={() => enqueueDraftSave()} dealId={activeDraftId} onBack={() => undefined} onSelectDeal={() => undefined} /> : null}
           </>
         ) : null}
 
@@ -1529,7 +1539,7 @@ function ContractGenerationScreen({
   return (
     <div className="screen-content create-deal-screen contract-generation-screen">
       <FlowHeader
-        eyebrow="Шаг 4 из 5"
+        eyebrow="Подготовка договора"
         onBack={onBack}
         title={isComplete ? "Проект договора" : "Подготовка договора"}
       />
@@ -1934,6 +1944,8 @@ function TemplateDocuments({
 }: {
   requirements: TemplateDocumentRequirementResponse[];
 }) {
+  requirements = requirements.filter(requirement => !/identity|passport/i.test(requirement.key) && !/удостоверяющ|паспорт/i.test(requirement.title));
+  if (!requirements.length) return null;
   return (
     <Card className="template-documents">
       <div className="template-documents-heading">
@@ -1953,7 +1965,7 @@ function TemplateDocuments({
                   <small>{getDocumentDisplayDescription(requirement)}</small>
                 ) : null}
               </span>
-              <em>{requirement.required ? "Обязательный" : "Дополнительный"}</em>
+              <em>Дополнительный</em>
             </li>
           ))}
         </ul>
@@ -2184,6 +2196,14 @@ export function MiniAppShell({
   showEnvironmentBadge: boolean;
 }) {
   const auth = useAuth();
+  useEffect(() => {
+    if (!auth.user?.id) return;
+    const heartbeat = () => { if (document.visibilityState === "visible") void apiRequest("auth/presence", { method: "POST" }).catch(() => undefined); };
+    heartbeat();
+    const timer = setInterval(heartbeat, 30_000);
+    document.addEventListener("visibilitychange", heartbeat);
+    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", heartbeat); };
+  }, [auth.user?.id]);
   const [startPayload] = useState<MaxStartPayload | null>(() =>
     getMaxStartPayload(),
   );

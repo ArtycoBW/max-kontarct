@@ -43,6 +43,7 @@ import { hasCompletePassportProfile } from "../files/document-policy";
 import { loadDocumentStage } from "../files/document-readiness";
 
 const invitationSelect = {
+  sentAt: true,
   acceptedAt: true,
   createdAt: true,
   expiresAt: true,
@@ -67,6 +68,7 @@ const workspaceSelect = {
       userId: true,
       user: {
         select: {
+          lastSeenAt: true,
           maxAccount: { select: { firstName: true, lastName: true, maxUserId: true } },
           phones: {
             orderBy: [{ isPrimary: "desc" as const }, { verifiedAt: "desc" as const }],
@@ -269,7 +271,7 @@ export class DealInvitationsService {
     return {
       ...toInvitationResponse(invitation),
       maxDeeplink,
-      shareText: invitationMessage({ firstName: (sender.profile ?? sender.maxAccount)?.firstName ?? "", title: record.title, templateTitle: record.templateVersion.template.title, slug: record.templateVersion.template.slug, answers: parseDealDraft(version.terms).answers }),
+      shareText: invitationMessage({ firstName: (sender.profile ?? sender.maxAccount)?.firstName ?? "", title: record.title, description: parseDealDraft(version.terms).description, templateTitle: record.templateVersion.template.title, slug: record.templateVersion.template.slug, answers: parseDealDraft(version.terms).answers }),
       shareUrl,
     };
   }
@@ -291,6 +293,7 @@ export class DealInvitationsService {
     const invitation = record.invitations[0];
     assertActiveInvitation(invitation, invitationId);
 
+    const sent = await this.prisma.dealInvitation.update({ where: { id: invitation.id }, data: { sentAt: invitation.sentAt ?? new Date() }, select: invitationSelect });
     if (record.status === DealStatus.INVITATION_READY) {
       await this.prisma.$transaction([
         this.prisma.deal.update({
@@ -313,7 +316,7 @@ export class DealInvitationsService {
         }),
       ]);
     }
-    return toInvitationResponse(invitation);
+    return toInvitationResponse(sent);
   }
 
   async revoke(
@@ -835,6 +838,7 @@ function toWorkspace(record: WorkspaceRecord, userId: string): DealWorkspaceResp
     counterparty: counterparty
       ? {
           displayName: displayName(counterparty.user),
+          presence: appPresence(counterparty.user.lastSeenAt),
           profileCompleted: hasCompletePassportProfile(counterparty.user.profile),
           role: counterparty.role,
         }
@@ -845,6 +849,7 @@ function toWorkspace(record: WorkspaceRecord, userId: string): DealWorkspaceResp
     id: record.id,
     initiator: {
       displayName: displayName(initiator.user),
+      presence: appPresence(initiator.user.lastSeenAt),
       profileCompleted: hasCompletePassportProfile(initiator.user.profile),
       role: initiator.role,
     },
@@ -869,6 +874,10 @@ function toWorkspace(record: WorkspaceRecord, userId: string): DealWorkspaceResp
 function displayName(user: WorkspaceRecord["parties"][number]["user"]): string {
   const profile = user.profile ?? user.maxAccount;
   return [profile?.lastName, profile?.firstName, user.profile?.middleName].filter(Boolean).join(" ") || "Участник сделки";
+}
+
+function appPresence(value: Date | null | undefined) {
+  return { online: Boolean(value && Date.now() - value.getTime() < 75_000), lastSeenAt: value?.toISOString() ?? null, source: "APP" as const };
 }
 
 function createFreeze(
@@ -953,6 +962,7 @@ function contractRequisites(record: WorkspaceRecord, version: WorkspaceRecord["v
 
 function toInvitationResponse(record: InvitationRecord): DealInvitationResponse {
   return {
+    sentAt: record.sentAt?.toISOString() ?? null,
     acceptedAt: record.acceptedAt?.toISOString() ?? null,
     createdAt: record.createdAt.toISOString(),
     expiresAt: record.expiresAt.toISOString(),

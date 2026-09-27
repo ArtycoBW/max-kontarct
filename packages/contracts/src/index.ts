@@ -36,6 +36,7 @@ export type DealCreationPath = "TEMPLATE" | "AI_ASSISTED";
 
 export type DealDraftStep =
   | "DESCRIPTION"
+  | "REQUISITES"
   | "PARAMETERS"
   | "AI_CLARIFICATION"
   | "AI_GENERATION"
@@ -160,6 +161,7 @@ export interface CreateDealInvitationRequest {
 }
 
 export interface DealInvitationResponse {
+  sentAt?: string | null;
   acceptedAt: string | null;
   createdAt: string;
   expiresAt: string;
@@ -177,6 +179,7 @@ export interface JoinDealInvitationRequest {
 }
 
 export interface DealPartySummary {
+  presence?: { online: boolean; lastSeenAt: string | null; source: "APP" };
   displayName: string;
   profileCompleted: boolean;
   role: DealPartyRole;

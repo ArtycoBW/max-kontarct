@@ -138,6 +138,10 @@ export class AuthService {
     };
   }
 
+  async recordPresence(userId: string): Promise<void> {
+    await this.prisma.user.update({ where: { id: userId }, data: { lastSeenAt: new Date() } });
+  }
+
   async logout(session: AuthSessionContext, requestId?: string): Promise<void> {
     await Promise.all([
       this.redis.delete(this.sessionKey(session.sessionHash)),

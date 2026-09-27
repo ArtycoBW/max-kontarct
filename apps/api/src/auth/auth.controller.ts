@@ -70,6 +70,13 @@ export class AuthController {
     this.clearLegacySessionCookie(response);
   }
 
+  @Post("presence")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(SessionAuthGuard)
+  async presence(@Req() request: AuthenticatedRequest): Promise<void> {
+    await this.auth.recordPresence(request.auth.user.id);
+  }
+
   private setSessionCookie(response: Response, token: string): void {
     this.clearLegacySessionCookie(response);
     response.cookie(

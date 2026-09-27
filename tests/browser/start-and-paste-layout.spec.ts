@@ -7,6 +7,7 @@ async function mockApp(page: Page) {
   await page.route("https://st.max.ru/js/max-web-app.js", route => route.fulfill({ contentType: "application/javascript", body: "window.WebApp={initData:'layout-test',initDataUnsafe:{},ready(){},expand(){}}" }));
   await page.route("**/api/v1/**", route => {
     const pathname = new URL(route.request().url()).pathname;
+    if (pathname === "/api/v1/auth/presence") return route.fulfill({ status: 204 });
     if (!["GET", "HEAD"].includes(route.request().method())) writes.push(pathname);
     if (pathname === "/api/v1/auth/me") return route.fulfill({ json: { user: { id: "local-layout-test", role: "USER", maxAccount: { firstName: "Тест", lastName: "Пользователь", maxUserId: "local-test", username: null, languageCode: "ru" } } } });
     if (pathname === "/api/v1/onboarding") return route.fulfill({ json: { completed: true, phoneVerified: true, requiredConsentsAccepted: true, consents: [], phone: { e164: "+79990000000", source: "MAX", verifiedAt: "2026-01-01T00:00:00Z" } } });
@@ -31,6 +32,54 @@ const workspaceFixture = (status = "DRAFT", ready = false) => ({
   contractDraft: { title: "Договор", preamble: "Стороны договорились", sections: [{ heading: "Предмет", clauses: ["Тестовый предмет"] }], warnings: [] },
 });
 
+test("Android 15 bridge receives invitation deeplink directly from the click", async ({ page }) => {
+  const workspace = { ...workspaceFixture(), currentUserRole: "INITIATOR", counterparty: null };
+  await openMockDeal(page, workspace as unknown as ReturnType<typeof workspaceFixture>);
+  await page.evaluate(() => {
+    Object.assign(window.WebApp!, { platform: "android", openMaxLink: (url: string) => { document.body.dataset.sharedUrl = url; document.body.dataset.shareGesture = String(navigator.userActivation.isActive); } });
+  });
+  await page.route("**/deals/review-deal/invitations", route => route.fulfill({ json: { id: "invite", state: "ACTIVE", shareText: "Создание презентации за 10000 рублей", shareUrl: "https://example.test/invite/1#secret", expiresAt: "2099-01-01T00:00:00Z" } }));
+  await page.getByRole("button", { name: "Создать приглашение", exact: true }).click();
+  await page.getByRole("button", { name: "Отправить в MAX", exact: true }).click();
+  const shared = await page.locator("body").getAttribute("data-shared-url");
+  expect(new URL(shared!).searchParams.get("text")).toContain("https://example.test/invite/1#secret");
+  expect(await page.locator("body").getAttribute("data-share-gesture")).toBe("true");
+  await expect(page.getByRole("link", { name: "Открыть приглашение в MAX" })).toBeVisible();
+});
+
+test("Android downloads use a scoped prepared link and a fresh native click", async ({ page }) => {
+  await openMockDeal(page, workspaceFixture("COMPLETED", true));
+  await page.evaluate(() => {
+    Object.assign(window.WebApp!, { platform: "android", downloadFile: (url: string, filename: string) => { document.body.dataset.download = JSON.stringify({ url, filename, gesture: navigator.userActivation.isActive }); return Promise.resolve({}); } });
+  });
+  const artifact = (kind: string) => ({ id: kind, originalName: kind === "final-pdf" ? "Договор.pdf" : "Материалы.zip", mimeType: "application/pdf", sizeBytes: 1000, downloadUrl: `/api/v1/deals/review-deal/artifacts/${kind}` });
+  await page.route("**/deals/review-deal/signing", route => route.fulfill({ json: { contractNumber: "Тест", currentUserSigned: true, dealId: "review-deal", documentHash: "a".repeat(64), finalPdf: artifact("final-pdf"), evidencePackage: artifact("evidence-package"), parties: [], pepAgreement: pepAgreement("v1"), requiredSignatures: 2, totalSignatures: 2, status: "COMPLETED", versionId: "version", versionNumber: 2 } }));
+  const paths: string[] = [];
+  await page.route("**/downloads/prepare", route => { expect(route.request().headers()["content-type"]).toBe("application/json"); paths.push(route.request().postDataJSON().path); return route.fulfill({ json: { url: "https://example.test/api/v1/downloads/content?ticket=test-only", filename: "Договор.pdf", expiresAt: new Date(Date.now() + 120000).toISOString() } }); });
+  await expect(page.getByRole("heading", { name: "Подпишите и сохраните" })).toBeVisible();
+  await page.getByRole("link", { name: "Скачать подписанный PDF" }).click();
+  const modal = page.getByRole("dialog", { name: "Скачать файл" });
+  await modal.getByRole("button", { name: "Скачать на устройство" }).click();
+  expect(paths).toEqual(["/api/v1/deals/review-deal/artifacts/final-pdf"]);
+  const received = JSON.parse((await page.locator("body").getAttribute("data-download"))!);
+  expect(received).toMatchObject({ gesture: true, filename: "Договор.pdf", url: "https://example.test/api/v1/downloads/content?ticket=test-only" });
+  await expect(modal.getByText("Файл передан в загрузки MAX.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Документы сделки", exact: true })).toHaveCount(0);
+  await page.screenshot({ path: "test-results/android-native-download.png" });
+});
+
+test("materials use role-specific empty text and uploader action; incomplete parties cannot view the contract", async ({ page }) => {
+  const workspace = workspaceFixture("TERMS_REVIEW", false);
+  await openMockDeal(page, workspace);
+  await page.route("**/deals/review-deal/files", route => route.fulfill({ json: { evidenceFiles: [], requirements: [], canUploadEvidence: false } }));
+  await expect(page.locator(".deal-panel-trigger").filter({ hasText: /^Договор/ })).toHaveCount(0);
+  await page.getByRole("button", { name: /Приложения к договору/ }).click();
+  await expect(page.getByRole("dialog")).toContainText("продавец ещё не загрузил дополнительные материалы");
+  await page.keyboard.press("Escape");
+  workspace.currentUserRole = "INITIATOR";
+  await expect(page.getByRole("button", { name: /Загрузите материалы сделки/ })).toBeVisible();
+});
+
 test("generation waits for both profiles and submits the actual deal id", async ({ page }) => {
   await mockApp(page);
   const workspace = { ...workspaceFixture(), currentUserRole: "INITIATOR", contractDraft: null, sourceGenerationId: null };
@@ -52,7 +101,8 @@ test("generation waits for both profiles and submits the actual deal id", async 
   await page.getByRole("button", { name: "Редактировать черновик" }).click();
   const action = page.getByRole("button", { name: "Подготовить договор", exact: true });
   await expect(action).toBeDisabled();
-  await expect(page.getByText("Тестова Анна Ивановна уже присоединился.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Мои реквизиты для договора" })).toHaveCount(0);
+  await expect(page.getByText("Шаг 4 из 5", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Пригласите вторую сторону уже сейчас", { exact: true })).toHaveCount(0);
   workspace.initiator.profileCompleted = true;
   await expect(action).toBeDisabled();
@@ -100,7 +150,10 @@ test("all shared materials appear in one list and the documents header sticks", 
     requirements: [{ id: "property", required: false, title: "Документ на имущество", uploads: [file("ownership")] },
       { id: "photos", required: false, title: "Фотографии имущества", uploads: [file("photo")] }],
   } }));
-  await page.getByRole("button", { name: "Документы сделки", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Документы сделки", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Назад", exact: true }).click();
+  await page.getByRole("button", { name: "Документы", exact: true }).click();
+  await page.locator(".document-deal-list").getByRole("button", { name: /Тестовая сделка/ }).click();
   await expect(page.getByText("Все материалы сделки", { exact: true })).toBeVisible();
   await expect(page.locator(".deal-file-row")).toHaveCount(7);
   await expect(page.locator(".requirement-upload-card")).toHaveCount(0);
@@ -308,7 +361,7 @@ test("empty and populated deal lists keep the bottom action and distinguish stat
   await page.screenshot({ path: "test-results/deals-statuses.png" });
 });
 
-test("description leads to three requisites methods; import is reviewed before explicit saving", async ({ page }) => {
+test("invitation gates a separate requisites step; uploads appear only with parameters", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 700 });
   await mockApp(page);
   const template = { id: "template", slug: "movable-property-sale", title: "Купля-продажа имущества", summary: "Передача имущества", isDemo: false,
@@ -329,7 +382,11 @@ test("description leads to three requisites methods; import is reviewed before e
     if (route.request().method() === "PATCH") draft = { ...draft, draft: { ...draft.draft, ...route.request().postDataJSON() } };
     return route.fulfill({ json: draft });
   });
-  await page.route("**/api/v1/deals/draft/workspace", route => route.fulfill({ json: { counterparty: null, invitation: null } }));
+  let sentAt: string | null = null;
+  const invitation = { id: "invite", state: "ACTIVE", shareUrl: "https://example.test/invite/1#secret", shareText: "Продажа стола", expiresAt: "2099-01-01T00:00:00Z", createdAt: "2026-09-27T00:00:00Z", publicCode: "test", acceptedAt: null, maxDeeplink: null };
+  await page.route("**/api/v1/deals/draft/workspace", route => route.fulfill({ json: { ...workspaceFixture(), ...draft, initiator: { profileCompleted: profileWrites > 0 }, counterparty: null, invitation: { ...invitation, sentAt } } }));
+  await page.route("**/api/v1/deals/draft/invitations", route => route.fulfill({ json: invitation }));
+  await page.route("**/api/v1/deals/draft/invitations/invite/sent", route => { sentAt = new Date().toISOString(); return route.fulfill({ json: { ...invitation, sentAt } }); });
   await page.route("**/api/v1/profile", route => {
     if (route.request().method() !== "PATCH") return route.fallback();
     profileWrites++;
@@ -342,7 +399,17 @@ test("description leads to three requisites methods; import is reviewed before e
   await page.getByRole("textbox", { name: "Что хотите оформить?" }).fill(draft.draft.description);
   await page.getByRole("button", { name: "Подобрать договор с ИИ" }).click();
   await expect(page.getByText("Определена продажа")).toBeHidden();
-  await page.getByRole("button", { name: "Заполнить реквизиты", exact: true }).click();
+  await page.getByRole("button", { name: "Перейти к приглашению", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Мои реквизиты для договора" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Загрузить фото или файл" })).toHaveCount(0);
+  await page.getByRole("combobox", { name: "Ваша роль в сделке" }).click();
+  await page.getByRole("option").first().click();
+  await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeDisabled();
+  await page.getByRole("button", { name: "Перевыпустить приглашение", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Отправить в MAX", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeDisabled();
+  await page.getByRole("button", { name: "Я отправил приглашение", exact: true }).click();
+  await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
   await expect(page.getByRole("heading", { name: "Мои реквизиты для договора" })).toBeVisible();
   await page.getByRole("button", { name: "Заполнить реквизиты вручную" }).click();
   await expect(page.getByRole("dialog").getByLabel("Серия паспорта", { exact: true })).toBeVisible();
@@ -363,13 +430,12 @@ test("description leads to three requisites methods; import is reviewed before e
   await expect(review).toBeHidden();
   expect(profileWrites).toBe(1);
   await expect(page.getByText("Реквизиты сохранены", { exact: true })).toBeVisible();
-  await page.getByRole("combobox", { name: "Ваша роль в сделке" }).click();
-  await page.getByRole("option").first().click();
+  await expect(page.getByRole("button", { name: "Загрузить фото или файл" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
+  await expect(page.getByRole("textbox", { name: "Цена", exact: true })).toHaveValue("1000");
   await expect(page.getByRole("button", { name: "Загрузить фото или файл" })).toBeVisible();
   await page.locator('.subject-materials input[type="file"]').setInputFiles({ name: "test.png", mimeType: "image/png", buffer: Buffer.from("test-image") });
   await expect.poll(() => uploads).toBe(1);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.screenshot({ path: "test-results/requisites-ready.png" });
-  await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
-  await expect(page.getByRole("textbox", { name: "Цена", exact: true })).toHaveValue("1000");
 });

@@ -1,4 +1,4 @@
-import { getMaxInitData, getMaxStartPayload, notifyMaxWebAppReady, waitForMaxWebApp } from "./bridge";
+import { getMaxInitData, getMaxStartPayload, notifyMaxWebAppReady, waitForMaxWebApp, shareInMax } from "./bridge";
 
 function setWindow(value: Partial<Window>): void {
   Object.defineProperty(global, "window", {
@@ -12,6 +12,16 @@ function setWindow(value: Partial<Window>): void {
 }
 
 describe("MAX Bridge startup", () => {
+  it("opens Android sharing synchronously through the MAX deeplink", async () => {
+    const openMaxLink = jest.fn();
+    const shareMaxContent = jest.fn();
+    setWindow({ WebApp: { initData: "test", platform: "android", openMaxLink, shareMaxContent } });
+    const request = shareInMax("Создание презентации за 10000 рублей", "https://example.test/invite/1#secret");
+    expect(openMaxLink).toHaveBeenCalledTimes(1);
+    expect(new URL(openMaxLink.mock.calls[0]![0] as string).searchParams.get("text")).toContain("https://example.test/invite/1#secret");
+    expect(shareMaxContent).not.toHaveBeenCalled();
+    await request;
+  });
   it("enables the native close confirmation once when the SDK is ready", () => {
     const enableClosingConfirmation = jest.fn();
     setWindow({ WebApp: { initData: "", ready: jest.fn(), enableClosingConfirmation } });

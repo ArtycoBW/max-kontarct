@@ -30,6 +30,22 @@ it("retries once when only another participant's approval changed", async () => 
   expect(approve).toHaveBeenLastCalledWith("deal", "version-1", { expectedDealUpdatedAt: "new" });
 });
 
+it("ignores live presence changes but keeps participant identity in the comparison", async () => {
+  const initiator: DealWorkspaceResponse["initiator"] = { displayName: "Иван", role: "INITIATOR", profileCompleted: true, presence: { online: true, lastSeenAt: "old", source: "APP" } };
+  approve.mockRejectedValueOnce(new ApiError(409, { code: "DEAL_VERSION_CONFLICT" })).mockResolvedValueOnce({} as never);
+  workspace.mockResolvedValue({ ...seen, updatedAt: "new", initiator: { ...initiator, presence: { online: false, lastSeenAt: "new", source: "APP" } } });
+  await approveCurrentDeal("deal", { ...seen, initiator });
+  expect(approve).toHaveBeenCalledTimes(2);
+});
+
+it("does not retry after a participant identity change", async () => {
+  const initiator: DealWorkspaceResponse["initiator"] = { displayName: "Иван", role: "INITIATOR", profileCompleted: true };
+  approve.mockRejectedValueOnce(new ApiError(409, { code: "DEAL_VERSION_CONFLICT" }));
+  workspace.mockResolvedValue({ ...seen, initiator: { ...initiator, displayName: "Пётр" } });
+  await expect(approveCurrentDeal("deal", { ...seen, initiator })).rejects.toMatchObject({ code: "DEAL_VERSION_CONFLICT" });
+  expect(approve).toHaveBeenCalledTimes(1);
+});
+
 it.each([{ versionId: "version-2" }, { title: "Другие условия" }, { status: "READY_TO_SIGN" }])("does not silently approve changed content: %j", async (changed) => {
   approve.mockRejectedValueOnce(new ApiError(409, { code: "DEAL_VERSION_CONFLICT" }));
   workspace.mockResolvedValue({ ...seen, ...changed } as DealWorkspaceResponse);

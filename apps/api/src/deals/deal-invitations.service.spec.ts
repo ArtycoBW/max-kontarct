@@ -39,7 +39,7 @@ describe("DealInvitationsService", () => {
       return callback(transaction);
     }),
     deal: { findFirst: dealFindFirst },
-    dealInvitation: { findUnique: invitationFindUnique },
+    dealInvitation: { findUnique: invitationFindUnique, update: jest.fn() },
     maxAccount: { findUnique: jest.fn() },
     user: { findUnique: jest.fn() },
   };
@@ -92,6 +92,15 @@ describe("DealInvitationsService", () => {
       publicCode: data.publicCode,
       revokedAt: null,
     }));
+  });
+
+  it("persists the participant's explicit confirmation that an early invitation was sent", async () => {
+    const invitation = { acceptedAt: null, sentAt: null, createdAt: new Date(), expiresAt: new Date(Date.now() + 60000), revokedAt: null, id: invitationId, publicCode: "test" };
+    dealFindFirst.mockResolvedValue(workspaceRecord({ status: DealStatus.DRAFT, invitations: [invitation] }));
+    prisma.dealInvitation.update.mockResolvedValue({ ...invitation, sentAt: new Date("2026-09-27T13:00:00Z") });
+    const response = await service.markSent(initiatorId, dealId, invitationId);
+    expect(response.sentAt).toBe("2026-09-27T13:00:00.000Z");
+    expect(prisma.dealInvitation.update).toHaveBeenCalledWith({ where: { id: invitationId }, data: { sentAt: expect.any(Date) }, select: expect.objectContaining({ sentAt: true }) });
   });
 
   it("issues a secret only once and stores only its SHA-256 hash", async () => {

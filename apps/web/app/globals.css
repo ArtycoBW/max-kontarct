@@ -335,6 +335,10 @@ textarea:focus-visible {
 .contract-requisites dt { color: var(--muted); font-size: 12px; }
 .contract-requisites dd { margin: 4px 0 0; overflow-wrap: anywhere; font-size: 14px; }
 .contract-requisites > section { margin-top: 20px; }
+.clarification-ready-screen > .card, .clarification-ready-screen > .early-invitation-panel, .clarification-ready-screen > .deal-requisites { margin-top: 20px; }
+.download-actions { display: grid; gap: 16px; }
+.download-actions a, .invitation-fallback-link { overflow-wrap: anywhere; font-size: 13px; text-decoration: underline; }
+.deal-party-card .party-online { color: #008766; }
 .pasted-details-preview > div { padding-bottom: 12px; border-bottom: 1px solid var(--border); }
 .pasted-details-preview dt { font-size: 12px; color: var(--muted); }
 .pasted-details-preview dd { margin: 4px 0 0; font-size: 14px; overflow-wrap: anywhere; }

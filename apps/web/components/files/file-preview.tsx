@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Download, FileText, ImageIcon, Maximize, RotateCw, X, ZoomIn, ZoomOut } from "lucide-react";
+import { FileText, ImageIcon, Maximize, RotateCw, X, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { fetchPreview, fileSizeLabel, fileTypeLabel, previewKind, type PreviewFile } from "@/lib/files/preview";
 import { PdfPreview } from "./pdf-preview";
+import { DownloadButton } from "./download-button";
 
 export function FilePreviewDialog({ files, index, onIndexChange, onClose, returnFocus }: {
   files: PreviewFile[]; index: number; onIndexChange: (index: number) => void; onClose: () => void; returnFocus?: () => void;
@@ -51,7 +52,7 @@ function PreviewContent({ id, originalName, mimeType, sizeBytes, url }: PreviewF
         <Button variant="ghost" size="icon" aria-label="Повернуть" disabled={Boolean(error)} onClick={() => setRotation(n => (n + 90) % 360)}><RotateCw size={18} /></Button>
         {kind === "pdf" ? <Button variant="ghost" size="icon" aria-label="Показать страницу целиком" title="Показать страницу целиком" aria-pressed={fitPage && zoom === 1} disabled={Boolean(error)} onClick={() => { setFitPage(true); setZoom(1); }}><Maximize size={18} /></Button> : null}
       </div> : <span />}
-      <Button asChild variant="outline" className="file-preview-download"><a href={url} download={originalName} aria-label="Скачать"><Download size={17} /><span>Скачать</span></a></Button>
+      <DownloadButton className="file-preview-download" url={url} filename={originalName}><span>Скачать</span></DownloadButton>
     </div>
     {error ? <div className="file-preview-state" role="alert"><FileText size={36} /><strong>Не удалось открыть файл</strong><p>{error}</p><Button variant="outline" onClick={() => { setError(null); setAttempt(n => n + 1); }}>Повторить</Button></div>
       : kind === "pdf" ? <PdfPreview key={attempt} file={file} zoom={zoom} rotation={rotation} fitPage={fitPage} onError={reportError} />

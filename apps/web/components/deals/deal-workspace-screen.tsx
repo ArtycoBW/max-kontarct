@@ -32,7 +32,7 @@ import {
   revokeDealInvitation,
 } from "@/lib/api/invitations";
 import { queryKeys } from "@/lib/api/query-keys";
-import { shareInMax } from "@/lib/max/bridge";
+import { maxShareUrl, shareInMax } from "@/lib/max/bridge";
 import { participantRoleLabel } from "@/lib/deals/party-responsibility";
 import { DealChat } from "./deal-chat";
 import { SharedDealAttachments } from "./shared-deal-attachments";
@@ -48,7 +48,6 @@ export function DealWorkspaceScreen({
   onBack,
   onEdit,
   onOpenProfile,
-  onOpenDocuments,
 }: {
   dealId: string;
   onBack: () => void;
@@ -65,7 +64,8 @@ export function DealWorkspaceScreen({
   const workspace = useQuery({
     queryFn: () => getDealWorkspace(dealId),
     queryKey: queryKeys.deals.workspace(dealId),
-    refetchInterval: (query) => dealRefreshInterval(query.state.data?.status),
+    // Closed deals still refresh presence, but no longer poll at the active rate.
+    refetchInterval: (query) => dealRefreshInterval(query.state.data?.status) || 30_000,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     staleTime: 0,
@@ -153,7 +153,7 @@ export function DealWorkspaceScreen({
     deal.currentUserRole === "COUNTERPARTY" ? deal.initiator : deal.counterparty;
   const signingVisible = ["READY_TO_SIGN", "SIGNED_BY_ONE", "SIGNED", "COMPLETED"].includes(deal.status);
   const profilesReady = deal.initiator.profileCompleted && deal.counterparty?.profileCompleted;
-  const contractAvailable = Boolean(deal.contractDraft) && (signingVisible || Boolean(profilesReady));
+  const contractAvailable = Boolean(deal.contractDraft) && (signingVisible || Boolean(profilesReady)) && (deal.status !== "DRAFT" || deal.draft.currentStep === "INITIATOR");
   const waitingFor = !deal.counterparty ? "Пригласите вторую сторону в сделку."
     : !deal.initiator.profileCompleted && !deal.counterparty.profileCompleted ? "Обеим сторонам нужно заполнить реквизиты."
     : !profilesReady ? `${!deal.initiator.profileCompleted ? deal.initiator.displayName : deal.counterparty.displayName} ещё заполняет реквизиты.`
@@ -163,19 +163,16 @@ export function DealWorkspaceScreen({
     if (!issuedInvitation?.shareUrl || !issuedInvitation.shareText) return;
     try {
       await shareInMax(issuedInvitation.shareText, issuedInvitation.shareUrl);
-      await markDealInvitationSent(dealId, issuedInvitation.id);
-      setNotice("Окно отправки в MAX открыто.");
+      setNotice("Выберите получателя, отправьте сообщение и подтвердите отправку после возвращения.");
       void refreshWorkspace(queryClient, dealId);
     } catch {
-      setNotice("Отправка отменена. Ссылка остаётся действующей.");
+      setNotice("Не удалось открыть отправку. Используйте ссылку ниже или скопируйте приглашение.");
     }
   };
   const copyInvitation = async () => {
     if (!issuedInvitation?.shareUrl) return;
-    await navigator.clipboard.writeText(issuedInvitation.shareUrl);
-    await markDealInvitationSent(dealId, issuedInvitation.id);
-    setNotice("Ссылка скопирована.");
-    void refreshWorkspace(queryClient, dealId);
+    try { await navigator.clipboard.writeText(issuedInvitation.shareUrl); setNotice("Ссылка скопирована. Отправьте её второй стороне."); }
+    catch { setNotice("Буфер обмена недоступен. Используйте ссылку отправки ниже."); }
   };
 
   return (
@@ -187,7 +184,7 @@ export function DealWorkspaceScreen({
             <Button aria-label="Назад" className="flow-back-button" onClick={onBack} size="icon" variant="ghost">
               <ArrowLeft size={21} />
             </Button>
-            <h1>{deal.title}</h1>
+            <h1>{signingVisible ? "Подпишите и сохраните" : deal.title}</h1>
           </div>
         </div>
       </header>
@@ -206,12 +203,12 @@ export function DealWorkspaceScreen({
         <h2>Стороны и приглашения</h2>
         {deal.status === "DRAFT" ? <>
           <Card className="form-message"><strong>{contractAvailable ? "Проект договора готов" : "Договор ещё не сформирован"}</strong><p>{deal.draft.description}</p><span>{contractAvailable ? "Проверьте проект и передайте итоговые условия обеим сторонам на согласование." : waitingFor}</span><span>Договор формируется после заполнения реквизитов обеими сторонами.</span></Card>
-          <DealRequisites onSaved={() => { void refreshWorkspace(queryClient, dealId); }} />
+          {profileRequired ? <DealRequisites onSaved={() => { void refreshWorkspace(queryClient, dealId); }} /> : null}
         </> : null}
         {visibleParty ? (
           <Card className="deal-party-card">
             <UserRound size={21} />
-            <span><strong>{visibleParty.displayName}</strong><small>{visibleParty.role === "INITIATOR" ? "Инициатор сделки" : "Контрагент подключён"}</small></span>
+            <span><strong>{visibleParty.displayName}</strong><small>{visibleParty.role === "INITIATOR" ? "Инициатор сделки" : "Контрагент подключён"}</small>{visibleParty.presence ? <small className={visibleParty.presence.online ? "party-online" : "party-offline"}>{visibleParty.presence.online ? "В сети в приложении" : "Не в сети в приложении"}</small> : null}</span>
             <Check size={18} />
           </Card>
         ) : (
@@ -225,6 +222,8 @@ export function DealWorkspaceScreen({
           <div className="deal-invitation-actions">
             <Button className="full-width" onClick={() => void shareInvitation()}><Send size={17} /> Отправить в MAX</Button>
             <Button className="full-width" onClick={() => void copyInvitation()} variant="secondary"><Copy size={17} /> Скопировать ссылку</Button>
+            <a className="invitation-fallback-link" href={maxShareUrl(issuedInvitation.shareText ?? "Приглашение", issuedInvitation.shareUrl)}>Открыть приглашение в MAX</a>
+            <Button variant="secondary" onClick={() => { void markDealInvitationSent(dealId, issuedInvitation.id).then(() => { setNotice("Отправка подтверждена."); void refreshWorkspace(queryClient, dealId); }).catch(() => setNotice("Не удалось сохранить подтверждение. Повторите попытку.")); }}>Я отправил приглашение</Button>
           </div>
         ) : null}
 
@@ -266,8 +265,8 @@ export function DealWorkspaceScreen({
 
       {deal.versionNumber > 1 ? <DealVersionHistory dealId={dealId} versionId={deal.versionId} /> : null}
       </DealPanel> : <Card className="form-message" role="status"><strong>Договор пока недоступен</strong><span>{waitingFor}</span></Card>}
-      <DealPanel title="Приложения к договору" description="Фото предмета сделки, документы на имущество, акты и другие общие файлы. Без паспортов и личных документов." icon={<Files size={22} />}>
-        <SharedDealAttachments dealId={dealId} />
+      <DealPanel title={deal.currentUserRole === deal.draft.subjectDocumentsParty && !["SIGNED", "COMPLETED", "CANCELED"].includes(deal.status) ? "Загрузите материалы сделки" : "Приложения к договору"} description="Фото предмета сделки, документы на имущество, акты и другие общие файлы. Без паспортов и личных документов." icon={<Files size={22} />}>
+        <SharedDealAttachments dealId={dealId} uploaderLabel={participantRoleLabel(deal.template.slug, deal.draft.subjectDocumentsParty, deal.draft.subjectDocumentsParty ?? "INITIATOR")} allowUpload={deal.currentUserRole === deal.draft.subjectDocumentsParty && !["SIGNED", "COMPLETED", "CANCELED"].includes(deal.status)} />
       </DealPanel>
       {deal.counterparty ? <DealPanel title="Чат сделки" description="Обсудить детали и предложить изменения" icon={<MessageCircle size={22} />} className="deal-chat-dialog">
         <DealChat key={dealId} dealId={dealId} status={deal.status} draft={chatDraft} onDraftChange={setChatDraft} draftKind={chatKind} onKindChange={setChatKind} />
@@ -306,11 +305,6 @@ export function DealWorkspaceScreen({
       </section>
 
 
-      {deal.counterparty ? (
-        <Button className="full-width" onClick={onOpenDocuments} variant="secondary">
-          <FileCheck2 size={18} /> Документы сделки
-        </Button>
-      ) : null}
 
       {issueInvitation.error ? (
         <Card className="form-message is-error" role="alert">

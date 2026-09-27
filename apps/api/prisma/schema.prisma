@@ -427,6 +427,7 @@ model DealMessage {
 }
 
 model DealInvitation {
+  sentAt           DateTime? @map("sent_at") @db.Timestamptz(3)
   id               String    @id @default(uuid()) @db.Uuid
   dealId           String    @map("deal_id") @db.Uuid
   createdByUserId  String    @map("created_by_user_id") @db.Uuid

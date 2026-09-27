@@ -61,7 +61,7 @@ export function DealIntakePanel({ initialDescription = "", isCreating, active = 
       {proposal ? (
         <section className="deal-intake-result" aria-label="Предложение ИИ" aria-live="polite">
           <strong>{proposal.mode === "INDIVIDUAL" ? "Индивидуальный проект" : proposal.template.title}</strong>
-          <p>Основа договора готова. Условия можно будет проверить и отредактировать на следующих шагах. Теперь заполните реквизиты для договора.</p>
+          <p>Основа договора готова. Пригласите вторую сторону, затем заполните реквизиты и уточните условия.</p>
           {proposal.mode === "INDIVIDUAL" ? <p className="deal-intake-warning">Это индивидуальный проект ИИ, а не проверенный шаблон. Проверьте условия перед подписанием.</p> : null}
           <Collapsible className="intake-result-details"><CollapsibleTrigger asChild><Button type="button" variant="ghost">Что определил ИИ</Button></CollapsibleTrigger><CollapsibleContent>
           <p>{proposal.reason}</p><p>Название: {proposal.title}</p>
@@ -77,7 +77,7 @@ export function DealIntakePanel({ initialDescription = "", isCreating, active = 
           {proposal.warnings.map((warning, index) => <p className="deal-intake-warning" key={index}>{warning}</p>)}
           </CollapsibleContent></Collapsible>
           {!children ? <Button className="full-width" disabled={busy} onClick={() => onAccept(proposal)} type="button">
-            {isCreating ? "Сохраняем…" : "Заполнить реквизиты"}
+            {isCreating ? "Сохраняем…" : "Перейти к приглашению"}
           </Button> : null}
         </section>
       ) : null}
