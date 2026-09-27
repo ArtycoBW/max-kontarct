@@ -3473,10 +3473,22 @@ button.service-status {
   padding-top: 14px;
 }
 
+.mini-app-scroll.is-deal-list {
+  overflow: hidden;
+}
+
+.mini-app-scroll.is-deal-list > .screen-motion {
+  height: 100%;
+  min-height: 0;
+}
+
 .dashboard-deals-screen {
   display: flex;
-  min-height: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 0;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .dashboard-deals-screen > .screen-header {
@@ -3486,13 +3498,24 @@ button.service-status {
 
 .deal-list {
   display: flex;
-  flex: 1 0 auto;
+  min-height: 0;
+  flex: 1 1 0;
   flex-direction: column;
 }
 
 .deal-list-items {
   display: grid;
+  min-height: 0;
+  flex: 1;
+  align-content: start;
+  grid-auto-rows: max-content;
   gap: 11px;
+  margin: -3px -3px 0;
+  padding: 3px 3px 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
 }
 
 .deal-list-action {

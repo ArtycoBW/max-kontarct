@@ -231,7 +231,7 @@ function DealsScreen({
 
       {hasDeals ? (
         <div className="deal-list" aria-label="Сохранённые сделки">
-          <div className="deal-list-items">
+          <div className="deal-list-items" role="region" aria-label="Список сделок" tabIndex={0}>
             {deals.data?.items.map((deal) => (
               <Button
                 className="deal-list-card"
@@ -2423,7 +2423,7 @@ function AppWorkspace({
         {showEnvironmentBadge ? (
           <span className="environment-badge">ТЕСТ</span>
         ) : null}
-        <div className="mini-app-scroll" ref={scrollRef}>
+        <div className={cn("mini-app-scroll", (active === "home" || active === "deals") && "is-deal-list")} ref={scrollRef}>
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               className="screen-motion"

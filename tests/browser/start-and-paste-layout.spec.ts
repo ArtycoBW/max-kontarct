@@ -361,6 +361,40 @@ test("empty and populated deal lists keep the bottom action and distinguish stat
   await page.screenshot({ path: "test-results/deals-statuses.png" });
 });
 
+for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 700 }, { width: 768, height: 900 }, { width: 740, height: 390 }]) {
+  test(`long deal list scrolls independently with a fixed create action at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await mockApp(page);
+    await page.route("**/api/v1/deals", route => route.fulfill({ json: { items: Array.from({ length: 30 }, (_, i) => ({
+      id: `long-list-${i}`, title: `Сделка ${i + 1}`, templateTitle: "Оказание услуг", status: i % 2 ? "COMPLETED" : "DRAFT",
+      counterpartyLastName: "Примеров", versionNumber: 1, updatedAt: "2026-09-26T12:00:00Z",
+    })) } }));
+    await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
+    await page.getByRole("button", { name: "Сделки", exact: true }).click();
+    await expect(page.locator(".deal-list-card")).toHaveCount(30);
+    const list = page.getByRole("region", { name: "Список сделок" });
+    const create = page.getByRole("button", { name: "Создать новую сделку", exact: true });
+    const navigation = page.getByRole("navigation", { name: "Навигация приложения" });
+    await expect(create).toBeInViewport();
+    const before = await create.boundingBox();
+    const nav = await navigation.boundingBox();
+    expect(before!.y + before!.height).toBeLessThanOrEqual(nav!.y);
+    expect(await list.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
+    await list.hover();
+    await page.mouse.wheel(0, 600);
+    await expect.poll(() => list.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+    await list.evaluate(el => { el.scrollTop = el.scrollHeight; });
+    await expect(page.locator(".deal-list-card").last()).toBeInViewport();
+    const after = await create.boundingBox();
+    expect(Math.abs(after!.y - before!.y)).toBeLessThan(1);
+    expect(await page.locator(".mini-app-scroll").evaluate(el => el.scrollTop)).toBe(0);
+    await expect(page.getByRole("heading", { name: "Мои сделки" })).toBeInViewport();
+    if (viewport.width === 390) await page.screenshot({ path: "test-results/deals-fixed-create.png" });
+    await create.click();
+    await expect(page.locator(".create-deal-screen")).toBeVisible();
+  });
+}
+
 test("invitation gates a separate requisites step; uploads appear only with parameters", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 700 });
   await mockApp(page);
