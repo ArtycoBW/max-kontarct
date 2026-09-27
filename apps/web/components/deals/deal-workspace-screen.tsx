@@ -153,7 +153,7 @@ export function DealWorkspaceScreen({
     deal.currentUserRole === "COUNTERPARTY" ? deal.initiator : deal.counterparty;
   const signingVisible = ["READY_TO_SIGN", "SIGNED_BY_ONE", "SIGNED", "COMPLETED"].includes(deal.status);
   const profilesReady = deal.initiator.profileCompleted && deal.counterparty?.profileCompleted;
-  const materialsAvailable = deal.status !== "DRAFT" || !["DESCRIPTION", "REQUISITES"].includes(deal.draft.currentStep);
+  const materialsAvailable = deal.status !== "DRAFT" || !["DESCRIPTION", "REQUISITES", "INVITATION"].includes(deal.draft.currentStep);
   const contractAvailable = Boolean(deal.contractDraft) && (signingVisible || Boolean(profilesReady)) && (deal.status !== "DRAFT" || deal.draft.currentStep === "INITIATOR");
   const waitingFor = !deal.counterparty ? "Пригласите вторую сторону в сделку."
     : !deal.initiator.profileCompleted && !deal.counterparty.profileCompleted ? "Обеим сторонам нужно заполнить реквизиты."
@@ -230,14 +230,14 @@ export function DealWorkspaceScreen({
           </Card>
         )}
 
-        {!deal.counterparty && issuedInvitation?.shareUrl ? (
+        {!deal.counterparty && deal.initiator.profileCompleted && issuedInvitation?.shareUrl ? (
           <div className="deal-invitation-actions">
             <Button className="full-width" onClick={() => void shareInvitation()}><Send size={17} /> Отправить в MAX</Button>
             <Button className="full-width" onClick={() => void copyInvitation()} variant="secondary"><Copy size={17} /> Скопировать ссылку</Button>
           </div>
         ) : null}
 
-        {!deal.counterparty && !issuedInvitation?.shareUrl ? (
+        {!deal.counterparty && deal.initiator.profileCompleted && !issuedInvitation?.shareUrl ? (
           <Button
             className="full-width"
             disabled={issueInvitation.isPending}

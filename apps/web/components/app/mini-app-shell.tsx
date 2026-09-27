@@ -306,6 +306,7 @@ function formatDealStatus(status: DealStatus): string {
 
 type CreateDealStep =
   | "requisites"
+  | "invitation"
   | "clarification"
   | "description"
   | "generation"
@@ -317,6 +318,7 @@ type CreateDealStep =
 type DraftSaveState = "error" | "idle" | "saved" | "saving";
 
 function toDraftStep(step: CreateDealStep): DealDraftStep {
+  if (step === "invitation") return "INVITATION";
   if (step === "requisites") return "REQUISITES";
   if (step === "description") return "DESCRIPTION";
   if (step === "questionnaire") return "PARAMETERS";
@@ -326,6 +328,7 @@ function toDraftStep(step: CreateDealStep): DealDraftStep {
 }
 
 function restoreCreateStep(step: DealDraftStep): CreateDealStep {
+  if (step === "INVITATION") return "invitation";
   if (step === "REQUISITES") return "requisites";
   if (step === "DESCRIPTION") return "description";
   if (step === "PARAMETERS") return "questionnaire";
@@ -573,7 +576,7 @@ function CreateDealScreen({
       startContractGeneration(effectiveSelectedSlug, sessionId, activeDraftId),
   });
   const partyReadiness = useQuery({
-    enabled: Boolean(activeDraftId) && ["ready", "requisites", "description"].includes(renderedStep),
+    enabled: Boolean(activeDraftId) && ["ready", "requisites", "description", "invitation"].includes(renderedStep),
     queryKey: queryKeys.deals.workspace(activeDraftId),
     queryFn: () => getDealWorkspace(activeDraftId),
     refetchInterval: 5_000,
@@ -766,7 +769,7 @@ function CreateDealScreen({
       setDescription(created.draft.description);
       setSelectedSlug(created.template.slug);
       setTitle(created.title);
-      setStep("description");
+      setStep(proposal ? "requisites" : "description");
       hydratedDraftId.current = created.id;
       updatedAt.current = created.updatedAt;
       lastSavedFingerprint.current = draftFingerprint({
@@ -784,7 +787,6 @@ function CreateDealScreen({
   };
 
   const continueDescription = async () => {
-    if (!invitationSent && !partyReadiness.data?.counterparty && !partyReadiness.data?.invitation?.sentAt) return;
     const normalizedTitle = title.trim();
     const normalizedDescription = description.trim();
     if (!normalizedTitle) {
@@ -793,10 +795,6 @@ function CreateDealScreen({
     }
     if (normalizedDescription.length < 10) {
       setDescriptionError("Опишите сделку хотя бы в нескольких словах");
-      return;
-    }
-    if (!subjectDocumentsParty) {
-      setDescriptionError("Выберите свою роль, чтобы распределить документы между сторонами");
       return;
     }
     setDescriptionError("");
@@ -1017,13 +1015,11 @@ function CreateDealScreen({
           <VoiceInput inputId="deal-description" value={description} onChange={value => { setDescription(value); setDescriptionError(""); }} />
           </CollapsibleContent>
           </Collapsible>
-          <PartyResponsibility slug={effectiveSelectedSlug} value={subjectDocumentsParty} onChange={value => { setSubjectDocumentsParty(value); setDescriptionError(""); }} />
           {descriptionError ? (
             <span className="field-error" role="alert">
               <CircleAlert size={13} /> {descriptionError}
             </span>
           ) : null}
-          <EarlyInvitationPanel dealId={activeDraftId} onSent={setInvitationSent} beforeCreate={() => enqueueDraftSave()} disabled={!title.trim() || description.trim().length < 10} />
           {saveState === "error" ? (
             <RequestErrorCard
               message={draftSave.error?.message ?? "Не удалось сохранить черновик"}
@@ -1033,7 +1029,7 @@ function CreateDealScreen({
           <div className="create-flow-action">
             <Button
               className="full-width"
-              disabled={saveState === "saving" || (!invitationSent && !partyReadiness.data?.counterparty && !partyReadiness.data?.invitation?.sentAt)}
+              disabled={saveState === "saving"}
               onClick={() => void continueDescription()}
               type="button"
             >
@@ -1043,12 +1039,20 @@ function CreateDealScreen({
         </div>
   );
 
-  if (step === "requisites") return <div className="screen-content create-deal-screen requisites-step-screen">
+  if (step === "requisites" || (step === "invitation" && !partyReadiness.data?.initiator.profileCompleted)) return <div className="screen-content create-deal-screen requisites-step-screen">
     <FlowHeader eyebrow="Реквизиты" title="Укажите свои данные" onBack={() => setStep("description")} />
     <div className="requisites-step-content">
       <DealRequisites onSaved={() => { void partyReadiness.refetch(); }} />
     </div>
-    <div className="create-flow-action"><Button className="full-width" disabled={!partyReadiness.data?.initiator.profileCompleted || saveState === "saving"} onClick={() => { void enqueueDraftSave({ currentStep: "questionnaire" }).then(() => setStep("questionnaire")).catch(() => undefined); }}>Сохранить и продолжить</Button></div>
+    <div className="create-flow-action"><Button className="full-width" disabled={!partyReadiness.data?.initiator.profileCompleted || saveState === "saving"} onClick={() => { void enqueueDraftSave({ currentStep: "invitation" }).then(() => setStep("invitation")).catch(() => undefined); }}>Сохранить и продолжить</Button></div>
+  </div>;
+
+  if (step === "invitation") return <div className="screen-content create-deal-screen">
+    <FlowHeader eyebrow="Приглашение" title="Пригласите вторую сторону" onBack={() => setStep("requisites")} />
+    <PartyResponsibility slug={effectiveSelectedSlug} value={subjectDocumentsParty} onChange={setSubjectDocumentsParty} />
+    <EarlyInvitationPanel dealId={activeDraftId} onSent={setInvitationSent} beforeCreate={() => enqueueDraftSave()} disabled={!subjectDocumentsParty || !title.trim() || description.trim().length < 10} />
+    {saveState === "error" ? <RequestErrorCard message={draftSave.error?.message ?? "Не удалось сохранить черновик"} onRetry={() => void enqueueDraftSave().catch(() => undefined)} /> : null}
+    <div className="create-flow-action"><Button className="full-width" disabled={saveState === "saving" || !subjectDocumentsParty || (!invitationSent && !partyReadiness.data?.counterparty && !partyReadiness.data?.invitation?.sentAt)} onClick={() => { void enqueueDraftSave({ currentStep: "questionnaire" }).then(() => setStep("questionnaire")).catch(() => undefined); }}>Сохранить и продолжить</Button></div>
   </div>;
 
   if (step === "type" || (step === "description" && acceptedIntake)) {
@@ -1433,7 +1437,7 @@ function CreateDealScreen({
       <FlowHeader
         action={<DraftSaveStatus state={saveState} />}
         eyebrow="Условия сделки"
-        onBack={() => setStep("requisites")}
+        onBack={() => setStep("invitation")}
         title="Параметры сделки"
       />
       <p className="screen-copy">

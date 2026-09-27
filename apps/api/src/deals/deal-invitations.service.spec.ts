@@ -94,6 +94,19 @@ describe("DealInvitationsService", () => {
     }));
   });
 
+  it("blocks invitation creation and sent confirmation without complete passport details", async () => {
+    const party = initiatorParty();
+    party.user.profile.passportDetails.number = "";
+    dealFindFirst.mockResolvedValue(workspaceRecord({ parties: [party] }));
+    await expect(service.create(initiatorId, dealId, { expectedUpdatedAt: "2026-08-31T12:00:00.000Z", expectedVersionId: versionId }))
+      .rejects.toMatchObject({ response: { code: "DEAL_INVITATION_REQUISITES_REQUIRED" } });
+    await expect(service.markSent(initiatorId, dealId, invitationId))
+      .rejects.toMatchObject({ response: { code: "DEAL_INVITATION_REQUISITES_REQUIRED" } });
+    expect(maxBot.createMiniAppDeeplink).not.toHaveBeenCalled();
+    expect(prisma.dealInvitation.update).not.toHaveBeenCalled();
+    expect(transaction.dealInvitation.create).not.toHaveBeenCalled();
+  });
+
   it("persists the participant's explicit confirmation that an early invitation was sent", async () => {
     const invitation = { acceptedAt: null, sentAt: null, createdAt: new Date(), expiresAt: new Date(Date.now() + 60000), revokedAt: null, id: invitationId, publicCode: "test" };
     dealFindFirst.mockResolvedValue(workspaceRecord({ status: DealStatus.DRAFT, invitations: [invitation] }));
@@ -488,7 +501,8 @@ function initiatorParty() {
       maxAccount: { firstName: "Артур", lastName: "Балашев", maxUserId: "111" },
       phones: [{ e164: "+79990000001", id: "phone-1" }],
       profile: {
-        addressValue: "г. Москва", birthDate: null, email: null,
+        addressValue: "г. Москва", birthDate: new Date("1990-01-01"), email: null,
+        passportDetails: { series: "1234", number: "567890", issuedAt: "2020-01-02", issuer: "МВД", divisionCode: "123-456", birthPlace: "Казань", gender: "М" },
         firstName: "Артур", lastName: "Балашев", middleName: null,
       },
     },

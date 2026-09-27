@@ -148,6 +148,7 @@ export class DealInvitationsService {
   ): Promise<DealInvitationResponse> {
     const record = await this.findWorkspace(dealId, userId);
     assertInitiator(record, userId);
+    assertInvitationRequisites(record);
     if (record.parties.some(party => party.role === DealPartyRole.COUNTERPARTY)) {
       throw new ConflictException({ code: "DEAL_COUNTERPARTY_ALREADY_JOINED", message: "Вторая сторона уже присоединилась" });
     }
@@ -290,6 +291,7 @@ export class DealInvitationsService {
   ): Promise<DealInvitationResponse> {
     const record = await this.findWorkspace(dealId, userId);
     assertInitiator(record, userId);
+    assertInvitationRequisites(record);
     const invitation = record.invitations[0];
     assertActiveInvitation(invitation, invitationId);
 
@@ -1000,6 +1002,13 @@ function assertInvitationUsable(invitation: {
   revokedAt: Date | null;
 }): void {
   if (invitationState(invitation) !== "ACTIVE") throw invitationUnavailable();
+}
+
+function assertInvitationRequisites(record: WorkspaceRecord): void {
+  const initiator = record.parties.find(party => party.role === DealPartyRole.INITIATOR);
+  if (!hasCompletePassportProfile(initiator?.user.profile)) {
+    throw new ConflictException({ code: "DEAL_INVITATION_REQUISITES_REQUIRED", message: "Перед отправкой приглашения заполните свои паспортные данные" });
+  }
 }
 
 function assertInitiator(record: WorkspaceRecord, userId: string): void {

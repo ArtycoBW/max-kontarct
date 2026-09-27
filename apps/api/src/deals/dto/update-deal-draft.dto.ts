@@ -20,6 +20,7 @@ import {
 const draftSteps: DealDraftStep[] = [
   "DESCRIPTION",
   "REQUISITES",
+  "INVITATION",
   "PARAMETERS",
   "AI_CLARIFICATION",
   "AI_GENERATION",

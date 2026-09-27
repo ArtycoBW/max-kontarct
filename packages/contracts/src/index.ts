@@ -37,6 +37,7 @@ export type DealCreationPath = "TEMPLATE" | "AI_ASSISTED";
 export type DealDraftStep =
   | "DESCRIPTION"
   | "REQUISITES"
+  | "INVITATION"
   | "PARAMETERS"
   | "AI_CLARIFICATION"
   | "AI_GENERATION"

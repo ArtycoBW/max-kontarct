@@ -33,7 +33,7 @@ const workspaceFixture = (status = "DRAFT", ready = false) => ({
 });
 
 test("Android sharing marks sent only after shared, not opening, cancellation or an unknown result", async ({ page }) => {
-  const workspace = { ...workspaceFixture(), currentUserRole: "INITIATOR", counterparty: null };
+  const workspace = { ...workspaceFixture("DRAFT", true), currentUserRole: "INITIATOR", counterparty: null };
   await openMockDeal(page, workspace as unknown as ReturnType<typeof workspaceFixture>);
   await page.evaluate(() => {
     Object.assign(window.WebApp!, { platform: "android", shareMaxContent: (params: unknown) => { document.body.dataset.shareParams = JSON.stringify(params); document.body.dataset.shareGesture = String(navigator.userActivation.isActive); return new Promise(resolve => { (window as unknown as { resolveShare: typeof resolve }).resolveShare = resolve; }); } });
@@ -131,11 +131,31 @@ for (const role of ["COUNTERPARTY", "INITIATOR"]) {
   });
 }
 
+test("resuming an invitation draft still requires passport details first", async ({ page }) => {
+  const workspace = { ...workspaceFixture(), currentUserRole: "INITIATOR", counterparty: null };
+  workspace.draft.currentStep = "INVITATION";
+  await openMockDeal(page, workspace as unknown as ReturnType<typeof workspaceFixture>);
+  await expect(page.getByRole("button", { name: "Создать приглашение", exact: true })).toHaveCount(0);
+  const template = { slug: workspace.template.slug, title: "Купля-продажа", summary: "Имущество", currentVersion: { id: "template", versionNumber: 1, documentRequirements: [], questionnaireSchema: { type: "object", properties: {} } } };
+  await page.route(/\/api\/v1\/deals\/review-deal(?:\/draft)?$/, route => route.fulfill({ json: workspace }));
+  await page.route("**/api/v1/templates**", route => route.fulfill({ json: route.request().url().endsWith("/templates") ? { items: [template] } : template }));
+  await page.getByRole("button", { name: "Редактировать черновик" }).click();
+  await expect(page.getByRole("heading", { name: "Укажите свои данные" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Пригласить сейчас" })).toHaveCount(0);
+  workspace.initiator.profileCompleted = true;
+  await expect(page.getByRole("heading", { name: "Пригласите вторую сторону", exact: true })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole("button", { name: "Пригласить сейчас" })).toBeEnabled();
+});
+
 test("draft materials are available only after invitation and requisites", async ({ page }) => {
   const workspace = { ...workspaceFixture(), currentUserRole: "INITIATOR" };
   await openMockDeal(page, workspace);
   await expect(page.getByRole("button", { name: /Загрузите материалы сделки/ })).toHaveCount(0);
   workspace.draft.currentStep = "REQUISITES";
+  await page.waitForResponse(response => response.url().endsWith("/workspace"));
+  await expect(page.getByRole("button", { name: /Загрузите материалы сделки/ })).toHaveCount(0);
+  workspace.draft.currentStep = "INVITATION";
   await page.waitForResponse(response => response.url().endsWith("/workspace"));
   await expect(page.getByRole("button", { name: /Загрузите материалы сделки/ })).toHaveCount(0);
   workspace.draft.currentStep = "PARAMETERS";
@@ -479,7 +499,7 @@ for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 700 }
   });
 }
 
-test("invitation gates a separate requisites step; uploads appear only with parameters", async ({ page }) => {
+test("passport details precede invitation; sending gates parameters and uploads", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 700 });
   await mockApp(page);
   const template = { id: "template", slug: "movable-property-sale", title: "Купля-продажа имущества", summary: "Передача имущества", isDemo: false,
@@ -530,30 +550,12 @@ test("invitation gates a separate requisites step; uploads appear only with para
   expect(warningBox!.y - fieldsBox!.y - fieldsBox!.height).toBeGreaterThanOrEqual(16);
   await page.locator(".intake-result-details").scrollIntoViewIfNeeded();
   await page.screenshot({ path: "test-results/intake-expanded.png" });
-  await page.getByRole("button", { name: "Перейти к приглашению", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Мои реквизиты для договора" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Перейти к реквизитам", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Мои реквизиты для договора" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Загрузить фото или файл" })).toHaveCount(0);
-  await page.getByRole("combobox", { name: "Ваша роль в сделке" }).click();
-  await page.getByRole("option").first().click();
+  await expect(page.getByRole("button", { name: "Перевыпустить приглашение", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Отправить в MAX", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeDisabled();
-  await page.getByRole("button", { name: "Перевыпустить приглашение", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Отправить в MAX", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Я отправил приглашение", exact: true })).toHaveCount(0);
-  await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: () => Promise.reject(new Error("denied")) } }));
-  await page.getByRole("button", { name: "Скопировать ссылку", exact: true }).click();
-  await expect(page.getByText("Не удалось передать ссылку. Повторите отправку или скопируйте её.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeDisabled();
-  expect(sentAt).toBeNull();
-  await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: () => Promise.resolve() } }));
-  await page.getByRole("button", { name: "Скопировать ссылку", exact: true }).click();
-  await expect(page.getByText("Не удалось сохранить отметку. Повторите отправку или копирование ссылки.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeDisabled();
-  expect(sentAt).toBeNull();
-  await page.getByRole("button", { name: "Скопировать ссылку", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeEnabled();
-  await expect(page.locator('a[href*="max.ru/:share"]')).toHaveCount(0);
-  await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
   await expect(page.getByRole("heading", { name: "Мои реквизиты для договора" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Выбрать реквизиты из профиля" })).toBeVisible();
   for (const viewport of [{ width: 768, height: 900 }, { width: 390, height: 700 }, { width: 320, height: 568 }, { width: 740, height: 390 }]) {
@@ -596,6 +598,28 @@ test("invitation gates a separate requisites step; uploads appear only with para
   expect(profileWrites).toBe(1);
   await expect(page.getByText("Реквизиты сохранены", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Загрузить фото или файл" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
+  await expect(page.getByRole("heading", { name: "Пригласите вторую сторону", exact: true })).toBeVisible();
+  await expect.poll(() => draft.draft.currentStep).toBe("INVITATION");
+  await page.getByRole("combobox", { name: "Ваша роль в сделке" }).click();
+  await page.getByRole("option").first().click();
+  await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeDisabled();
+  await page.getByRole("button", { name: "Перевыпустить приглашение", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Отправить в MAX", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Я отправил приглашение", exact: true })).toHaveCount(0);
+  await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: () => Promise.reject(new Error("denied")) } }));
+  await page.getByRole("button", { name: "Скопировать ссылку", exact: true }).click();
+  await expect(page.getByText("Не удалось передать ссылку. Повторите отправку или скопируйте её.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeDisabled();
+  expect(sentAt).toBeNull();
+  await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: () => Promise.resolve() } }));
+  await page.getByRole("button", { name: "Скопировать ссылку", exact: true }).click();
+  await expect(page.getByText("Не удалось сохранить отметку. Повторите отправку или копирование ссылки.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeDisabled();
+  expect(sentAt).toBeNull();
+  await page.getByRole("button", { name: "Скопировать ссылку", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeEnabled();
+  await expect(page.locator('a[href*="max.ru/:share"]')).toHaveCount(0);
   await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
   await expect(page.getByRole("textbox", { name: "Цена", exact: true })).toHaveValue("1000");
   await expect(page.getByRole("button", { name: "Загрузить фото или файл" })).toBeVisible();

@@ -46,7 +46,7 @@ export function EarlyInvitationPanel({ dealId, beforeCreate, disabled, onSent }:
     <>
       {create.data?.shareUrl ? <><div className="invitation-share-preview"><strong>Сообщение получателю</strong><p style={{ whiteSpace: "pre-line" }}>{create.data.shareText}</p><small>Проверьте текст перед отправкой. Не включайте конфиденциальные сведения.</small></div><Button type="button" onClick={() => void send(false)}>Отправить в MAX</Button><Button type="button" variant="secondary" onClick={() => void send(true)}>Скопировать ссылку</Button></> :
         <Button type="button" disabled={disabled || create.isPending} onClick={() => create.mutate()}>{create.isPending ? "Готовим приглашение…" : workspace.data?.invitation?.state === "ACTIVE" ? "Перевыпустить приглашение" : "Пригласить сейчас"}</Button>}
-      {disabled ? <small>Сначала укажите название и описание от 10 символов.</small> : null}
+      {disabled ? <small>Сначала выберите свою роль и заполните описание сделки.</small> : null}
     </>
     {create.error || shareError ? <p role="alert">{create.error?.message ?? shareError}</p> : null}
     {notice ? <p role="status">{notice}</p> : null}
