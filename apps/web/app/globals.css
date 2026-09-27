@@ -3382,6 +3382,18 @@ button.service-status {
 .requisites-step-content .deal-requisites h2,
 .requisites-step-content .deal-requisites > p { text-align: center; }
 .requisites-step-screen > .create-flow-action { flex: none; margin-top: 0; padding-top: 0; }
+.invitation-step-screen { min-height: 100dvh; container-type: inline-size; }
+.invitation-step-screen > .flow-header { flex: none; gap: 10px; }
+.invitation-step-screen .flow-header-title { width: 100%; gap: 8px; }
+.invitation-step-screen .flow-header h1 { flex: 1; font-size: clamp(18px, 6.2cqi, 24px); line-height: 1.2; white-space: nowrap; text-align: center; }
+.invitation-step-content { display: flex; flex: 1 0 auto; flex-direction: column; justify-content: center; gap: 24px; padding-block: 32px; }
+.invitation-step-content > * { width: 100%; }
+.invitation-step-content > .form-field { gap: 12px; }
+.invitation-step-content > .form-field > label,
+.invitation-step-content > .form-field > .field-description,
+.invitation-step-content .early-invitation-panel > strong { text-align: center; }
+.invitation-step-content .early-invitation-panel { gap: 16px; padding: 20px; }
+.invitation-step-screen > .create-flow-action { flex: none; margin-top: 0; padding-top: 0; }
 .deal-description-details { border: 1px solid var(--border); border-radius: 16px; padding: 14px; }
 .deal-description-details .collapsible-trigger { white-space: normal; text-align: left; font-size: 13px; line-height: 1.5; }
 .deal-description-details .form-field { margin-top: 16px; }

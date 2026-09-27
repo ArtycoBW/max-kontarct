@@ -1047,11 +1047,13 @@ function CreateDealScreen({
     <div className="create-flow-action"><Button className="full-width" disabled={!partyReadiness.data?.initiator.profileCompleted || saveState === "saving"} onClick={() => { void enqueueDraftSave({ currentStep: "invitation" }).then(() => setStep("invitation")).catch(() => undefined); }}>Сохранить и продолжить</Button></div>
   </div>;
 
-  if (step === "invitation") return <div className="screen-content create-deal-screen">
+  if (step === "invitation") return <div className="screen-content create-deal-screen invitation-step-screen">
     <FlowHeader eyebrow="Приглашение" title="Пригласите вторую сторону" onBack={() => setStep("requisites")} />
+    <div className="invitation-step-content">
     <PartyResponsibility slug={effectiveSelectedSlug} value={subjectDocumentsParty} onChange={setSubjectDocumentsParty} />
     <EarlyInvitationPanel dealId={activeDraftId} onSent={setInvitationSent} beforeCreate={() => enqueueDraftSave()} disabled={!subjectDocumentsParty || !title.trim() || description.trim().length < 10} />
     {saveState === "error" ? <RequestErrorCard message={draftSave.error?.message ?? "Не удалось сохранить черновик"} onRetry={() => void enqueueDraftSave().catch(() => undefined)} /> : null}
+    </div>
     <div className="create-flow-action"><Button className="full-width" disabled={saveState === "saving" || !subjectDocumentsParty || (!invitationSent && !partyReadiness.data?.counterparty && !partyReadiness.data?.invitation?.sentAt)} onClick={() => { void enqueueDraftSave({ currentStep: "questionnaire" }).then(() => setStep("questionnaire")).catch(() => undefined); }}>Сохранить и продолжить</Button></div>
   </div>;
 

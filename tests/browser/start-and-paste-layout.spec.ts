@@ -601,6 +601,22 @@ test("passport details precede invitation; sending gates parameters and uploads"
   await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
   await expect(page.getByRole("heading", { name: "Пригласите вторую сторону", exact: true })).toBeVisible();
   await expect.poll(() => draft.draft.currentStep).toBe("INVITATION");
+  for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 740 }, { width: 430, height: 844 }, { width: 768, height: 900 }, { width: 740, height: 390 }]) {
+    await page.setViewportSize(viewport);
+    await page.locator(".mini-app-scroll").evaluate(el => { el.scrollTop = 0; });
+    const heading = page.locator(".invitation-step-screen h1");
+    expect(await heading.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    expect(await heading.evaluate(el => el.getBoundingClientRect().height <= parseFloat(getComputedStyle(el).lineHeight) + 1)).toBe(true);
+    const content = (await page.locator(".invitation-step-content").boundingBox())!;
+    const role = (await page.locator(".invitation-step-content > .form-field").boundingBox())!;
+    const panel = (await page.locator(".invitation-step-content .early-invitation-panel").boundingBox())!;
+    expect(panel.y - role.y - role.height).toBeGreaterThanOrEqual(23);
+    expect(Math.abs((role.y + panel.y + panel.height) / 2 - content.y - content.height / 2)).toBeLessThan(1);
+    expect(Math.abs(panel.x + panel.width / 2 - viewport.width / 2)).toBeLessThan(1);
+    expect(await page.locator(".mini-app-scroll").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/invitation-centered-${viewport.width}x${viewport.height}.png` });
+  }
+  await page.setViewportSize({ width: 390, height: 700 });
   await page.getByRole("combobox", { name: "Ваша роль в сделке" }).click();
   await page.getByRole("option").first().click();
   await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeDisabled();
