@@ -12,15 +12,30 @@ function setWindow(value: Partial<Window>): void {
 }
 
 describe("MAX Bridge startup", () => {
-  it("opens Android sharing synchronously through the MAX deeplink", async () => {
+  it("calls Android native sharing synchronously and waits for the actual result", async () => {
     const openMaxLink = jest.fn();
-    const shareMaxContent = jest.fn();
+    let complete!: (result: unknown) => void;
+    const shareMaxContent = jest.fn(() => new Promise(resolve => { complete = resolve; }));
     setWindow({ WebApp: { initData: "test", platform: "android", openMaxLink, shareMaxContent } });
     const request = shareInMax("Создание презентации за 10000 рублей", "https://example.test/invite/1#secret");
+    expect(shareMaxContent).toHaveBeenCalledWith({ text: "Создание презентации за 10000 рублей", link: "https://example.test/invite/1#secret" });
+    expect(openMaxLink).not.toHaveBeenCalled();
+    complete({ status: "shared" });
+    await expect(request).resolves.toBe("shared");
+  });
+  it.each([{ status: "cancelled" }, {}, undefined, { success: true }])("does not count an unconfirmed result as sent: %j", async result => {
+    setWindow({ WebApp: { initData: "test", shareMaxContent: jest.fn().mockResolvedValue(result) } });
+    await expect(shareInMax("text", "https://example.test")).resolves.toBe(result?.status === "cancelled" ? "cancelled" : "unconfirmed");
+  });
+  it("rejects resolved native error objects", async () => {
+    setWindow({ WebApp: { initData: "test", shareMaxContent: jest.fn().mockResolvedValue({ error: { code: "timeout" } }) } });
+    await expect(shareInMax("text", "https://example.test")).rejects.toThrow();
+  });
+  it("never treats a deeplink opening as sent", async () => {
+    const openMaxLink = jest.fn();
+    setWindow({ WebApp: { initData: "test", platform: "android", openMaxLink } });
+    await expect(shareInMax("text", "https://example.test")).resolves.toBe("unconfirmed");
     expect(openMaxLink).toHaveBeenCalledTimes(1);
-    expect(new URL(openMaxLink.mock.calls[0]![0] as string).searchParams.get("text")).toContain("https://example.test/invite/1#secret");
-    expect(shareMaxContent).not.toHaveBeenCalled();
-    await request;
   });
   it("enables the native close confirmation once when the SDK is ready", () => {
     const enableClosingConfirmation = jest.fn();

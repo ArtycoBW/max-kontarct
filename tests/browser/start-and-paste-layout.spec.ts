@@ -32,18 +32,36 @@ const workspaceFixture = (status = "DRAFT", ready = false) => ({
   contractDraft: { title: "Договор", preamble: "Стороны договорились", sections: [{ heading: "Предмет", clauses: ["Тестовый предмет"] }], warnings: [] },
 });
 
-test("Android 15 bridge receives invitation deeplink directly from the click", async ({ page }) => {
+test("Android sharing marks sent only after shared, not opening, cancellation or an unknown result", async ({ page }) => {
   const workspace = { ...workspaceFixture(), currentUserRole: "INITIATOR", counterparty: null };
   await openMockDeal(page, workspace as unknown as ReturnType<typeof workspaceFixture>);
   await page.evaluate(() => {
-    Object.assign(window.WebApp!, { platform: "android", openMaxLink: (url: string) => { document.body.dataset.sharedUrl = url; document.body.dataset.shareGesture = String(navigator.userActivation.isActive); } });
+    Object.assign(window.WebApp!, { platform: "android", shareMaxContent: (params: unknown) => { document.body.dataset.shareParams = JSON.stringify(params); document.body.dataset.shareGesture = String(navigator.userActivation.isActive); return new Promise(resolve => { (window as unknown as { resolveShare: typeof resolve }).resolveShare = resolve; }); } });
   });
   await page.route("**/deals/review-deal/invitations", route => route.fulfill({ json: { id: "invite", state: "ACTIVE", shareText: "Создание презентации за 10000 рублей", shareUrl: "https://example.test/invite/1#secret", expiresAt: "2099-01-01T00:00:00Z" } }));
+  let sent = 0;
+  await page.route("**/deals/review-deal/invitations/invite/sent", route => { sent++; return route.fulfill({ json: { sentAt: new Date().toISOString() } }); });
   await page.getByRole("button", { name: "Создать приглашение", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Я отправил приглашение", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Отправить в MAX", exact: true }).click();
-  const shared = await page.locator("body").getAttribute("data-shared-url");
-  expect(new URL(shared!).searchParams.get("text")).toContain("https://example.test/invite/1#secret");
+  expect(sent).toBe(0);
+  expect(JSON.parse((await page.locator("body").getAttribute("data-share-params"))!)).toMatchObject({ link: "https://example.test/invite/1#secret" });
   expect(await page.locator("body").getAttribute("data-share-gesture")).toBe("true");
+  await page.evaluate(() => (window as unknown as { resolveShare: (result: unknown) => void }).resolveShare({ status: "cancelled" }));
+  await expect(page.getByText("Отправка отменена.", { exact: true })).toBeVisible();
+  expect(sent).toBe(0);
+  await page.getByRole("button", { name: "Отправить в MAX", exact: true }).click();
+  await page.evaluate(() => (window as unknown as { resolveShare: (result: unknown) => void }).resolveShare({}));
+  await expect(page.getByText(/MAX не подтвердил отправку/)).toBeVisible();
+  expect(sent).toBe(0);
+  await page.getByRole("button", { name: "Отправить в MAX", exact: true }).click();
+  await page.evaluate(() => (window as unknown as { resolveShare: (result: unknown) => void }).resolveShare({ error: { code: "timeout" } }));
+  await expect(page.getByText("Не удалось открыть отправку. Используйте ссылку ниже или скопируйте приглашение.")).toBeVisible();
+  expect(sent).toBe(0);
+  await page.getByRole("button", { name: "Отправить в MAX", exact: true }).click();
+  await page.evaluate(() => (window as unknown as { resolveShare: (result: unknown) => void }).resolveShare({ status: "shared" }));
+  await expect.poll(() => sent).toBe(1);
+  await expect(page.getByText("Приглашение отправлено.", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Открыть приглашение в MAX" })).toBeVisible();
 });
 
@@ -427,7 +445,11 @@ test("invitation gates a separate requisites step; uploads appear only with para
   const invitation = { id: "invite", state: "ACTIVE", shareUrl: "https://example.test/invite/1#secret", shareText: "Продажа стола", expiresAt: "2099-01-01T00:00:00Z", createdAt: "2026-09-27T00:00:00Z", publicCode: "test", acceptedAt: null, maxDeeplink: null };
   await page.route("**/api/v1/deals/draft/workspace", route => route.fulfill({ json: { ...workspaceFixture(), ...draft, initiator: { profileCompleted: profileWrites > 0 }, counterparty: null, invitation: { ...invitation, sentAt } } }));
   await page.route("**/api/v1/deals/draft/invitations", route => route.fulfill({ json: invitation }));
-  await page.route("**/api/v1/deals/draft/invitations/invite/sent", route => { sentAt = new Date().toISOString(); return route.fulfill({ json: { ...invitation, sentAt } }); });
+  let failMarkOnce = true;
+  await page.route("**/api/v1/deals/draft/invitations/invite/sent", route => {
+    if (failMarkOnce) { failMarkOnce = false; return route.fulfill({ status: 503, json: { message: "Temporary failure" } }); }
+    sentAt = new Date().toISOString(); return route.fulfill({ json: { ...invitation, sentAt } });
+  });
   await page.route("**/api/v1/profile", route => {
     if (route.request().method() !== "PATCH") return route.fulfill({ json: {
       firstName: "Иван", lastName: "Примеров", middleName: null, birthDate: "1990-01-01", address: null, phone: null, email: null, updatedAt: null,
@@ -452,7 +474,19 @@ test("invitation gates a separate requisites step; uploads appear only with para
   await page.getByRole("button", { name: "Перевыпустить приглашение", exact: true }).click();
   await expect(page.getByRole("button", { name: "Отправить в MAX", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeDisabled();
-  await page.getByRole("button", { name: "Я отправил приглашение", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Я отправил приглашение", exact: true })).toHaveCount(0);
+  await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: () => Promise.reject(new Error("denied")) } }));
+  await page.getByRole("button", { name: "Скопировать ссылку", exact: true }).click();
+  await expect(page.getByText("Не удалось передать ссылку. Повторите отправку или скопируйте её.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeDisabled();
+  expect(sentAt).toBeNull();
+  await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: () => Promise.resolve() } }));
+  await page.getByRole("button", { name: "Скопировать ссылку", exact: true }).click();
+  await expect(page.getByText("Не удалось сохранить отметку. Повторите отправку или копирование ссылки.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeDisabled();
+  expect(sentAt).toBeNull();
+  await page.getByRole("button", { name: "Скопировать ссылку", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeEnabled();
   await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
   await expect(page.getByRole("heading", { name: "Мои реквизиты для договора" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Выбрать реквизиты из профиля" })).toBeVisible();

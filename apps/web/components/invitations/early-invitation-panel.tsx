@@ -20,23 +20,26 @@ export function EarlyInvitationPanel({ dealId, beforeCreate, disabled, onSent }:
       const current = await getDealWorkspace(dealId);
       return createDealInvitation(dealId, { expectedUpdatedAt: current.updatedAt, expectedVersionId: current.versionId, replaceActive: current.invitation?.state === "ACTIVE" });
     },
-    onSuccess: () => { setShareStarted(false); onSent?.(false); setNotice("Ссылка готова. Отправьте её второй стороне, затем подтвердите отправку."); void workspace.refetch(); },
+    onSuccess: () => { setShareStarted(false); onSent?.(false); setNotice("Ссылка готова. Отправьте приглашение в MAX или скопируйте ссылку."); void workspace.refetch(); },
   });
   const send = async (copy: boolean) => {
     if (!create.data?.shareUrl) return;
     setShareError("");
     setShareStarted(true);
+    setNotice("");
+    let result;
     try {
-      if (copy) await navigator.clipboard.writeText(create.data.shareUrl);
-      else await shareInMax(create.data.shareText ?? "Приглашение в Макс-Контракт", create.data.shareUrl);
-      setNotice(copy ? "Ссылка скопирована. Отправьте её второй стороне." : "Выберите получателя в MAX и отправьте сообщение. Затем вернитесь и подтвердите отправку.");
-    } catch { setShareError("Не удалось передать ссылку. Повторите отправку или скопируйте её."); }
-  };
-  const confirmSent = async () => {
-    const id = create.data?.id ?? workspace.data?.invitation?.id;
-    if (!id) return;
-    try { await markDealInvitationSent(dealId, id); onSent?.(true); setNotice("Отправка подтверждена. Можно продолжать."); void workspace.refetch(); }
-    catch { setShareError("Не удалось сохранить подтверждение. Повторите попытку."); }
+      if (copy) { await navigator.clipboard.writeText(create.data.shareUrl); result = "copied"; }
+      else result = await shareInMax(create.data.shareText ?? "Приглашение в Макс-Контракт", create.data.shareUrl);
+    } catch { setShareError("Не удалось передать ссылку. Повторите отправку или скопируйте её."); return; }
+    if (result === "cancelled") { setNotice("Отправка отменена."); return; }
+    if (result === "unconfirmed") { setNotice("MAX не подтвердил отправку. Чтобы продолжить, скопируйте ссылку или дождитесь присоединения второй стороны."); return; }
+    try {
+      await markDealInvitationSent(dealId, create.data.id);
+      onSent?.(true);
+      setNotice(result === "copied" ? "Ссылка скопирована. Можно продолжать." : "Приглашение отправлено. Можно продолжать.");
+      void workspace.refetch();
+    } catch { setShareError("Не удалось сохранить отметку. Повторите отправку или копирование ссылки."); }
   };
   if (workspace.data?.counterparty) return <Card className="early-invitation-panel invitation-joined"><p role="status">{workspace.data.counterparty.displayName} уже присоединился.</p></Card>;
   return <Card className="early-invitation-panel">
@@ -48,7 +51,6 @@ export function EarlyInvitationPanel({ dealId, beforeCreate, disabled, onSent }:
       {disabled ? <small>Сначала укажите название и описание от 10 символов.</small> : null}
     </>
     {create.data?.shareUrl && shareStarted ? <a className="invitation-fallback-link" href={maxShareUrl(create.data.shareText ?? "Приглашение", create.data.shareUrl)}>Если окно не открылось — открыть приглашение в MAX</a> : null}
-    {(shareStarted || workspace.data?.invitation?.state === "ACTIVE") && !sent ? <Button type="button" variant="secondary" onClick={() => void confirmSent()}>Я отправил приглашение</Button> : null}
     {create.error || shareError ? <p role="alert">{create.error?.message ?? shareError}</p> : null}
     {notice ? <p role="status">{notice}</p> : null}
   </Card>;

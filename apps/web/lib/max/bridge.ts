@@ -116,27 +116,37 @@ export function maxShareUrl(text: string, link: string): string {
   return `https://max.ru/:share?text=${encodeURIComponent(`${text}\n\n${link}`)}`;
 }
 
-export async function shareInMax(text: string, link: string): Promise<void> {
-  const webApp = typeof window === "undefined" ? undefined : window.WebApp;
-  // Call synchronously from the user's click: Android requires the native gesture.
-  // The documented :share deeplink also works on hosts lacking WebAppMaxShare.
-  if ((webApp?.platform === "android" || (typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent))) && webApp?.openMaxLink) {
-    await webApp.openMaxLink(maxShareUrl(text, link));
-    return;
+export type InvitationShareResult = "shared" | "copied" | "cancelled" | "unconfirmed";
+
+function confirmedShareResult(result: unknown): InvitationShareResult {
+  if (typeof result === "object" && result !== null) {
+    if ("error" in result) throw new Error("MAX не смог отправить приглашение");
+    if ("status" in result && (result.status === "shared" || result.status === "cancelled")) return result.status;
   }
+  return "unconfirmed";
+}
+
+export async function shareInMax(text: string, link: string): Promise<InvitationShareResult> {
+  const webApp = typeof window === "undefined" ? undefined : window.WebApp;
+  // Invoke the bridge before any await to preserve Android's click gesture.
+  // Only its documented `shared` status confirms actual sending; opening a
+  // deeplink or resolving an OS share sheet is not a delivery confirmation.
   if (webApp?.shareMaxContent) {
-    await webApp.shareMaxContent({ link, text });
-    return;
+    return confirmedShareResult(await webApp.shareMaxContent({ link, text }));
   }
   if (webApp?.shareContent) {
-    await webApp.shareContent({ link, text });
-    return;
+    return confirmedShareResult(await webApp.shareContent({ link, text }));
+  }
+  if (webApp?.openMaxLink) {
+    await webApp.openMaxLink(maxShareUrl(text, link));
+    return "unconfirmed";
   }
   if (typeof navigator !== "undefined" && navigator.share) {
     await navigator.share({ text, title: "Приглашение в Макс-Контракт", url: link });
-    return;
+    return "unconfirmed";
   }
   await navigator.clipboard.writeText(`${text}\n${link}`);
+  return "copied";
 }
 
 export async function requestMaxContact(): Promise<MaxContactBridgeResult> {

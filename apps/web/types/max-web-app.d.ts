@@ -3,8 +3,8 @@ interface MaxWebApp {
   initDataUnsafe?: { start_param?: string };
   openMaxLink?: (url: string) => void | Promise<unknown>;
   downloadFile?: (url: string, filename: string) => Promise<unknown>;
-  shareContent?: (params: { link?: string; text?: string }) => void | Promise<void>;
-  shareMaxContent?: (params: { link?: string; text?: string }) => void | Promise<void>;
+  shareContent?: (params: { link?: string; text?: string }) => unknown | Promise<unknown>;
+  shareMaxContent?: (params: { link?: string; text?: string }) => unknown | Promise<unknown>;
   platform?: "android" | "desktop" | "ios" | "web" | string;
   ready?: () => void;
   enableClosingConfirmation?: () => void;

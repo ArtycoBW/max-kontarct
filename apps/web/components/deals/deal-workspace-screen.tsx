@@ -161,18 +161,29 @@ export function DealWorkspaceScreen({
 
   const shareInvitation = async () => {
     if (!issuedInvitation?.shareUrl || !issuedInvitation.shareText) return;
+    setNotice("");
+    let result;
     try {
-      await shareInMax(issuedInvitation.shareText, issuedInvitation.shareUrl);
-      setNotice("Выберите получателя, отправьте сообщение и подтвердите отправку после возвращения.");
-      void refreshWorkspace(queryClient, dealId);
+      result = await shareInMax(issuedInvitation.shareText, issuedInvitation.shareUrl);
     } catch {
       setNotice("Не удалось открыть отправку. Используйте ссылку ниже или скопируйте приглашение.");
+      return;
     }
+    if (result === "cancelled") { setNotice("Отправка отменена."); return; }
+    if (result === "unconfirmed") { setNotice("MAX не подтвердил отправку. Скопируйте ссылку или дождитесь присоединения второй стороны."); return; }
+    try {
+      await markDealInvitationSent(dealId, issuedInvitation.id);
+      setNotice(result === "copied" ? "Ссылка скопирована." : "Приглашение отправлено.");
+      void refreshWorkspace(queryClient, dealId);
+    } catch { setNotice("Не удалось сохранить отметку. Повторите отправку или копирование ссылки."); }
   };
   const copyInvitation = async () => {
     if (!issuedInvitation?.shareUrl) return;
-    try { await navigator.clipboard.writeText(issuedInvitation.shareUrl); setNotice("Ссылка скопирована. Отправьте её второй стороне."); }
-    catch { setNotice("Буфер обмена недоступен. Используйте ссылку отправки ниже."); }
+    setNotice("");
+    try { await navigator.clipboard.writeText(issuedInvitation.shareUrl); }
+    catch { setNotice("Буфер обмена недоступен. Используйте ссылку отправки ниже."); return; }
+    try { await markDealInvitationSent(dealId, issuedInvitation.id); setNotice("Ссылка скопирована."); void refreshWorkspace(queryClient, dealId); }
+    catch { setNotice("Ссылка скопирована, но отметка не сохранена. Повторите копирование."); }
   };
 
   return (
@@ -223,7 +234,6 @@ export function DealWorkspaceScreen({
             <Button className="full-width" onClick={() => void shareInvitation()}><Send size={17} /> Отправить в MAX</Button>
             <Button className="full-width" onClick={() => void copyInvitation()} variant="secondary"><Copy size={17} /> Скопировать ссылку</Button>
             <a className="invitation-fallback-link" href={maxShareUrl(issuedInvitation.shareText ?? "Приглашение", issuedInvitation.shareUrl)}>Открыть приглашение в MAX</a>
-            <Button variant="secondary" onClick={() => { void markDealInvitationSent(dealId, issuedInvitation.id).then(() => { setNotice("Отправка подтверждена."); void refreshWorkspace(queryClient, dealId); }).catch(() => setNotice("Не удалось сохранить подтверждение. Повторите попытку.")); }}>Я отправил приглашение</Button>
           </div>
         ) : null}
 
