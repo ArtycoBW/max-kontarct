@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { VoiceInput } from "@/components/ui/voice-input";
 import { suggestDeal } from "@/lib/api/templates";
+import { DealRequisites } from "@/components/deals/deal-requisites";
 
 export function DealIntakePanel({ initialDescription = "", isCreating, active = true, onAccept, children }: {
   children?: ReactNode;
@@ -20,6 +21,7 @@ export function DealIntakePanel({ initialDescription = "", isCreating, active = 
   const [description, setDescription] = useState(initialDescription);
   const descriptionId = useId();
   const [validationError, setValidationError] = useState("");
+  const [requisitesReady, setRequisitesReady] = useState(false);
   const inputRef = useRef<HTMLLabelElement>(null);
   useEffect(() => {
     if (initialDescription) {
@@ -75,9 +77,13 @@ export function DealIntakePanel({ initialDescription = "", isCreating, active = 
           {!Object.keys(proposal.answers).length ? <p>Недостающие условия можно заполнить на следующем шаге.</p> : null}
           {proposal.warnings.map((warning, index) => <p className="deal-intake-warning" key={index}>{warning}</p>)}
           </div>
-          {!children ? <Button className="full-width" disabled={busy} onClick={() => onAccept(proposal)} type="button">
-            {isCreating ? "Сохраняем…" : "Перейти к реквизитам"}
-          </Button> : null}
+          {!children ? <div className="inline-deal-requisites">
+            <DealRequisites onReadyChange={setRequisitesReady} onSaved={() => undefined} />
+            {!requisitesReady ? <p className="field-description">Заполните паспортные данные, чтобы перейти к приглашению.</p> : null}
+            <Button className="full-width" disabled={busy || !requisitesReady} onClick={() => onAccept(proposal)} type="button">
+              {isCreating ? "Сохраняем…" : "Перейти к приглашению"}
+            </Button>
+          </div> : null}
         </section>
       ) : null}
     </Card>{children}</>

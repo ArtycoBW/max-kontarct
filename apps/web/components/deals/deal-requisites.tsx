@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getProfile } from "@/lib/api/profile";
 import { queryKeys } from "@/lib/api/query-keys";
@@ -13,11 +13,12 @@ import { PasteProfileDetails } from "@/components/profile/paste-profile-details"
 import { PassportScanner } from "@/components/profile/passport-scanner";
 import type { PassportData } from "@/lib/ocr/passport-parser";
 
-export function DealRequisites({ onSaved }: { onSaved: () => void }) {
+export function DealRequisites({ onSaved, onReadyChange }: { onSaved: () => void; onReadyChange?: (ready: boolean) => void }) {
   const [details, setDetails] = useState<Partial<PassportData> | null>(null);
   const [saved, setSaved] = useState(false);
   const profile = useQuery({ queryKey: queryKeys.profile.current(), queryFn: getProfile });
   const hasSavedDetails = Boolean(profile.data?.firstName && profile.data?.lastName && profile.data?.birthDate && profile.data?.passport?.series && profile.data?.passport?.number && profile.data?.passport?.issuedAt && profile.data?.passport?.issuer && profile.data?.passport?.divisionCode && profile.data?.passport?.birthPlace && profile.data?.passport?.gender);
+  useEffect(() => { onReadyChange?.(hasSavedDetails); }, [hasSavedDetails, onReadyChange]);
   const open = (data: Partial<PassportData>) => { setDetails(data); setSaved(false); };
   return <>
     <Card className="deal-requisites">

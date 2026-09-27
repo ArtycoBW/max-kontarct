@@ -3375,13 +3375,9 @@ button.service-status {
 .deal-requisites p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .deal-requisites .button, .passport-scan-trigger { height: auto; min-height: 48px; white-space: normal; text-align: center; }
 .deal-requisites .button svg, .passport-scan-trigger svg { flex-shrink: 0; }
-.requisites-step-screen { min-height: 100dvh; }
-.requisites-step-screen > .flow-header { flex: none; }
-.requisites-step-content { display: flex; flex: 1 0 auto; flex-direction: column; justify-content: center; padding-block: 28px; }
-.requisites-step-content .deal-requisites { width: 100%; }
-.requisites-step-content .deal-requisites h2,
-.requisites-step-content .deal-requisites > p { text-align: center; }
-.requisites-step-screen > .create-flow-action { flex: none; margin-top: 0; padding-top: 0; }
+.inline-deal-requisites { display: grid; gap: 16px; margin-top: 16px; min-width: 0; }
+.inline-deal-requisites > .deal-requisites { min-width: 0; }
+.inline-deal-requisites > .field-description { margin: 0; }
 .invitation-step-screen { min-height: 100dvh; container-type: inline-size; }
 .invitation-step-screen > .flow-header { flex: none; gap: 10px; }
 .invitation-step-screen .flow-header-title { width: 100%; gap: 8px; }
