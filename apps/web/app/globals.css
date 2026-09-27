@@ -2108,7 +2108,6 @@ button.service-status {
 .deal-chat-message header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; font-size: 12px; }
 .deal-chat-message time, .deal-chat-message small { color: var(--muted); font-size: 11px; }
 .deal-chat-message p { white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 0; font-size: 14px; line-height: 1.5; }
-.shared-deal-attachments a { height: auto; white-space: normal; overflow-wrap: anywhere; justify-content: flex-start; text-align: left; }
 .revision-form { display: grid; gap: 18px; min-width: 0; margin: 0; padding: 0; border: 0; }
 .revision-question { padding: 16px; display: grid; gap: 10px; }
 .app-modal-body .profile-screen, .app-modal-body .documents-screen { padding: 0; }

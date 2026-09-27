@@ -99,6 +99,38 @@ test("materials use role-specific empty text and uploader action; incomplete par
   await expect(page.getByRole("button", { name: /Загрузите материалы сделки/ })).toBeVisible();
 });
 
+for (const role of ["COUNTERPARTY", "INITIATOR"]) {
+  test(`attachment download icons stay centered for ${role}`, async ({ page }) => {
+    const workspace = { ...workspaceFixture("TERMS_REVIEW", true), currentUserRole: role };
+    await page.setViewportSize({ width: 390, height: 740 });
+    await openMockDeal(page, workspace);
+    await page.route("**/deals/review-deal/files", route => route.fulfill({ json: {
+      dealId: workspace.id, dealTitle: workspace.title, dealStatus: workspace.status,
+      allowedMimeTypes: ["application/pdf"], maxUploadBytes: 10000000,
+      canUploadEvidence: role === "INITIATOR", requirements: [],
+      evidenceFiles: [1, 2].map(id => ({ id: `pdf-${id}`, originalName: `Договор-МК-20260927-длинное-название-${id}.pdf`,
+        mimeType: "application/pdf", sizeBytes: 35000, visibility: "DEAL_PARTICIPANTS",
+        owner: { isCurrentUser: role === "INITIATOR", displayName: "Тест" } })),
+    } }));
+    await page.getByRole("button", { name: role === "INITIATOR" ? /Загрузите материалы сделки/ : /Приложения к договору/ }).click();
+    for (const width of [320, 390, 768]) {
+      await page.setViewportSize({ width, height: 740 });
+      const links = page.getByRole("dialog").getByRole("link", { name: /^Скачать Договор/ });
+      await expect(links).toHaveCount(2);
+      for (const link of await links.all()) {
+        const button = (await link.boundingBox())!;
+        const icon = (await link.locator("svg").boundingBox())!;
+        expect(Math.abs(icon.x + icon.width / 2 - button.x - button.width / 2)).toBeLessThan(1);
+        expect(Math.abs(icon.y + icon.height / 2 - button.y - button.height / 2)).toBeLessThan(1);
+        expect(button.width).toBeGreaterThanOrEqual(40);
+        expect(button.height).toBeGreaterThanOrEqual(40);
+      }
+      expect(await page.locator(".deal-panel-body").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+      if (width === 390) await page.screenshot({ path: `test-results/attachment-buttons-${role}.png` });
+    }
+  });
+}
+
 test("draft materials are available only after invitation and requisites", async ({ page }) => {
   const workspace = { ...workspaceFixture(), currentUserRole: "INITIATOR" };
   await openMockDeal(page, workspace);
