@@ -1042,9 +1042,11 @@ function CreateDealScreen({
         </div>
   );
 
-  if (step === "requisites") return <div className="screen-content create-deal-screen">
+  if (step === "requisites") return <div className="screen-content create-deal-screen requisites-step-screen">
     <FlowHeader eyebrow="Реквизиты" title="Укажите свои данные" onBack={() => setStep("description")} />
-    <DealRequisites onSaved={() => { void partyReadiness.refetch(); }} />
+    <div className="requisites-step-content">
+      <DealRequisites onSaved={() => { void partyReadiness.refetch(); }} />
+    </div>
     <div className="create-flow-action"><Button className="full-width" disabled={!partyReadiness.data?.initiator.profileCompleted || saveState === "saving"} onClick={() => { void enqueueDraftSave({ currentStep: "questionnaire" }).then(() => setStep("questionnaire")).catch(() => undefined); }}>Сохранить и продолжить</Button></div>
   </div>;
 

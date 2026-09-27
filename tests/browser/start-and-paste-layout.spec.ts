@@ -429,7 +429,10 @@ test("invitation gates a separate requisites step; uploads appear only with para
   await page.route("**/api/v1/deals/draft/invitations", route => route.fulfill({ json: invitation }));
   await page.route("**/api/v1/deals/draft/invitations/invite/sent", route => { sentAt = new Date().toISOString(); return route.fulfill({ json: { ...invitation, sentAt } }); });
   await page.route("**/api/v1/profile", route => {
-    if (route.request().method() !== "PATCH") return route.fallback();
+    if (route.request().method() !== "PATCH") return route.fulfill({ json: {
+      firstName: "Иван", lastName: "Примеров", middleName: null, birthDate: "1990-01-01", address: null, phone: null, email: null, updatedAt: null,
+      passport: { series: "1234", number: "567890", issuedAt: "2020-01-02", issuer: "Тестовый отдел", divisionCode: "123-456", birthPlace: "Казань", gender: "М" },
+    } });
     profileWrites++;
     return route.fulfill({ json: { ...route.request().postDataJSON(), phone: null, address: null, updatedAt: "2026-09-26T12:01:00Z" } });
   });
@@ -452,6 +455,27 @@ test("invitation gates a separate requisites step; uploads appear only with para
   await page.getByRole("button", { name: "Я отправил приглашение", exact: true }).click();
   await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
   await expect(page.getByRole("heading", { name: "Мои реквизиты для договора" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Выбрать реквизиты из профиля" })).toBeVisible();
+  for (const viewport of [{ width: 768, height: 900 }, { width: 390, height: 700 }, { width: 320, height: 568 }, { width: 740, height: 390 }]) {
+    await page.setViewportSize(viewport);
+    await page.locator(".mini-app-scroll").evaluate(el => { el.scrollTop = 0; });
+    const card = await page.locator(".requisites-step-content .deal-requisites").boundingBox();
+    const content = await page.locator(".requisites-step-content").boundingBox();
+    const heading = await page.locator(".requisites-step-screen .flow-header").boundingBox();
+    expect(card!.y - heading!.y - heading!.height).toBeGreaterThanOrEqual(27);
+    expect(Math.abs(card!.y + card!.height / 2 - content!.y - content!.height / 2)).toBeLessThan(1);
+    expect(Math.abs(card!.x + card!.width / 2 - viewport.width / 2)).toBeLessThan(1);
+    expect(await page.locator(".mini-app-scroll").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    if (viewport.height >= 700) {
+      await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeInViewport();
+      expect(Math.abs(card!.y + card!.height / 2 - viewport.height / 2)).toBeLessThan(45);
+      await page.screenshot({ path: `test-results/requisites-centered-${viewport.width}.png` });
+    } else {
+      await page.getByRole("button", { name: "Сохранить и продолжить" }).scrollIntoViewIfNeeded();
+      await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeInViewport();
+    }
+  }
+  await page.setViewportSize({ width: 390, height: 700 });
   await page.getByRole("button", { name: "Заполнить реквизиты вручную" }).click();
   await expect(page.getByRole("dialog").getByLabel("Серия паспорта", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");

@@ -3376,6 +3376,13 @@ button.service-status {
 .deal-requisites p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .deal-requisites .button, .passport-scan-trigger { height: auto; min-height: 48px; white-space: normal; text-align: center; }
 .deal-requisites .button svg, .passport-scan-trigger svg { flex-shrink: 0; }
+.requisites-step-screen { min-height: 100dvh; }
+.requisites-step-screen > .flow-header { flex: none; }
+.requisites-step-content { display: flex; flex: 1 0 auto; flex-direction: column; justify-content: center; padding-block: 28px; }
+.requisites-step-content .deal-requisites { width: 100%; }
+.requisites-step-content .deal-requisites h2,
+.requisites-step-content .deal-requisites > p { text-align: center; }
+.requisites-step-screen > .create-flow-action { flex: none; margin-top: 0; padding-top: 0; }
 .deal-description-details { border: 1px solid var(--border); border-radius: 16px; padding: 14px; }
 .deal-description-details .collapsible-trigger { white-space: normal; text-align: left; font-size: 13px; line-height: 1.5; }
 .deal-description-details .form-field { margin-top: 16px; }
