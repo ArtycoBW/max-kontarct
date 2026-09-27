@@ -377,6 +377,13 @@ for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 700 }
     const navigation = page.getByRole("navigation", { name: "Навигация приложения" });
     await expect(create).toBeInViewport();
     const before = await create.boundingBox();
+    const listBox = await list.boundingBox();
+    const appBox = await page.locator(".mini-app").boundingBox();
+    const cardBox = await page.locator(".deal-list-card").first().boundingBox();
+    // The scrollbar is at the app edge, while card/button edges stay aligned.
+    expect(Math.abs(listBox!.x + listBox!.width - appBox!.x - appBox!.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(cardBox!.x - before!.x)).toBeLessThan(1);
+    expect(Math.abs(cardBox!.x + cardBox!.width - before!.x - before!.width)).toBeLessThan(2);
     const nav = await navigation.boundingBox();
     expect(before!.y + before!.height).toBeLessThanOrEqual(nav!.y);
     expect(await list.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
