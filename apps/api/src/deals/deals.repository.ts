@@ -77,6 +77,12 @@ export type DealVersionHistoryRecord = Prisma.DealVersionGetPayload<{
 export class DealsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  async revisionParties(dealId: string) {
+    const parties = await this.prisma.dealParty.findMany({ where: { dealId }, select: { role: true, user: { select: { profile: true } } } });
+    if (parties.length !== 2 || parties.some(party => !hasCompletePassportProfile(party.user.profile))) throw new ConflictException({ code: "DEAL_PARTY_DETAILS_REQUIRED", message: "Сначала обе стороны должны заполнить реквизиты в профиле" });
+    return Object.fromEntries(parties.map(party => [party.role, [party.user.profile!.lastName, party.user.profile!.firstName, party.user.profile!.middleName].filter(Boolean).join(" ")]));
+  }
+
   findPublishedTemplateVersion(id: string) {
     return this.prisma.contractTemplateVersion.findFirst({
       select: {
@@ -269,7 +275,7 @@ export class DealsRepository {
     dealId: string;
     expectedUpdatedAt: Date;
     nextStatus: DealStatus;
-    sourceGenerationId: string;
+    sourceGenerationId: string | null;
     terms: Prisma.InputJsonObject;
     userId: string;
     versionNumber: number;

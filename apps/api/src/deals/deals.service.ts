@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from "node:util";
 
 import type {
   ContractStructuredDraft,
+  EditContractVersionRequest,
   CreateDealVersionRequest,
   CreateDealDraftRequest,
   DealDraftData,
@@ -25,6 +26,7 @@ import type { DealDraftRecord } from "./deals.repository";
 import { DealsRepository } from "./deals.repository";
 import { DealStateMachineService } from "./deal-state-machine.service";
 import { readSubjectDocumentsParty } from "./declared-party-roles";
+import { validateManualContract } from "./manual-contract-validation";
 
 const MAX_ANSWERS_BYTES = 64 * 1024;
 
@@ -174,6 +176,31 @@ export class DealsService {
       ),
       userId,
       versionNumber: version.versionNumber,
+    });
+    if (!updated) throw versionConflict();
+    return toResponse(updated);
+  }
+
+  async editContract(userId: string, dealId: string, input: EditContractVersionRequest): Promise<DealDraftResponse> {
+    const record = await this.deals.findOwnedDraft(dealId, userId);
+    if (!record) throw dealNotFound();
+    assertInitiator(record, userId);
+    assertVersioningAllowed(record.status);
+    const version = requireVersion(record);
+    assertExpectedVersion(version.id, input.expectedVersionId);
+    if (!version.contractDraft) throw new ConflictException({ code: "DEAL_GENERATION_NOT_READY", message: "Сначала сформируйте договор" });
+    const partyNames = await this.deals.revisionParties(dealId);
+    const contractDraft = validateManualContract(input.contractDraft, record.templateVersion.template.slug, Object.values(partyNames));
+    contractDraft.warnings = (version.contractDraft as unknown as ContractStructuredDraft).warnings ?? [];
+    if (isDeepStrictEqual(contractDraft, version.contractDraft)) throw new BadRequestException({ code: "DEAL_VERSION_NO_CHANGES", message: "В тексте договора нет изменений" });
+    const current = parseDraft(version.terms);
+    const updated = await this.deals.createVersion({
+      changeSummary: input.changeSummary.trim(), contractDraft: toPrismaValue(contractDraft),
+      currentStatus: record.status, currentVersionId: version.id, dealId,
+      expectedUpdatedAt: new Date(input.expectedUpdatedAt), nextStatus: statusAfterRevision(record.status, this.stateMachine),
+      sourceGenerationId: null,
+      terms: { ...toPrismaObject({ ...current, answers: {}, clarificationSessionId: null }), manualRevision: { partyNames } },
+      userId, versionNumber: version.versionNumber + 1,
     });
     if (!updated) throw versionConflict();
     return toResponse(updated);
@@ -510,7 +537,7 @@ function toPrismaObject(value: DealDraftData): Prisma.InputJsonObject {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonObject;
 }
 
-function toPrismaValue(value: Prisma.JsonValue): Prisma.InputJsonValue {
+function toPrismaValue(value: Prisma.JsonValue | ContractStructuredDraft): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 

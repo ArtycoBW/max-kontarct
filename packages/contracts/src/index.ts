@@ -93,6 +93,13 @@ export interface CreateDealVersionRequest {
   sourceGenerationId: string;
 }
 
+export interface EditContractVersionRequest {
+  contractDraft: ContractStructuredDraft;
+  changeSummary: string;
+  expectedUpdatedAt: string;
+  expectedVersionId: string;
+}
+
 export interface DealDraftResponse {
   contractDraft: ContractStructuredDraft | null;
   createdAt: string;

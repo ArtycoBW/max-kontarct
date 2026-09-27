@@ -9,12 +9,12 @@ describe("document responsibilities", () => {
     const deal = { initiatorUserId: "first", templateVersion, versions: [{ terms: { subjectDocumentsParty } }] };
     const supplier = subjectDocumentsParty === "INITIATOR" ? "first" : "second";
     const customer = supplier === "first" ? "second" : "first";
-    expect(requiredForParty(deal, supplier)).toEqual(["passport", "property"]);
-    expect(requiredForParty(deal, customer)).toEqual(["passport"]);
+    expect(requiredForParty(deal, supplier)).toEqual([]);
+    expect(requiredForParty(deal, customer)).toEqual([]);
     expect(canUploadSubject(deal, customer)).toBe(false);
   });
   it("does not silently reinterpret roles in old deals", () => {
-    expect(requiredForParty({ templateVersion }, "first")).toEqual(["passport", "property"]);
+    expect(requiredForParty({ templateVersion }, "first")).toEqual([]);
   });
 
   it("uses complete passport data in the profile instead of requiring an identity scan", () => {
@@ -24,15 +24,15 @@ describe("document responsibilities", () => {
     };
     const deal = { initiatorUserId: "first", parties: [{ userId: "first", user: { profile } }], templateVersion };
     expect(hasCompletePassportProfile(profile)).toBe(true);
-    expect(requiredForParty(deal, "first")).toEqual(["property"]);
+    expect(requiredForParty(deal, "first")).toEqual([]);
   });
 
-  it("still requires an identity scan when passport details are incomplete", () => {
+  it("does not require an upload even with incomplete profile details", () => {
     const deal = {
       parties: [{ userId: "first", user: { profile: { firstName: "Анна", lastName: "Примерова", birthDate: "1990-01-01", passportDetails: { series: "1234", number: "567890" } } } }],
       templateVersion,
     };
     expect(hasCompletePassportProfile(deal.parties[0]?.user.profile)).toBe(false);
-    expect(requiredForParty(deal, "first")).toEqual(["passport", "property"]);
+    expect(requiredForParty(deal, "first")).toEqual([]);
   });
 });

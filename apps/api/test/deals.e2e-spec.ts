@@ -27,6 +27,7 @@ describe("deals API (e2e)", () => {
   let app: INestApplication;
   const createDraft = jest.fn(async () => draftResponse());
   const getDraft = jest.fn(async () => draftResponse());
+  const editContract = jest.fn(async () => draftResponse({ versionNumber: 2 }));
   const list = jest.fn(async () => ({
     items: [
       {
@@ -79,6 +80,7 @@ describe("deals API (e2e)", () => {
           useValue: {
             createDraft,
             createVersion,
+            editContract,
             getDraft,
             list,
             listVersions,
@@ -102,6 +104,18 @@ describe("deals API (e2e)", () => {
 
   afterAll(async () => {
     await app?.close();
+  });
+
+  it("accepts a direct text revision with an explicit version and timestamp", async () => {
+    const body = { contractDraft: { title: "Договор", preamble: "Стороны", sections: [], warnings: [] }, changeSummary: "Уточнение цены", expectedVersionId: "40000000-0000-4000-8000-000000000001", expectedUpdatedAt: "2026-09-27T10:00:00Z" };
+    await request(app.getHttpServer()).post(`/${API_PREFIX}/deals/${dealId}/text-versions`).send(body).expect(201);
+    expect(editContract).toHaveBeenLastCalledWith(userId, dealId, body);
+  });
+
+  it("rejects text revision without a version before reaching the service", async () => {
+    editContract.mockClear();
+    await request(app.getHttpServer()).post(`/${API_PREFIX}/deals/${dealId}/text-versions`).send({ contractDraft: {}, changeSummary: "Изменения" }).expect(400);
+    expect(editContract).not.toHaveBeenCalled();
   });
 
   it("creates an authenticated server draft", async () => {

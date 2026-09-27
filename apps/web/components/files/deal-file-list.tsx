@@ -21,7 +21,7 @@ export function DealFileList({ dealId, files, showReview = false, showDownload =
           <span className="deal-file-info"><strong title={file.originalName}>{file.originalName}</strong><small>{fileTypeLabel(file.mimeType)} · {fileSizeLabel(file.sizeBytes)}</small><span className="deal-file-preview-label"><Eye size={13} /> Просмотреть</span></span>
         </Button>
         {showDownload ? <Button asChild size="icon" variant="ghost"><a href={getDealFileDownloadUrl(dealId, file.id)} download={file.originalName} aria-label={`Скачать ${file.originalName}`}><Download size={18} /></a></Button> : null}
-        {showReview ? <div className="deal-file-review"><span>{file.owner.isCurrentUser ? "Ваш файл" : file.owner.displayName} · {{ ACCEPTED: "Принят", PENDING: "На проверке", REJECTED: "Нужно исправить" }[file.reviewStatus]}</span>{file.reviewComment ? <p>{file.reviewComment}</p> : null}</div> : null}
+        {showReview ? <div className="deal-file-review"><span>{file.owner.isCurrentUser ? "Ваш файл" : file.owner.displayName}</span></div> : null}
       </li>)}
     </ul>
     {index >= 0 ? <FilePreviewDialog files={files.map(file => ({ ...file, url: getDealFileDownloadUrl(dealId, file.id) }))} index={index} onIndexChange={next => setSelected(files[next]!.id)} onClose={() => setSelected(null)} returnFocus={() => opener.current?.focus()} /> : null}

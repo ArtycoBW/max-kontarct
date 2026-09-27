@@ -52,6 +52,8 @@ test("generation waits for both profiles and submits the actual deal id", async 
   await page.getByRole("button", { name: "Редактировать черновик" }).click();
   const action = page.getByRole("button", { name: "Подготовить договор", exact: true });
   await expect(action).toBeDisabled();
+  await expect(page.getByText("Тестова Анна Ивановна уже присоединился.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Пригласите вторую сторону уже сейчас", { exact: true })).toHaveCount(0);
   workspace.initiator.profileCompleted = true;
   await expect(action).toBeDisabled();
   expect(posted).toBeNull();
@@ -85,10 +87,39 @@ test("all shared materials appear in one list and the documents header sticks", 
   await expect(page.getByText("Все материалы сделки", { exact: true })).toBeVisible();
   await expect(page.locator(".deal-file-row")).toHaveCount(7);
   await expect(page.locator(".requirement-upload-card")).toHaveCount(0);
+  await expect(page.getByText("Обязательные документы", { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/На проверке|Нужно исправить/)).toHaveCount(0);
   await page.locator(".mini-app-scroll").evaluate(el => { el.scrollTop = 700; });
   await expect(page.locator(".documents-screen > .flow-header")).toBeInViewport({ ratio: 1 });
   await expect(page.locator(".documents-screen > .flow-header")).toHaveCSS("position", "sticky");
   await page.screenshot({ path: "test-results/documents-sticky-all-materials.png" });
+});
+
+test("final contract is edited in one modal; errors retain the text and save uses the opened revision", async ({ page }) => {
+  const workspace = { ...workspaceFixture("TERMS_REVIEW", true), currentUserRole: "INITIATOR" };
+  await openMockDeal(page, workspace);
+  let posted: Record<string, unknown> | null = null;
+  let invalid = true;
+  await page.route("**/api/v1/deals/review-deal/text-versions", route => {
+    posted = route.request().postDataJSON();
+    if (invalid) return route.fulfill({ status: 400, json: { code: "CONTRACT_REVISION_INVALID", message: "Исправьте отмеченные условия договора", details: { errors: [{ path: "sections", message: "Укажите срок оплаты" }] } } });
+    workspace.versionNumber = 3;
+    workspace.versionId = "version-3";
+    return route.fulfill({ json: workspace });
+  });
+  await page.getByRole("button", { name: "Редактировать договор", exact: true }).click();
+  const modal = page.getByRole("dialog");
+  await modal.getByLabel("Пункт 1.1", { exact: true }).fill("Изменённый предмет за 15000 рублей");
+  await modal.getByLabel("Что изменилось", { exact: true }).fill("Уточнена стоимость");
+  await modal.getByRole("button", { name: "Проверить и сохранить новую версию" }).click();
+  await expect(modal.getByText("Укажите срок оплаты", { exact: true })).toBeVisible();
+  await expect(modal.getByLabel("Пункт 1.1", { exact: true })).toHaveValue("Изменённый предмет за 15000 рублей");
+  expect(posted).toMatchObject({ expectedVersionId: "version", expectedUpdatedAt: "2026-09-26T12:00:00Z", contractDraft: { sections: [{ clauses: ["Изменённый предмет за 15000 рублей"] }] } });
+  invalid = false;
+  await modal.getByLabel("Пункт 1.1", { exact: true }).fill("Стоимость 15000 рублей, оплата при встрече");
+  await modal.getByRole("button", { name: "Проверить и сохранить новую версию" }).click();
+  await expect(modal).toHaveCount(0);
+  await expect(page.locator(".deal-version-label")).toContainText("версия 3");
 });
 
 test("draft recipient sees all three entry methods and cannot open a premature contract", async ({ page }) => {
@@ -101,6 +132,23 @@ test("draft recipient sees all three entry methods and cannot open a premature c
   await expect(page.locator(".deal-panel-trigger").filter({ hasText: /^Договор/ })).toHaveCount(0);
   await expect(page.getByText(/Ваша роль:/)).toHaveCount(0);
   await expect(page.locator(".deal-version-label")).toHaveCSS("background-color", "rgb(255, 242, 191)");
+});
+
+test("saved passport details can be chosen from the profile without re-entering them", async ({ page }) => {
+  await mockApp(page);
+  const workspace = workspaceFixture();
+  await page.route("**/api/v1/profile", route => route.fulfill({ json: { firstName: "Анна", lastName: "Тестова", middleName: "Ивановна", birthDate: "1990-01-01", address: null, phone: null, email: null, updatedAt: null,
+    passport: { series: "1234", number: "567890", issuedAt: "2020-01-02", issuer: "Тестовый отдел", divisionCode: "123-456", birthPlace: "Казань", gender: "Ж" },
+  } }));
+  await page.route("**/api/v1/deals", route => route.fulfill({ json: { items: [{ ...workspace, templateTitle: "Купля-продажа" }] } }));
+  await page.route("**/api/v1/deals/review-deal/workspace", route => route.fulfill({ json: workspace }));
+  await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
+  await page.getByRole("button", { name: /Тестовая сделка/ }).click();
+  await page.getByRole("button", { name: "Выбрать реквизиты из профиля" }).click();
+  const modal = page.getByRole("dialog");
+  await expect(modal.getByLabel("Серия паспорта", { exact: true })).toHaveValue("1234");
+  await expect(modal.getByLabel("Номер паспорта", { exact: true })).toHaveValue("567890");
+  await expect(modal.getByRole("button", { name: "Сохранить профиль" })).toHaveCount(1);
 });
 
 test("profile link opens the expanded passport section, not the top", async ({ page }) => {
@@ -177,6 +225,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     await trigger.click();
     const dialog = page.getByRole("dialog");
     const input = dialog.getByLabel("Скопированный текст");
+    await expect(dialog.getByText(/Обработка выполняется на устройстве|Это перенос реквизитов/)).toHaveCount(0);
     await input.fill("Серия и номер: 1234 567890\nКем выдан: ОТДЕЛ МВД ПО ПРИМЕРНОМУ РАЙОНУ\nДата выдачи: 15.05.2020\nКод подразделения: 123-456\nФИО: Примеров Иван Петрович\nПол: Мужской\nДата рождения: 12.04.1995\nМесто рождения: ГОР. Казань");
     await expect(dialog.getByRole("status")).toHaveText("Готово к переносу полей: 11");
     await expect(dialog.locator(".pasted-details-preview > div")).toHaveCount(11);

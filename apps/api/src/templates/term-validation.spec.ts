@@ -1,6 +1,13 @@
 import { invalidRequiredTermAnswers, missingContractTerms } from "./contract-completeness";
 
 describe("Human payment answers across templates", () => {
+  it.each([
+    "Проверяет и подтверждает приёмку на месте, когда встретимся",
+    "Заказчик проверяет результат и подтверждает приёмку на месте при встрече и день продажи",
+    "Покупатель принимает имущество при встрече после осмотра",
+  ])("accepts explicit in-person acceptance: %s", termsAcceptance => {
+    expect(invalidRequiredTermAnswers("movable-property-sale", {}, { termsAcceptance })).toEqual([]);
+  });
   const slugs = ["work-contract", "paid-services", "property-rental", "movable-property-sale"];
   const valid = [
     "аванса нет, сразу на месте оплата будет произведена", "Без аванса, оплата на месте сразу",

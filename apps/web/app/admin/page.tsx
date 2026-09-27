@@ -12,7 +12,6 @@ import {
   Check,
   CircleAlert,
   FileStack,
-  FileSearch,
   RefreshCw,
   ScrollText,
   ShieldCheck,
@@ -24,7 +23,6 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { AdminAiGenerationsView } from "@/components/admin/ai-generations-view";
-import { AdminFileReviewsView } from "@/components/admin/file-reviews-view";
 import { AdminTemplatesView } from "@/components/admin/templates-view";
 import { useAuth } from "@/components/providers/auth-provider";
 import { Button } from "@/components/ui/button";
@@ -119,14 +117,6 @@ export default function AdminPage() {
             <Bot size={17} /> Генерации ИИ
           </Button>
           <Button
-            className={activeTab === "files" ? "is-active" : undefined}
-            onClick={() => setActiveTab("files")}
-            type="button"
-            variant="unstyled"
-          >
-            <FileSearch size={17} /> Проверка файлов
-          </Button>
-          <Button
             className={activeTab === "audit" ? "is-active" : undefined}
             onClick={() => setActiveTab("audit")}
             type="button"
@@ -161,7 +151,6 @@ export default function AdminPage() {
           <AdminTemplatesView canManage={auth.user.role === "ADMIN"} />
         ) : null}
         {activeTab === "generations" ? <AdminAiGenerationsView /> : null}
-        {activeTab === "files" ? <AdminFileReviewsView canReview={auth.user.role === "ADMIN"} /> : null}
         {activeTab === "audit" ? <AuditView query={audit} /> : null}
       </section>
     </main>

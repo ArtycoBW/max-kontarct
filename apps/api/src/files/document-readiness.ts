@@ -6,16 +6,10 @@ type ReadinessInput = Parameters<typeof requiredForParty>[0] & {
   files: Array<{ ownerUserId: string; requirementId: string | null; reviewStatus: string }>;
 };
 
-/** Existing accepted documents remain valid when the agreement starts or a party joins. */
+/** Uploads never gate agreement. Profile readiness is checked separately. */
 export function documentStage(deal: ReadinessInput): DealStatus {
   if (deal.parties.length !== 2) return DealStatus.DOCUMENTS_PENDING;
-  const required = deal.parties.flatMap(party => requiredForParty(deal, party.userId)
-    .map(requirementId => ({ ownerUserId: party.userId, requirementId })));
-  const has = (item: typeof required[number], statuses: string[]) => deal.files.some(file =>
-    file.ownerUserId === item.ownerUserId && file.requirementId === item.requirementId && statuses.includes(file.reviewStatus));
-  if (required.every(item => has(item, ["ACCEPTED"]))) return DealStatus.TERMS_REVIEW;
-  if (required.every(item => has(item, ["ACCEPTED", "PENDING"]))) return DealStatus.DOCUMENTS_REVIEW;
-  return DealStatus.DOCUMENTS_PENDING;
+  return DealStatus.TERMS_REVIEW;
 }
 
 /** Call under the deal row lock, after updating parties / the current version. */

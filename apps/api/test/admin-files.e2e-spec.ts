@@ -76,18 +76,13 @@ describe("admin file review RBAC (e2e)", () => {
       .expect(403);
   });
 
-  it("allows only an administrator to record a review decision", async () => {
+  it("does not allow recording review decisions anymore", async () => {
     await request(app.getHttpServer())
       .patch(`/${API_PREFIX}/admin/files/${FILE_ID}/review`)
       .set("x-test-role", UserRole.ADMIN)
       .send({ comment: null, status: "ACCEPTED" })
-      .expect(200);
-    expect(review).toHaveBeenCalledWith(
-      USER_ID,
-      FILE_ID,
-      { comment: null, status: "ACCEPTED" },
-      "request-files-e2e",
-    );
+      .expect(410);
+    expect(review).not.toHaveBeenCalled();
   });
 
   it("rejects unsupported review statuses before the service", async () => {
@@ -95,7 +90,7 @@ describe("admin file review RBAC (e2e)", () => {
       .patch(`/${API_PREFIX}/admin/files/${FILE_ID}/review`)
       .set("x-test-role", UserRole.ADMIN)
       .send({ comment: null, status: "PENDING" })
-      .expect(400);
+      .expect(410);
     expect(review).not.toHaveBeenCalled();
   });
 });

@@ -5,8 +5,6 @@ import { ConflictException, Inject, Injectable, NotFoundException } from "@nestj
 import { ConfigService } from "@nestjs/config";
 import {
   DealArtifactType,
-  DealFileCategory,
-  DealFileReviewStatus,
   DealFileVisibility,
   DealStatus,
   Prisma,
@@ -25,10 +23,6 @@ const finalizationSelect = {
     orderBy: { uploadedAt: "asc" as const },
     select: { id: true, mimeType: true, objectKey: true, originalName: true, sha256: true, sizeBytes: true },
     where: {
-      OR: [
-        { category: DealFileCategory.EVIDENCE },
-        { reviewStatus: DealFileReviewStatus.ACCEPTED },
-      ],
       visibility: DealFileVisibility.DEAL_PARTICIPANTS,
     },
   },

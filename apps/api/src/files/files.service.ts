@@ -88,7 +88,7 @@ export class FilesService {
         canUpload: !passportProfileSatisfiesRequirement(deal, userId, requirement) && canUploadRequirement(deal, userId, requirement),
         description: requirement.description,
         id: requirement.id,
-        required: requirement.required && !passportProfileSatisfiesRequirement(deal, userId, requirement),
+        required: false,
         satisfiedByProfile: passportProfileSatisfiesRequirement(deal, userId, requirement),
         title: requirement.title,
         uploads: files.filter((file) => file.requirementId === requirement.id).map(format),

@@ -38,6 +38,7 @@ import { DealParamsDto } from "./dto/deal-params.dto";
 import { StartDealAgreementDto } from "./dto/start-deal-agreement.dto";
 import { UpdateDealDraftDto } from "./dto/update-deal-draft.dto";
 import { DealsService } from "./deals.service";
+import { EditContractVersionDto } from "./dto/edit-contract-version.dto";
 
 @Controller("deals")
 @UseGuards(SessionAuthGuard)
@@ -122,6 +123,12 @@ export class DealsController {
       params.dealId,
       body satisfies CreateDealVersionRequest,
     );
+  }
+
+  @Post(":dealId/text-versions")
+  @ApiOperation({ summary: "Проверить и сохранить отредактированный текст договора" })
+  editContract(@Param() params: DealParamsDto, @Body() body: EditContractVersionDto, @Req() request: AuthenticatedRequest): Promise<DealDraftResponse> {
+    return this.deals.editContract(request.auth.user.id, params.dealId, body);
   }
 
   @Patch(":dealId/draft")

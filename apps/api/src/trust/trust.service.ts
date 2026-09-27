@@ -19,8 +19,6 @@ const CHECK_ORDER: TrustCheckType[] = [
   TrustCheckType.MAX_ACCOUNT,
   TrustCheckType.PHONE,
   TrustCheckType.REQUISITES_FORMAT,
-  TrustCheckType.REQUIRED_FILES,
-  TrustCheckType.INTERNAL_REVIEW,
 ];
 
 @Injectable()
@@ -86,18 +84,6 @@ export class TrustService {
     const checks = await this.prisma.$transaction(async (transaction) => {
       for (const check of desired) {
         await syncComputedCheck(transaction, userId, check);
-      }
-      for (const type of [TrustCheckType.REQUIRED_FILES, TrustCheckType.INTERNAL_REVIEW]) {
-        await transaction.userTrustCheck.upsert({
-          create: {
-            source: TrustCheckSource.SYSTEM,
-            status: TrustCheckStatus.PENDING,
-            type,
-            userId,
-          },
-          update: {},
-          where: { userId_type: { type, userId } },
-        });
       }
       return transaction.userTrustCheck.findMany({ where: { userId } });
     });

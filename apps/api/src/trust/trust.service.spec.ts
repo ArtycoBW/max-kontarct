@@ -6,7 +6,7 @@ import { TrustService } from "./trust.service";
 const now = new Date("2026-09-01T10:00:00.000Z");
 
 describe("TrustService", () => {
-  it("stores and returns five independent trust levels", async () => {
+  it("stores and returns three account and profile checks without file reviews", async () => {
     const stored = new Map<TrustCheckType, any>();
     const prisma: any = {
       $transaction: jest.fn(async (callback: (transaction: any) => Promise<unknown>) => callback(prisma)),
@@ -46,7 +46,7 @@ describe("TrustService", () => {
 
     const result = await new TrustService(prisma).getStatus("user-id");
 
-    expect(result.total).toBe(5);
+    expect(result.total).toBe(3);
     expect(result.confirmed).toBe(3);
     expect(result.checks).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -58,10 +58,6 @@ describe("TrustService", () => {
         source: TrustCheckSource.DADATA,
         status: TrustCheckStatus.CONFIRMED,
         type: TrustCheckType.REQUISITES_FORMAT,
-      }),
-      expect.objectContaining({
-        status: TrustCheckStatus.PENDING,
-        type: TrustCheckType.INTERNAL_REVIEW,
       }),
     ]));
   });

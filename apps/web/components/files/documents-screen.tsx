@@ -144,7 +144,7 @@ function DealDocuments({ dealId, onBack, materialsOnly, beforeUpload }: { dealId
       {!materialsOnly ? <><BackTitle onBack={onBack} title={data.dealTitle} />
       <Card className="documents-summary">
         <span><ShieldCheck size={20} /></span>
-        <i><small>Защищённая сделка</small><strong>Документы и материалы</strong><em>{data.requirements.length} требований</em></i>
+        <i><small>Защищённая сделка</small><strong>Документы и материалы</strong><em>Загрузка по желанию</em></i>
       </Card></> : null}
 
       {upload ? (
@@ -165,10 +165,10 @@ function DealDocuments({ dealId, onBack, materialsOnly, beforeUpload }: { dealId
         }}>Повторить неудавшиеся</Button>
       </Card> : null}
 
-      {!materialsOnly ? <section className="documents-section">
-        <header><span><Files size={18} /><strong>Обязательные документы</strong></span><small>PDF, JPEG, PNG, WebP</small></header>
+      {!materialsOnly && data.requirements.some(requirement => requirement.uploads.some(file => file.visibility !== "DEAL_PARTICIPANTS")) ? <section className="documents-section">
+        <header><span><Files size={18} /><strong>Мои личные файлы</strong></span><small>Не видны второй стороне</small></header>
         <div className="requirement-list">
-          {data.requirements.filter(requirement => requirement.required || requirement.uploads.some(file => file.visibility !== "DEAL_PARTICIPANTS")).map((requirement) => (
+          {data.requirements.filter(requirement => requirement.uploads.some(file => file.visibility !== "DEAL_PARTICIPANTS")).map((requirement) => (
             <RequirementCard
               accept={data.allowedMimeTypes.join(",")}
               disabled={Boolean(upload)}
@@ -249,7 +249,7 @@ function BackTitle({ onBack, title }: { onBack: () => void; title: string }) {
 }
 
 function PrivacyNote() {
-  return <Card className="security-note"><LockKeyhole size={18} /><span><strong>Приватное хранение</strong><small>Личные документы видны вам и администратору, который их проверяет.</small></span></Card>;
+  return <Card className="security-note"><LockKeyhole size={18} /><span><strong>Документы — по желанию</strong><small>Для договора достаточно реквизитов в профилях обеих сторон. Загружать паспорт или другие документы не обязательно.</small></span></Card>;
 }
 
 function DocumentsError({ onRetry }: { onRetry: () => void }) {

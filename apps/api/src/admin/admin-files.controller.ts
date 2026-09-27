@@ -1,15 +1,13 @@
 import type {
-  AdminFileReviewItem,
   AdminFileReviewListResponse,
 } from "@max-contract/contracts";
 import {
-  Body,
+  GoneException,
   Controller,
   Get,
   Param,
   ParseUUIDPipe,
   Patch,
-  Req,
   StreamableFile,
   UseGuards,
 } from "@nestjs/common";
@@ -21,12 +19,10 @@ import {
 } from "@nestjs/swagger";
 import { UserRole } from "@prisma/client";
 
-import type { AuthenticatedRequest } from "../auth/auth.types";
 import { Roles } from "../auth/roles.decorator";
 import { RolesGuard } from "../auth/roles.guard";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { FilesService } from "../files/files.service";
-import { ReviewDealFileDto } from "./dto/admin-file-review.dto";
 
 @Controller("admin/files")
 @UseGuards(SessionAuthGuard, RolesGuard)
@@ -58,12 +54,8 @@ export class AdminFilesController {
 
   @Patch(":fileId/review")
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: "Принять или отклонить материал вручную" })
-  reviewFile(
-    @Param("fileId", new ParseUUIDPipe()) fileId: string,
-    @Body() body: ReviewDealFileDto,
-    @Req() request: AuthenticatedRequest,
-  ): Promise<AdminFileReviewItem> {
-    return this.files.review(request.auth.user.id, fileId, body, request.id);
+  @ApiOperation({ summary: "Ручная проверка файлов отключена" })
+  reviewFile(): never {
+    throw new GoneException({ code: "FILE_REVIEW_DISABLED", message: "Проверка файлов больше не требуется" });
   }
 }

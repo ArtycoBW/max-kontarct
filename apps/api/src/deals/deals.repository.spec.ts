@@ -22,9 +22,9 @@ describe("starting agreement with existing files", () => {
   }
   it.each([
     [["ACCEPTED", "ACCEPTED"], "TERMS_REVIEW"],
-    [["ACCEPTED", "PENDING"], "DOCUMENTS_REVIEW"],
-    [["ACCEPTED", "REJECTED"], "DOCUMENTS_PENDING"],
-    [["ACCEPTED"], "DOCUMENTS_PENDING"],
+    [["ACCEPTED", "PENDING"], "TERMS_REVIEW"],
+    [["ACCEPTED", "REJECTED"], "TERMS_REVIEW"],
+    [["ACCEPTED"], "TERMS_REVIEW"],
   ])("starts with %j at %s", async (statuses, status) => {
     const { tx, repository } = setup(statuses);
     await repository.startAgreement(input);
@@ -50,6 +50,6 @@ describe("starting agreement with existing files", () => {
     await repository.createVersion({ dealId: "deal", userId: "seller", currentVersionId: "version", expectedUpdatedAt: input.expectedUpdatedAt,
       currentStatus: "READY_TO_SIGN", nextStatus: "TERMS_REVIEW", versionNumber: 2, terms: {}, contractDraft: {}, changeSummary: "Уточнение срока", sourceGenerationId: "generation" });
     expect(tx.dealApproval.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: { dealId: "deal", status: "APPROVED" } }));
-    expect(tx.deal.update).toHaveBeenCalledWith({ where: { id: "deal" }, data: { status: reviewStatus === "ACCEPTED" ? "TERMS_REVIEW" : reviewStatus === "PENDING" ? "DOCUMENTS_REVIEW" : "DOCUMENTS_PENDING" } });
+    expect(tx.deal.update).toHaveBeenCalledWith({ where: { id: "deal" }, data: { status: "TERMS_REVIEW" } });
   });
 });

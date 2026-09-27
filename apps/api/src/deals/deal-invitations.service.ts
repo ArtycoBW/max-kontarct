@@ -21,7 +21,6 @@ import {
 import { ConfigService } from "@nestjs/config";
 import {
   DealApprovalStatus,
-  DealFileReviewStatus,
   DealPartyRole,
   DealStatus,
   ConsentType,
@@ -37,7 +36,7 @@ import {
   hashFrozenSnapshot,
   type FrozenDealSnapshot,
 } from "./deal-version-freeze";
-import { hasCompletePassportProfile, requiredForParty } from "../files/document-policy";
+import { hasCompletePassportProfile } from "../files/document-policy";
 import { loadDocumentStage } from "../files/document-readiness";
 
 const invitationSelect = {
@@ -644,13 +643,14 @@ export class DealInvitationsService {
     if (record.status !== DealStatus.TERMS_REVIEW) {
       throw new ConflictException({
         code: "DEAL_APPROVAL_NOT_ALLOWED",
-        message: "Согласование откроется после принятия обязательных документов обеих сторон",
+        message: "Согласование откроется после подготовки договора и присоединения второй стороны",
       });
     }
     const party = record.parties.find(({ userId: id }) => id === userId);
     if (!party) throw dealNotFound();
     const generationMetadata = version.sourceGeneration?.providerMetadata as Record<string, unknown> | undefined;
-    const namedParties = generationMetadata?.partyNames as Record<string, string> | undefined;
+    const manual = (version.terms as Record<string, unknown> | null)?.manualRevision as { partyNames?: Record<string, string> } | undefined;
+    const namedParties = manual?.partyNames ?? generationMetadata?.partyNames as Record<string, string> | undefined;
     if (namedParties && record.parties.some(item => !hasCompletePassportProfile(item.user.profile) || namedParties[item.role] !== displayName(item.user))) {
       throw new ConflictException({ code: "DEAL_PARTY_DETAILS_CHANGED", message: "Реквизиты участника изменились. Заполните профиль и подготовьте новую редакцию договора с актуальными ФИО" });
     }
@@ -691,24 +691,7 @@ export class DealInvitationsService {
         },
       });
       if (updated.count !== 1) throw versionConflict();
-      const requiredIds = record.templateVersion.documentRequirements
-        .filter(({ required }) => required)
-        .map(({ id }) => id);
-      const accepted = await transaction.dealFile.findMany({
-        select: { ownerUserId: true, requirementId: true },
-        where: { dealId, requirementId: { in: requiredIds }, reviewStatus: DealFileReviewStatus.ACCEPTED },
-      });
-      const documentsAccepted = record.parties.length === 2 && record.parties.every((item) =>
-        requiredForParty(record, item.userId).every((requirementId) => accepted.some((file) =>
-          file.ownerUserId === item.userId && file.requirementId === requirementId,
-        )),
-      );
-      if (!documentsAccepted) {
-        throw new ConflictException({
-          code: "DEAL_APPROVAL_DOCUMENTS_REQUIRED",
-          message: "Дождитесь принятия обязательных документов обеих сторон",
-        });
-      }
+      if (record.parties.length !== 2) throw new ConflictException({ code: "DEAL_PARTIES_REQUIRED", message: "Дождитесь подключения второй стороны" });
       const approval = await transaction.dealApproval.upsert({
         create: { dealId, dealVersionId: version.id, partyId: party.id },
         select: { approvedAt: true, id: true },

@@ -273,7 +273,7 @@ export function DealWorkspaceScreen({
       </div>
 
       <section className="deal-workspace-actions" aria-label="Действия по сделке">
-      {documentsPending ? <Card className="form-message"><strong>{deal.status === "DOCUMENTS_REVIEW" ? "Документы на проверке" : "Сначала подготовьте документы"}</strong><span>{deal.status === "DOCUMENTS_REVIEW" ? "Обязательные документы на проверке. После их принятия здесь появится кнопка согласования." : "Согласование пока недоступно: нужны принятые обязательные документы обеих сторон."}</span></Card> : null}
+      {documentsPending ? <Card className="form-message"><strong>Готовим согласование</strong><span>Дождитесь подключения второй стороны и подготовки договора. Загружать документы не обязательно.</span></Card> : null}
       {profileRequired && !signingVisible && deal.status !== "CANCELED" && deal.status !== "DRAFT" ? (
         <Card className="form-message is-warning">
           <strong>Сначала заполните профиль</strong>
@@ -335,8 +335,8 @@ function statusLabel(status: DealStatus): string {
   const labels: Record<DealStatus, string> = {
     CANCELED: "Сделка отменена", COLLECTING_DATA: "Условия зафиксированы",
     COMPLETED: "Сделка завершена", CONTRACT_DRAFT: "Проект договора",
-    COUNTERPARTY_JOINED: "Контрагент подключён", DOCUMENTS_PENDING: "Ожидаем документы",
-    DOCUMENTS_REVIEW: "Проверяем документы", DRAFT: "Черновик",
+    COUNTERPARTY_JOINED: "Контрагент подключён", DOCUMENTS_PENDING: "Подготовка договора",
+    DOCUMENTS_REVIEW: "Подготовка договора", DRAFT: "Черновик",
     INVITATION_READY: "Приглашение готово", INVITED: "Ожидаем контрагента",
     READY_TO_SIGN: "Готово к подписанию", SIGNED: "Подписано",
     SIGNED_BY_ONE: "Подписано одной стороной", TERMS_REVIEW: "Согласование условий",

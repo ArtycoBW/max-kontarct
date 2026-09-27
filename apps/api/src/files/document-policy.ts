@@ -53,9 +53,8 @@ export function canUploadRequirement(deal: DealPolicyInput, userId: string, requ
   return isPersonalRequirement(requirement) || canUploadSubject(deal, userId);
 }
 
-export function requiredForParty(deal: DealPolicyInput, userId: string): string[] {
-  return deal.templateVersion.documentRequirements
-    .filter(requirement => requirement.required && canUploadRequirement(deal, userId, requirement))
-    .filter(requirement => !passportProfileSatisfiesRequirement(deal, userId, requirement))
-    .map(item => item.id);
+export function requiredForParty(_deal: DealPolicyInput, _userId: string): string[] {
+  void _deal; void _userId;
+  // Requisites come from each participant's profile. Uploads are optional evidence.
+  return [];
 }

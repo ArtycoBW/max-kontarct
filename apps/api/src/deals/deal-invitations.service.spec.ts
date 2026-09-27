@@ -333,7 +333,7 @@ describe("DealInvitationsService", () => {
     await service.join(counterpartyId, { publicCode: "AbCdEfGhIjKl", token });
     expect(transaction.deal.updateMany).toHaveBeenLastCalledWith({
       where: { id: dealId, status: "DOCUMENTS_PENDING" },
-      data: { status: reviewStatus === "ACCEPTED" ? "TERMS_REVIEW" : reviewStatus === "PENDING" ? "DOCUMENTS_REVIEW" : "DOCUMENTS_PENDING" },
+      data: { status: "TERMS_REVIEW" },
     });
   });
 
@@ -392,13 +392,13 @@ describe("DealInvitationsService", () => {
     expect(transaction.dealApproval.upsert).not.toHaveBeenCalled();
   });
 
-  it("checks accepted documents of both parties even when the status says terms review", async () => {
+  it("allows agreement without any mandatory file reviews", async () => {
     const record = workspaceRecord({ parties: [initiatorParty(), counterpartyParty()], status: DealStatus.TERMS_REVIEW });
     dealFindFirst.mockResolvedValue({ ...record, templateVersion: { ...record.templateVersion, documentRequirements: [{ id: "required-identity", required: true }] } });
     transaction.dealFile.findMany.mockResolvedValue([{ ownerUserId: initiatorId, requirementId: "required-identity" }]);
     await expect(service.approve(counterpartyId, dealId, versionId, { expectedDealUpdatedAt: "2026-08-31T12:00:00.000Z" }))
-      .rejects.toMatchObject({ response: expect.objectContaining({ code: "DEAL_APPROVAL_DOCUMENTS_REQUIRED" }) });
-    expect(transaction.dealApproval.upsert).not.toHaveBeenCalled();
+      .resolves.toMatchObject({ dealStatus: "TERMS_REVIEW" });
+    expect(transaction.dealApproval.upsert).toHaveBeenCalled();
     expect(transaction.dealVersion.updateMany).not.toHaveBeenCalled();
   });
 });

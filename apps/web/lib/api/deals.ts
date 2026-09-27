@@ -1,5 +1,6 @@
 import type {
   CreateDealVersionRequest,
+  EditContractVersionRequest,
   CreateDealDraftRequest,
   DealDraftResponse,
   DealListResponse,
@@ -9,6 +10,10 @@ import type {
 } from "@max-contract/contracts";
 
 import { apiRequest } from "./client";
+
+export function editContractVersion(dealId: string, request: EditContractVersionRequest): Promise<DealDraftResponse> {
+  return apiRequest<DealDraftResponse>(`deals/${encodeURIComponent(dealId)}/text-versions`, { body: JSON.stringify(request), headers: { "Content-Type": "application/json" }, method: "POST" });
+}
 
 export function createDealDraft(
   request: CreateDealDraftRequest,
