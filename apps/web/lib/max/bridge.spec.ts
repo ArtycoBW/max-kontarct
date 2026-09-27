@@ -31,11 +31,20 @@ describe("MAX Bridge startup", () => {
     setWindow({ WebApp: { initData: "test", shareMaxContent: jest.fn().mockResolvedValue({ error: { code: "timeout" } }) } });
     await expect(shareInMax("text", "https://example.test")).rejects.toThrow();
   });
-  it("never treats a deeplink opening as sent", async () => {
+  it("copies the invitation instead of opening the unsupported MAX share deeplink", async () => {
     const openMaxLink = jest.fn();
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    const previousNavigator = Object.getOwnPropertyDescriptor(global, "navigator");
+    Object.defineProperty(global, "navigator", { configurable: true, value: { clipboard: { writeText } } });
     setWindow({ WebApp: { initData: "test", platform: "android", openMaxLink } });
-    await expect(shareInMax("text", "https://example.test")).resolves.toBe("unconfirmed");
-    expect(openMaxLink).toHaveBeenCalledTimes(1);
+    try {
+      await expect(shareInMax("text", "https://example.test")).resolves.toBe("copied");
+      expect(writeText).toHaveBeenCalledWith("text\nhttps://example.test");
+      expect(openMaxLink).not.toHaveBeenCalled();
+    } finally {
+      if (previousNavigator) Object.defineProperty(global, "navigator", previousNavigator);
+      else Reflect.deleteProperty(global, "navigator");
+    }
   });
   it("enables the native close confirmation once when the SDK is ready", () => {
     const enableClosingConfirmation = jest.fn();

@@ -337,7 +337,7 @@ textarea:focus-visible {
 .contract-requisites > section { margin-top: 20px; }
 .clarification-ready-screen > .card, .clarification-ready-screen > .early-invitation-panel, .clarification-ready-screen > .deal-requisites { margin-top: 20px; }
 .download-actions { display: grid; gap: 16px; }
-.download-actions a, .invitation-fallback-link { overflow-wrap: anywhere; font-size: 13px; text-decoration: underline; }
+.download-actions a { overflow-wrap: anywhere; font-size: 13px; text-decoration: underline; }
 .deal-party-card .party-online { color: #008766; }
 .pasted-details-preview > div { padding-bottom: 12px; border-bottom: 1px solid var(--border); }
 .pasted-details-preview dt { font-size: 12px; color: var(--muted); }
@@ -3386,7 +3386,9 @@ button.service-status {
 .deal-description-details { border: 1px solid var(--border); border-radius: 16px; padding: 14px; }
 .deal-description-details .collapsible-trigger { white-space: normal; text-align: left; font-size: 13px; line-height: 1.5; }
 .deal-description-details .form-field { margin-top: 16px; }
-.intake-result-details { margin-block: 12px; }
+.intake-result-details { display: grid; gap: 16px; margin-block: 12px; }
+.intake-result-details > p, .intake-result-details > dl { margin: 0; }
+.intake-result-details dl { gap: 14px; }
 
 .dashboard-empty-content {
   display: flex;
@@ -5242,7 +5244,9 @@ button.service-status {
 .deal-panel-body .deal-contract-preview h3 { font-size: 16px; margin-top: 24px; }
 .deal-panel-body .deal-workspace-section-heading { display: none; }
 .deal-panel-body > .shared-deal-attachments { border: 0; padding: 0; }
-.deal-panel-body > .shared-deal-attachments > h2, .deal-panel-body > .shared-deal-attachments > .field-description { display: none; }
+.deal-panel-body > .shared-deal-attachments > h2, .deal-panel-body > .shared-deal-attachments > .field-description:first-of-type { display: none; }
+.attachments-empty { display: grid; gap: 10px; justify-items: center; padding: 32px 20px; border: 1px dashed var(--border); border-radius: 16px; text-align: center; color: var(--muted); line-height: 1.6; }
+.attachments-empty strong { color: var(--ink-deep); }
 .deal-chat-dialog .deal-panel-body { overflow: hidden; padding: 0; }
 .deal-chat-dialog .deal-chat { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 0; border: 0; padding: 0; border-radius: 0; }
 .deal-chat-dialog .deal-chat > h2, .deal-chat-dialog .deal-chat > .field-description:first-of-type { display: none; }

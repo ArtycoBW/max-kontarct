@@ -32,8 +32,8 @@ import {
   revokeDealInvitation,
 } from "@/lib/api/invitations";
 import { queryKeys } from "@/lib/api/query-keys";
-import { maxShareUrl, shareInMax } from "@/lib/max/bridge";
-import { participantRoleLabel } from "@/lib/deals/party-responsibility";
+import { shareInMax } from "@/lib/max/bridge";
+import { materialsUploaderLabel, participantRoleLabel } from "@/lib/deals/party-responsibility";
 import { DealChat } from "./deal-chat";
 import { SharedDealAttachments } from "./shared-deal-attachments";
 import { ContractPreview } from "./contract-preview";
@@ -153,6 +153,7 @@ export function DealWorkspaceScreen({
     deal.currentUserRole === "COUNTERPARTY" ? deal.initiator : deal.counterparty;
   const signingVisible = ["READY_TO_SIGN", "SIGNED_BY_ONE", "SIGNED", "COMPLETED"].includes(deal.status);
   const profilesReady = deal.initiator.profileCompleted && deal.counterparty?.profileCompleted;
+  const materialsAvailable = deal.status !== "DRAFT" || !["DESCRIPTION", "REQUISITES"].includes(deal.draft.currentStep);
   const contractAvailable = Boolean(deal.contractDraft) && (signingVisible || Boolean(profilesReady)) && (deal.status !== "DRAFT" || deal.draft.currentStep === "INITIATOR");
   const waitingFor = !deal.counterparty ? "Пригласите вторую сторону в сделку."
     : !deal.initiator.profileCompleted && !deal.counterparty.profileCompleted ? "Обеим сторонам нужно заполнить реквизиты."
@@ -166,7 +167,7 @@ export function DealWorkspaceScreen({
     try {
       result = await shareInMax(issuedInvitation.shareText, issuedInvitation.shareUrl);
     } catch {
-      setNotice("Не удалось открыть отправку. Используйте ссылку ниже или скопируйте приглашение.");
+      setNotice("Не удалось открыть отправку. Повторите попытку или скопируйте ссылку.");
       return;
     }
     if (result === "cancelled") { setNotice("Отправка отменена."); return; }
@@ -181,7 +182,7 @@ export function DealWorkspaceScreen({
     if (!issuedInvitation?.shareUrl) return;
     setNotice("");
     try { await navigator.clipboard.writeText(issuedInvitation.shareUrl); }
-    catch { setNotice("Буфер обмена недоступен. Используйте ссылку отправки ниже."); return; }
+    catch { setNotice("Буфер обмена недоступен. Повторите попытку или нажмите «Отправить в MAX»."); return; }
     try { await markDealInvitationSent(dealId, issuedInvitation.id); setNotice("Ссылка скопирована."); void refreshWorkspace(queryClient, dealId); }
     catch { setNotice("Ссылка скопирована, но отметка не сохранена. Повторите копирование."); }
   };
@@ -229,11 +230,10 @@ export function DealWorkspaceScreen({
           </Card>
         )}
 
-        {issuedInvitation?.shareUrl ? (
+        {!deal.counterparty && issuedInvitation?.shareUrl ? (
           <div className="deal-invitation-actions">
             <Button className="full-width" onClick={() => void shareInvitation()}><Send size={17} /> Отправить в MAX</Button>
             <Button className="full-width" onClick={() => void copyInvitation()} variant="secondary"><Copy size={17} /> Скопировать ссылку</Button>
-            <a className="invitation-fallback-link" href={maxShareUrl(issuedInvitation.shareText ?? "Приглашение", issuedInvitation.shareUrl)}>Открыть приглашение в MAX</a>
           </div>
         ) : null}
 
@@ -275,9 +275,9 @@ export function DealWorkspaceScreen({
 
       {deal.versionNumber > 1 ? <DealVersionHistory dealId={dealId} versionId={deal.versionId} /> : null}
       </DealPanel> : <Card className="form-message" role="status"><strong>Договор пока недоступен</strong><span>{waitingFor}</span></Card>}
-      <DealPanel title={deal.currentUserRole === deal.draft.subjectDocumentsParty && !["SIGNED", "COMPLETED", "CANCELED"].includes(deal.status) ? "Загрузите материалы сделки" : "Приложения к договору"} description="Фото предмета сделки, документы на имущество, акты и другие общие файлы. Без паспортов и личных документов." icon={<Files size={22} />}>
-        <SharedDealAttachments dealId={dealId} uploaderLabel={participantRoleLabel(deal.template.slug, deal.draft.subjectDocumentsParty, deal.draft.subjectDocumentsParty ?? "INITIATOR")} allowUpload={deal.currentUserRole === deal.draft.subjectDocumentsParty && !["SIGNED", "COMPLETED", "CANCELED"].includes(deal.status)} />
-      </DealPanel>
+      {materialsAvailable ? <DealPanel title={deal.currentUserRole === deal.draft.subjectDocumentsParty && !["SIGNED", "COMPLETED", "CANCELED"].includes(deal.status) ? "Загрузите материалы сделки" : "Приложения к договору"} description="Фото предмета сделки, документы на имущество, акты и другие общие файлы. Без паспортов и личных документов." icon={<Files size={22} />}>
+        <SharedDealAttachments dealId={dealId} uploaderLabel={materialsUploaderLabel(deal.template.slug, deal.draft.subjectDocumentsParty)} allowUpload={deal.currentUserRole === deal.draft.subjectDocumentsParty && !["SIGNED", "COMPLETED", "CANCELED"].includes(deal.status)} />
+      </DealPanel> : null}
       {deal.counterparty ? <DealPanel title="Чат сделки" description="Обсудить детали и предложить изменения" icon={<MessageCircle size={22} />} className="deal-chat-dialog">
         <DealChat key={dealId} dealId={dealId} status={deal.status} draft={chatDraft} onDraftChange={setChatDraft} draftKind={chatKind} onKindChange={setChatKind} />
       </DealPanel> : null}

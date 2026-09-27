@@ -15,6 +15,6 @@ export function SharedDealAttachments({ dealId, uploaderLabel = "Инициат�
   if (allowUpload) return <DocumentsScreen materialsOnly dealId={dealId} onBack={() => undefined} onSelectDeal={() => undefined} />;
   return <Card className="deal-chat shared-deal-attachments"><h2>Приложения к договору</h2><p className="field-description">Общие материалы предмета сделки. Личные документы сюда не включаются.</p>
     {documents.isPending ? <Skeleton className="file-list-loading" /> : <DealFileList dealId={dealId} files={shared} showDownload />}
-    {documents.error ? <p role="alert">Не удалось загрузить приложения. <Button variant="ghost" onClick={() => void documents.refetch()}>Повторить</Button></p> : !documents.isPending && !shared.length ? <p className="field-description">Здесь пока пусто: {uploaderLabel.toLocaleLowerCase("ru-RU")} ещё не загрузил дополнительные материалы по сделке.</p> : null}
+    {documents.error ? <p role="alert">Не удалось загрузить приложения. <Button variant="ghost" onClick={() => void documents.refetch()}>Повторить</Button></p> : !documents.isPending && !shared.length ? <div className="attachments-empty" role="status"><strong>Здесь пока пусто</strong><p>{uploaderLabel} ещё не загрузил дополнительные материалы по сделке.</p></div> : null}
   </Card>;
 }

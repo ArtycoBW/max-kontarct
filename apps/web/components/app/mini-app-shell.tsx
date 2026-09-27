@@ -60,6 +60,7 @@ import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { ProfileScreen } from "@/components/profile/profile-screen";
 import { DealWorkspaceScreen } from "@/components/deals/deal-workspace-screen";
 import { PartyResponsibility } from "@/components/deals/party-responsibility";
+import { materialsUploaderLabel } from "@/lib/deals/party-responsibility";
 import { DealRequisites } from "@/components/deals/deal-requisites";
 import { ContractPreview } from "@/components/deals/contract-preview";
 import { SharedDealAttachments } from "@/components/deals/shared-deal-attachments";
@@ -1307,10 +1308,9 @@ function CreateDealScreen({
         {!bothProfilesReady ? <>
           <Card className="form-message" role="status"><strong>{partyReadiness.isPending ? "Проверяем реквизиты…" : "Что осталось заполнить"}</strong>
             <span>{partyReadiness.data?.initiator.profileCompleted ? "Ваши реквизиты заполнены." : "Заполните свои реквизиты для договора."}</span>
-            <span>{!partyReadiness.data?.counterparty ? "Пригласите вторую сторону — она сможет заполнить данные параллельно с вами." : partyReadiness.data.counterparty.profileCompleted ? "Реквизиты второй стороны заполнены." : `${partyReadiness.data.counterparty.displayName} ещё заполняет реквизиты.`}</span>
+            <span>{!partyReadiness.data?.counterparty ? "Ждём, пока вторая сторона присоединится по ранее отправленному приглашению и заполнит реквизиты." : partyReadiness.data.counterparty.profileCompleted ? "Реквизиты второй стороны заполнены." : `${partyReadiness.data.counterparty.displayName} ещё заполняет реквизиты.`}</span>
           </Card>
           {!partyReadiness.data?.initiator.profileCompleted ? <Button variant="secondary" onClick={() => setStep("requisites")}>Вернуться к реквизитам</Button> : null}
-          {!partyReadiness.data?.counterparty ? <EarlyInvitationPanel dealId={activeDraftId} beforeCreate={() => enqueueDraftSave()} disabled={false} /> : null}
           {partyReadiness.isError ? <RequestErrorCard message={partyReadiness.error.message} onRetry={() => partyReadiness.refetch()} /> : null}
         </> : null}
         <div className="create-flow-action">
@@ -1363,7 +1363,7 @@ function CreateDealScreen({
           title="Договор и приложения"
         />
         <p className="screen-copy">
-          Проверьте текст, свои данные и общие приложения. После сохранения откроется сделка: там можно пригласить вторую сторону, обсудить условия в чате и внести изменения до подписания.
+          Проверьте текст, свои данные и общие приложения. После сохранения откроется сделка: там можно обсудить условия в чате и внести изменения до подписания.
         </p>
         <div className="deal-panel-grid">
         <DealPanel title="Договор" description="Прочитать подготовленный текст" icon={<FileCheck2 size={22} />}>
@@ -1371,7 +1371,7 @@ function CreateDealScreen({
           ? <Card role="status">Загружаем текст договора…</Card>
           : <RequestErrorCard message="Не удалось загрузить текст договора" onRetry={() => void generation.refetch()} />}
         </DealPanel>
-        {activeDraftId ? <DealPanel title="Приложения к договору" description="Посмотреть фото и общие материалы" icon={<Files size={22} />}><SharedDealAttachments dealId={activeDraftId} /></DealPanel> : null}
+        {activeDraftId ? <DealPanel title="Приложения к договору" description="Посмотреть фото и общие материалы" icon={<Files size={22} />}><SharedDealAttachments dealId={activeDraftId} uploaderLabel={materialsUploaderLabel(effectiveSelectedSlug, subjectDocumentsParty)} /></DealPanel> : null}
         </div>
         {initiator ? (
           <Card className="initiator-summary-card">

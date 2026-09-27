@@ -56,13 +56,13 @@ test("Android sharing marks sent only after shared, not opening, cancellation or
   expect(sent).toBe(0);
   await page.getByRole("button", { name: "Отправить в MAX", exact: true }).click();
   await page.evaluate(() => (window as unknown as { resolveShare: (result: unknown) => void }).resolveShare({ error: { code: "timeout" } }));
-  await expect(page.getByText("Не удалось открыть отправку. Используйте ссылку ниже или скопируйте приглашение.")).toBeVisible();
+  await expect(page.getByText("Не удалось открыть отправку. Повторите попытку или скопируйте ссылку.")).toBeVisible();
   expect(sent).toBe(0);
   await page.getByRole("button", { name: "Отправить в MAX", exact: true }).click();
   await page.evaluate(() => (window as unknown as { resolveShare: (result: unknown) => void }).resolveShare({ status: "shared" }));
   await expect.poll(() => sent).toBe(1);
   await expect(page.getByText("Приглашение отправлено.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Открыть приглашение в MAX" })).toBeVisible();
+  await expect(page.locator('a[href*="max.ru/:share"]')).toHaveCount(0);
 });
 
 test("Android downloads use a scoped prepared link and a fresh native click", async ({ page }) => {
@@ -92,10 +92,34 @@ test("materials use role-specific empty text and uploader action; incomplete par
   await page.route("**/deals/review-deal/files", route => route.fulfill({ json: { evidenceFiles: [], requirements: [], canUploadEvidence: false } }));
   await expect(page.locator(".deal-panel-trigger").filter({ hasText: /^Договор/ })).toHaveCount(0);
   await page.getByRole("button", { name: /Приложения к договору/ }).click();
-  await expect(page.getByRole("dialog")).toContainText("продавец ещё не загрузил дополнительные материалы");
+  await expect(page.getByRole("dialog").getByText("Продавец ещё не загрузил дополнительные материалы по сделке.")).toBeVisible();
+  await page.screenshot({ path: "test-results/materials-empty.png" });
   await page.keyboard.press("Escape");
   workspace.currentUserRole = "INITIATOR";
   await expect(page.getByRole("button", { name: /Загрузите материалы сделки/ })).toBeVisible();
+});
+
+test("draft materials are available only after invitation and requisites", async ({ page }) => {
+  const workspace = { ...workspaceFixture(), currentUserRole: "INITIATOR" };
+  await openMockDeal(page, workspace);
+  await expect(page.getByRole("button", { name: /Загрузите материалы сделки/ })).toHaveCount(0);
+  workspace.draft.currentStep = "REQUISITES";
+  await page.waitForResponse(response => response.url().endsWith("/workspace"));
+  await expect(page.getByRole("button", { name: /Загрузите материалы сделки/ })).toHaveCount(0);
+  workspace.draft.currentStep = "PARAMETERS";
+  await expect(page.getByRole("button", { name: /Загрузите материалы сделки/ })).toBeVisible();
+});
+
+test("empty attachments identify the service provider on narrow screens", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  const workspace = workspaceFixture("TERMS_REVIEW", true);
+  workspace.template.slug = "paid-services";
+  await openMockDeal(page, workspace);
+  await page.route("**/deals/review-deal/files", route => route.fulfill({ json: { evidenceFiles: [], requirements: [], canUploadEvidence: false } }));
+  await page.getByRole("button", { name: /Приложения к договору/ }).click();
+  await expect(page.getByRole("dialog").getByText("Исполнитель ещё не загрузил дополнительные материалы по сделке.")).toBeVisible();
+  await expect(page.getByRole("dialog").getByText("Здесь пока пусто")).toBeInViewport();
+  await page.screenshot({ path: "test-results/materials-empty-mobile.png" });
 });
 
 test("generation waits for both profiles and submits the actual deal id", async ({ page }) => {
@@ -105,7 +129,8 @@ test("generation waits for both profiles and submits the actual deal id", async 
   const draft = { ...workspace, draft: { ...workspace.draft, clarificationSessionId: "session" } };
   const template = { slug: workspace.template.slug, title: "Купля-продажа", summary: "Имущество", currentVersion: { id: "template", versionNumber: 1, documentRequirements: [], questionnaireSchema: { type: "object", properties: {} } } };
   await page.route("**/api/v1/deals", route => route.fulfill({ json: { items: [{ ...workspace, templateTitle: template.title }] } }));
-  await page.route("**/api/v1/deals/review-deal/workspace", route => route.fulfill({ json: workspace }));
+  let joined = false;
+  await page.route("**/api/v1/deals/review-deal/workspace", route => route.fulfill({ json: { ...workspace, counterparty: joined ? workspace.counterparty : null } }));
   await page.route(/\/api\/v1\/deals\/review-deal(?:\/draft)?$/, route => route.fulfill({ json: draft }));
   await page.route("**/api/v1/templates**", route => route.fulfill({ json: route.request().url().endsWith("/templates") ? { items: [template] } : template }));
   await page.route("**/clarifications/session", route => route.fulfill({ json: { id: "session", status: "READY_TO_GENERATE", questions: [], answers: {}, round: 0 } }));
@@ -122,6 +147,8 @@ test("generation waits for both profiles and submits the actual deal id", async 
   await expect(page.getByRole("heading", { name: "Мои реквизиты для договора" })).toHaveCount(0);
   await expect(page.getByText("Шаг 4 из 5", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Пригласите вторую сторону уже сейчас", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Ждём, пока вторая сторона присоединится по ранее отправленному приглашению и заполнит реквизиты.")).toBeVisible();
+  joined = true;
   workspace.initiator.profileCompleted = true;
   await expect(action).toBeDisabled();
   expect(posted).toBeNull();
@@ -435,7 +462,7 @@ test("invitation gates a separate requisites step; uploads appear only with para
     return route.fulfill({ json: { dealId: "draft", dealTitle: draft.title, dealStatus: "DRAFT", allowedMimeTypes: ["image/png"], maxUploadBytes: 1000000, evidenceFiles: [], requirements: [], canUploadEvidence: true } });
   });
   await page.route("**/api/v1/templates**", route => route.fulfill({ json: route.request().url().endsWith("/templates") ? { items: [template] } : template }));
-  await page.route("**/api/v1/deal-intake", route => route.fulfill({ json: { template, mode: "TEMPLATE", description: draft.draft.description, title: draft.title, reason: "Определена продажа", answers: { price: 1000 }, warnings: [] } }));
+  await page.route("**/api/v1/deal-intake", route => route.fulfill({ json: { template, mode: "TEMPLATE", description: draft.draft.description, title: draft.title, reason: "Определена продажа", answers: { price: 1000 }, warnings: ["Проверьте и дополните поля анкеты."] } }));
   await page.route("**/api/v1/deals", route => route.request().method() === "POST" ? route.fulfill({ json: draft }) : route.fallback());
   await page.route(/\/api\/v1\/deals\/draft(?:\/draft)?$/, route => {
     if (route.request().method() === "PATCH") draft = { ...draft, draft: { ...draft.draft, ...route.request().postDataJSON() } };
@@ -464,7 +491,13 @@ test("invitation gates a separate requisites step; uploads appear only with para
   await expect(page.getByText("Данные и материалы", { exact: true })).toHaveCount(0);
   await page.getByRole("textbox", { name: "Что хотите оформить?" }).fill(draft.draft.description);
   await page.getByRole("button", { name: "Подобрать договор с ИИ" }).click();
-  await expect(page.getByText("Определена продажа")).toBeHidden();
+  await expect(page.getByText("Определена продажа")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Что определил ИИ" })).toHaveCount(0);
+  const fieldsBox = await page.locator(".intake-result-details dl").boundingBox();
+  const warningBox = await page.locator(".intake-result-details .deal-intake-warning").boundingBox();
+  expect(warningBox!.y - fieldsBox!.y - fieldsBox!.height).toBeGreaterThanOrEqual(16);
+  await page.locator(".intake-result-details").scrollIntoViewIfNeeded();
+  await page.screenshot({ path: "test-results/intake-expanded.png" });
   await page.getByRole("button", { name: "Перейти к приглашению", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Мои реквизиты для договора" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Загрузить фото или файл" })).toHaveCount(0);
@@ -487,6 +520,7 @@ test("invitation gates a separate requisites step; uploads appear only with para
   expect(sentAt).toBeNull();
   await page.getByRole("button", { name: "Скопировать ссылку", exact: true }).click();
   await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeEnabled();
+  await expect(page.locator('a[href*="max.ru/:share"]')).toHaveCount(0);
   await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
   await expect(page.getByRole("heading", { name: "Мои реквизиты для договора" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Выбрать реквизиты из профиля" })).toBeVisible();

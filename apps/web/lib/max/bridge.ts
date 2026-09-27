@@ -112,10 +112,6 @@ export function getMaxStartPayload(): MaxStartPayload | null {
   return null;
 }
 
-export function maxShareUrl(text: string, link: string): string {
-  return `https://max.ru/:share?text=${encodeURIComponent(`${text}\n\n${link}`)}`;
-}
-
 export type InvitationShareResult = "shared" | "copied" | "cancelled" | "unconfirmed";
 
 function confirmedShareResult(result: unknown): InvitationShareResult {
@@ -136,10 +132,6 @@ export async function shareInMax(text: string, link: string): Promise<Invitation
   }
   if (webApp?.shareContent) {
     return confirmedShareResult(await webApp.shareContent({ link, text }));
-  }
-  if (webApp?.openMaxLink) {
-    await webApp.openMaxLink(maxShareUrl(text, link));
-    return "unconfirmed";
   }
   if (typeof navigator !== "undefined" && navigator.share) {
     await navigator.share({ text, title: "Приглашение в Макс-Контракт", url: link });

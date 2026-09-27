@@ -14,3 +14,8 @@ export function participantRoleLabel(slug: string, responsible: DealPartyRole | 
   if (!responsible) return party === "INITIATOR" ? "Инициатор" : "Вторая сторона";
   return subjectRoleLabels(slug)[party === responsible ? 0 : 1];
 }
+
+export function materialsUploaderLabel(slug: string, responsible: DealPartyRole | null | undefined): string {
+  const label = responsible ? subjectRoleLabels(slug)[0] : null;
+  return label && label !== "Передаёт предмет или результат" ? label : responsible === "COUNTERPARTY" ? "Контрагент" : "Инициатор";
+}

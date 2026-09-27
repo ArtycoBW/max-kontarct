@@ -6,7 +6,6 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Textarea } from "@/components/ui/textarea";
 import { VoiceInput } from "@/components/ui/voice-input";
 import { suggestDeal } from "@/lib/api/templates";
@@ -63,7 +62,7 @@ export function DealIntakePanel({ initialDescription = "", isCreating, active = 
           <strong>{proposal.mode === "INDIVIDUAL" ? "Индивидуальный проект" : proposal.template.title}</strong>
           <p>Основа договора готова. Пригласите вторую сторону, затем заполните реквизиты и уточните условия.</p>
           {proposal.mode === "INDIVIDUAL" ? <p className="deal-intake-warning">Это индивидуальный проект ИИ, а не проверенный шаблон. Проверьте условия перед подписанием.</p> : null}
-          <Collapsible className="intake-result-details"><CollapsibleTrigger asChild><Button type="button" variant="ghost">Что определил ИИ</Button></CollapsibleTrigger><CollapsibleContent>
+          <div className="intake-result-details">
           <p>{proposal.reason}</p><p>Название: {proposal.title}</p>
           <dl>
             {Object.entries(proposal.answers).map(([key, value]) => {
@@ -75,7 +74,7 @@ export function DealIntakePanel({ initialDescription = "", isCreating, active = 
           </dl>
           {!Object.keys(proposal.answers).length ? <p>Недостающие условия можно заполнить на следующем шаге.</p> : null}
           {proposal.warnings.map((warning, index) => <p className="deal-intake-warning" key={index}>{warning}</p>)}
-          </CollapsibleContent></Collapsible>
+          </div>
           {!children ? <Button className="full-width" disabled={busy} onClick={() => onAccept(proposal)} type="button">
             {isCreating ? "Сохраняем…" : "Перейти к приглашению"}
           </Button> : null}
