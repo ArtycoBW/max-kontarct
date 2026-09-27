@@ -249,7 +249,7 @@ function BackTitle({ onBack, title }: { onBack: () => void; title: string }) {
 }
 
 function PrivacyNote() {
-  return <Card className="security-note"><LockKeyhole size={18} /><span><strong>Документы — по желанию</strong><small>Для договора достаточно реквизитов в профилях обеих сторон. Загружать паспорт или другие документы не обязательно.</small></span></Card>;
+  return <Card className="security-note"><LockKeyhole size={18} /><span><strong>Документы</strong><small>Для договора достаточно реквизитов в профилях обеих сторон. Загружать паспорт или другие документы не обязательно.</small></span></Card>;
 }
 
 function DocumentsError({ onRetry }: { onRetry: () => void }) {
