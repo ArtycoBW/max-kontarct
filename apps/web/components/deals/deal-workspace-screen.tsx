@@ -38,6 +38,7 @@ import { DealChat } from "./deal-chat";
 import { SharedDealAttachments } from "./shared-deal-attachments";
 import { ContractPreview } from "./contract-preview";
 import { DealRevisionEditor } from "./deal-revision-editor";
+import { ContractRequisites } from "./contract-requisites";
 import { DealVersionHistory } from "./deal-version-history";
 import { DealPanel } from "./deal-panel";
 import { DealRequisites } from "./deal-requisites";
@@ -254,12 +255,13 @@ export function DealWorkspaceScreen({
       {contractAvailable ? <DealPanel title="Договор" description={`Версия ${deal.versionNumber} · ${deal.approvals.totalApproved} из ${deal.approvals.required} согласовано`} icon={<FileCheck2 size={22} />}>
       <section className="deal-workspace-section">
         <div className="deal-workspace-section-heading">
-          <h2>Условия сделки</h2>
+          <h2>Текст договора</h2>
           <span>{deal.approvals.totalApproved} из {deal.approvals.required} согласовано</span>
         </div>
         {deal.contractDraft ? (
           <ContractPreview draft={deal.contractDraft} />
         ) : <Card className="form-message"><strong>Проект договора готовится</strong></Card>}
+        <ContractRequisites value={deal.requisites} />
       </section>
 
       {deal.versionNumber > 1 ? <DealVersionHistory dealId={dealId} versionId={deal.versionId} /> : null}

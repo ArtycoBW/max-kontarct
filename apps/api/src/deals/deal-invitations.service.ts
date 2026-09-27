@@ -8,6 +8,8 @@ import type {
   DealInvitationResponse,
   DealInvitationState,
   DealWorkspaceResponse,
+  DealContractRequisites,
+  PassportDetails,
   JoinDealInvitationRequest,
   PublicDealInvitationResponse,
   PublicInvitationTerm,
@@ -34,6 +36,7 @@ import { invitationMessage, invitationPrice } from "./invitation-copy";
 import {
   createContractNumber,
   hashFrozenSnapshot,
+  canonicalSerialize,
   type FrozenDealSnapshot,
 } from "./deal-version-freeze";
 import { hasCompletePassportProfile } from "../files/document-policy";
@@ -651,7 +654,8 @@ export class DealInvitationsService {
     const generationMetadata = version.sourceGeneration?.providerMetadata as Record<string, unknown> | undefined;
     const manual = (version.terms as Record<string, unknown> | null)?.manualRevision as { partyNames?: Record<string, string> } | undefined;
     const namedParties = manual?.partyNames ?? generationMetadata?.partyNames as Record<string, string> | undefined;
-    if (namedParties && record.parties.some(item => !hasCompletePassportProfile(item.user.profile) || namedParties[item.role] !== displayName(item.user))) {
+    const frozenSnapshot = version.frozenSnapshot as unknown as FrozenDealSnapshot | null;
+    if (!frozenSnapshot && namedParties && record.parties.some(item => !hasCompletePassportProfile(item.user.profile) || namedParties[item.role] !== displayName(item.user))) {
       throw new ConflictException({ code: "DEAL_PARTY_DETAILS_CHANGED", message: "Реквизиты участника изменились. Заполните профиль и подготовьте новую редакцию договора с актуальными ФИО" });
     }
     if (!party.user.profile || !party.user.phones[0]) {
@@ -659,6 +663,10 @@ export class DealInvitationsService {
         code: "DEAL_APPROVAL_PROFILE_REQUIRED",
         message: "Сначала заполните профиль и подтвердите номер телефона",
       });
+    }
+    const requisites = contractRequisites(record, version);
+    if ((namedParties && !input.expectedRequisitesHash) || (input.expectedRequisitesHash && input.expectedRequisitesHash !== requisites.hash)) {
+      throw new ConflictException({ code: "DEAL_REQUISITES_CHANGED", message: "Обновите договор и проверьте реквизиты сторон перед согласованием" });
     }
     const existing = version.approvals.find(
       (approval) =>
@@ -679,7 +687,8 @@ export class DealInvitationsService {
       const nextStatus = allApproved
         ? this.stateMachine.transition(DealStatus.TERMS_REVIEW, DealStatus.READY_TO_SIGN)
         : record.status;
-      const freeze = nextStatus === DealStatus.READY_TO_SIGN
+      // Freeze exactly the details reviewed by the first approver. The second sees the same snapshot.
+      const freeze = !version.frozenAt
         ? createFreeze(record, version, now)
         : null;
       const updated = await transaction.deal.updateMany({
@@ -814,6 +823,7 @@ function toWorkspace(record: WorkspaceRecord, userId: string): DealWorkspaceResp
   );
   const terms = parseDealDraft(version.terms);
   return {
+    ...(version.contractDraft && record.parties.length === 2 ? { requisites: contractRequisites(record, version) } : {}),
     approvals: {
       currentUserApproved: approved.some(
         ({ partyId }) => partyId === currentParty.id,
@@ -889,10 +899,12 @@ function createFreeze(
           firstName: profile.firstName,
           lastName: profile.lastName,
           middleName: profile.middleName,
+          passport: readPassport(profile.passportDetails),
         },
         role: party.role,
         userId: party.userId,
         verifiedPhoneRef: phone.id,
+        verifiedPhone: phone.e164,
       };
     });
   const snapshot: FrozenDealSnapshot = {
@@ -911,10 +923,32 @@ function createFreeze(
     },
     frozenAt: frozenAt.toISOString(),
     parties,
-    schemaVersion: "deal-signature-v1",
+    schemaVersion: "deal-signature-v2",
     terms: version.terms,
   };
   return { hash: hashFrozenSnapshot(snapshot), snapshot };
+}
+
+function readPassport(value: unknown): PassportDetails | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const data = value as Record<string, unknown>;
+  const text = (key: string) => typeof data[key] === "string" ? data[key] : null;
+  return { series: text("series"), number: text("number"), issuedAt: text("issuedAt"), issuer: text("issuer"), divisionCode: text("divisionCode"), birthPlace: text("birthPlace"), gender: data.gender === "М" || data.gender === "Ж" ? data.gender : null };
+}
+
+function contractRequisites(record: WorkspaceRecord, version: WorkspaceRecord["versions"][number]) {
+  const snapshot = version.frozenSnapshot as unknown as FrozenDealSnapshot | null;
+  const parties: DealContractRequisites[] = snapshot ? snapshot.parties.map(party => ({
+    role: party.role, fullName: [party.profile.lastName, party.profile.firstName, party.profile.middleName].filter(Boolean).join(" "),
+    birthDate: party.profile.birthDate, address: party.profile.address, email: party.profile.email,
+    phone: party.verifiedPhone ?? null, passport: party.profile.passport ?? null,
+  })) : record.parties.map(party => ({
+    role: party.role, fullName: displayName(party.user), birthDate: party.user.profile?.birthDate?.toISOString().slice(0, 10) ?? null,
+    address: party.user.profile?.addressValue ?? null, email: party.user.profile?.email ?? null,
+    phone: party.user.phones[0]?.e164 ?? null, passport: readPassport(party.user.profile?.passportDetails),
+  }));
+  parties.sort((a, b) => a.role.localeCompare(b.role));
+  return { parties, frozen: Boolean(snapshot), hash: createHash("sha256").update(canonicalSerialize(parties)).digest("hex") };
 }
 
 function toInvitationResponse(record: InvitationRecord): DealInvitationResponse {

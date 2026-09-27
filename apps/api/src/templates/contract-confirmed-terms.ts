@@ -74,11 +74,20 @@ export function withConfirmedContractTerms(
   const sections: ContractStructuredDraft["sections"] = [];
   for (let offset = 0; offset < terms.length; offset += 20) {
     sections.push({
-      heading: offset ? "Условия сделки (продолжение)" : "Условия сделки",
+      heading: offset ? "Условия договора (продолжение)" : "Условия договора",
       clauses: terms.slice(offset, offset + 20),
     });
   }
-  return { ...draft, sections: [...sections, ...draft.sections] };
+  // This section belongs to the server: it contains every confirmed questionnaire/clarification
+  // answer verbatim. Do not append the model's second retelling of those same source conditions.
+  // Apply only during generation, never to manual revisions or frozen/signed documents.
+  const serverSection = /^(?:основные\s+|существенные\s+|подтвержденные\s+)?условия(?:\s+(?:договора|сделки))?(?:\s*\(продолжение\))?$/u;
+  const normalized = (value: string) => value.toLowerCase().replaceAll("ё", "е").replace(/^\d+[.)]\s*/u, "").trim();
+  const exactTerms = new Set(terms.map(normalized));
+  const additional = draft.sections.filter(section => !serverSection.test(normalized(section.heading)))
+    .map(section => ({ ...section, clauses: section.clauses.filter(clause => !exactTerms.has(normalized(clause))) }))
+    .filter(section => section.clauses.length);
+  return { ...draft, sections: [...sections, ...additional] };
 }
 
 function display(value: unknown, date: boolean): string {

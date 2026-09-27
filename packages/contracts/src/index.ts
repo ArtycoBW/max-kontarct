@@ -183,6 +183,8 @@ export interface DealPartySummary {
 }
 
 export interface DealWorkspaceResponse extends DealDraftResponse {
+  /** Visible only to authenticated deal participants, never in a public invitation. */
+  requisites?: { hash: string; frozen: boolean; parties: DealContractRequisites[] };
   approvals: {
     currentUserApproved: boolean;
     required: number;
@@ -196,6 +198,17 @@ export interface DealWorkspaceResponse extends DealDraftResponse {
 
 export interface ApproveDealVersionRequest {
   expectedDealUpdatedAt: string;
+  expectedRequisitesHash?: string;
+}
+
+export interface DealContractRequisites {
+  role: DealPartyRole;
+  fullName: string;
+  birthDate: string | null;
+  address: string | null;
+  email: string | null;
+  phone: string | null;
+  passport: PassportDetails | null;
 }
 
 export interface DealApprovalResponse {

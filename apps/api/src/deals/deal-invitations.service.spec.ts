@@ -365,7 +365,7 @@ describe("DealInvitationsService", () => {
     expect(transaction.dealVersion.updateMany).toHaveBeenCalledWith({
       data: expect.objectContaining({
         contractNumber: expect.stringMatching(/^МК-\d{8}-[A-F0-9]{8}-V1$/),
-        frozenSnapshot: expect.objectContaining({ schemaVersion: "deal-signature-v1" }),
+        frozenSnapshot: expect.objectContaining({ schemaVersion: "deal-signature-v2" }),
         snapshotHash: expect.stringMatching(/^[a-f0-9]{64}$/),
       }),
       where: { frozenAt: null, id: versionId },
@@ -399,6 +399,39 @@ describe("DealInvitationsService", () => {
     await expect(service.approve(counterpartyId, dealId, versionId, { expectedDealUpdatedAt: "2026-08-31T12:00:00.000Z" }))
       .resolves.toMatchObject({ dealStatus: "TERMS_REVIEW" });
     expect(transaction.dealApproval.upsert).toHaveBeenCalled();
+    expect(transaction.dealVersion.updateMany).toHaveBeenCalled();
+  });
+
+  it("previews passport fields and rejects agreement after profile details change", async () => {
+    const passportDetails = { series: "1234", number: "567890", issuer: "Тестовое подразделение", issuedAt: "2020-01-02", divisionCode: "123-456", birthPlace: "Тестовый город", gender: "М", privateExtra: "must-not-leak" };
+    const party = initiatorParty();
+    const record = workspaceRecord({ parties: [{ ...party, user: { ...party.user, profile: { ...party.user.profile, passportDetails } } }, counterpartyParty()], status: DealStatus.TERMS_REVIEW });
+    dealFindFirst.mockResolvedValue(record);
+    const preview = await service.workspace(initiatorId, dealId);
+    expect(preview.requisites?.parties.find(p => p.role === "INITIATOR")).toMatchObject({ phone: "+79990000001", passport: { series: "1234", number: "567890" } });
+    expect(JSON.stringify(preview.requisites)).not.toContain("privateExtra");
+    passportDetails.number = "999999";
+    await expect(service.approve(initiatorId, dealId, versionId, { expectedDealUpdatedAt: record.updatedAt.toISOString(), expectedRequisitesHash: preview.requisites!.hash }))
+      .rejects.toMatchObject({ response: { code: "DEAL_REQUISITES_CHANGED" } });
+    expect(transaction.dealApproval.upsert).not.toHaveBeenCalled();
+  });
+
+  it("freezes full requisites at first approval and keeps them after profile edits", async () => {
+    const party = initiatorParty();
+    const profile = { ...party.user.profile, passportDetails: { series: "1234", number: "567890" } };
+    const record = workspaceRecord({ parties: [{ ...party, user: { ...party.user, profile } }, counterpartyParty()], status: DealStatus.TERMS_REVIEW });
+    dealFindFirst.mockResolvedValue(record);
+    const preview = await service.workspace(initiatorId, dealId);
+    await service.approve(initiatorId, dealId, versionId, { expectedDealUpdatedAt: record.updatedAt.toISOString(), expectedRequisitesHash: preview.requisites!.hash });
+    const frozen = transaction.dealVersion.updateMany.mock.calls[0]![0].data;
+    expect(frozen.frozenSnapshot.parties).toEqual(expect.arrayContaining([expect.objectContaining({ verifiedPhone: "+79990000001", profile: expect.objectContaining({ passport: expect.objectContaining({ number: "567890" }) }) })]));
+    profile.passportDetails.number = "999999";
+    dealFindFirst.mockResolvedValue({ ...record, versions: [{ ...record.versions[0], ...frozen, approvals: [{ partyId: party.id, status: "APPROVED", approvedAt: new Date() }] }] });
+    const after = await service.workspace(counterpartyId, dealId);
+    expect(after.requisites?.frozen).toBe(true);
+    expect(after.requisites?.hash).toBe(preview.requisites?.hash);
+    transaction.dealVersion.updateMany.mockClear();
+    await expect(service.approve(counterpartyId, dealId, versionId, { expectedDealUpdatedAt: record.updatedAt.toISOString(), expectedRequisitesHash: after.requisites!.hash })).resolves.toMatchObject({ dealStatus: "READY_TO_SIGN" });
     expect(transaction.dealVersion.updateMany).not.toHaveBeenCalled();
   });
 });

@@ -71,6 +71,23 @@ async function openMockDeal(page: Page, workspace: ReturnType<typeof workspaceFi
   await page.getByRole("button", { name: /Тестовая сделка/ }).click();
 }
 
+test("full requisites are visible before approval without horizontal overflow", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 650 });
+  const workspace = { ...workspaceFixture("TERMS_REVIEW", true), requisites: { hash: "a".repeat(64), frozen: false, parties: [{
+    role: "INITIATOR", fullName: "Примеров Иван Петрович", birthDate: "1990-01-01", address: "Тестовый город, улица Примерная, дом 1", email: "example@example.test", phone: "+79990000001",
+    passport: { series: "1234", number: "567890", issuedAt: "2020-01-02", issuer: "Тестовое подразделение по Примерному району", divisionCode: "123-456", birthPlace: "Тестовый город", gender: "М" },
+  }] } };
+  await openMockDeal(page, workspace);
+  await page.locator(".deal-panel-trigger").filter({ hasText: /^Договор/ }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("heading", { name: "Реквизиты сторон" })).toBeVisible();
+  await dialog.getByText("1234 567890", { exact: true }).scrollIntoViewIfNeeded();
+  await expect(dialog.getByText("1234 567890", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("+79990000001", { exact: true })).toHaveCount(1);
+  expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/contract-requisites-mobile.png" });
+});
+
 test("all shared materials appear in one list and the documents header sticks", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 700 });
   await openMockDeal(page, workspaceFixture());

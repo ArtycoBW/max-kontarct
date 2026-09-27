@@ -59,16 +59,27 @@ export async function renderFinalContractPdf(input: FinalContractPdfInput): Prom
     });
   }
 
-  ensureSpace(doc, 210);
+  ensureSpace(doc, input.snapshot.schemaVersion === "deal-signature-v2" ? 245 : 210);
   sectionTitle(doc, "Реквизиты сторон");
   for (const party of input.snapshot.parties) {
+    if (input.snapshot.schemaVersion === "deal-signature-v2") ensureSpace(doc, party.profile.passport ? 215 : 125);
     const role = party.role === "INITIATOR" ? "Инициатор" : "Контрагент";
     doc.font("PTSans-Bold").fontSize(10).fillColor("#35120d").text(`${role}: ${fullName(party.profile)}`);
     doc.font("PTSans").fontSize(9).fillColor("#75645f");
     detail(doc, "Дата рождения", party.profile.birthDate ?? "не указана");
+    const passport = party.profile.passport;
+    if (passport) {
+      detail(doc, "Паспорт", [passport.series, passport.number].filter(Boolean).join(" ") || "не указан");
+      detail(doc, "Дата выдачи", passport.issuedAt ?? "не указана");
+      detail(doc, "Кем выдан", passport.issuer ?? "не указано");
+      detail(doc, "Код подразделения", passport.divisionCode ?? "не указан");
+      detail(doc, "Место рождения", passport.birthPlace ?? "не указано");
+      detail(doc, "Пол", passport.gender ?? "не указан");
+    }
     detail(doc, "Адрес регистрации", party.profile.address ?? "не указан");
     detail(doc, "Электронная почта", party.profile.email ?? "не указана");
-    detail(doc, "Подтверждённый номер", `реестр ${party.verifiedPhoneRef}`);
+    if (input.snapshot.schemaVersion === "deal-signature-v2") detail(doc, "Подтверждённый телефон", party.verifiedPhone ?? "не указан");
+    else detail(doc, "Подтверждённый номер", `реестр ${party.verifiedPhoneRef}`);
     doc.moveDown(0.8);
   }
 
@@ -80,7 +91,9 @@ export async function renderFinalContractPdf(input: FinalContractPdfInput): Prom
   );
   doc.moveDown(0.7);
   for (const signature of input.signatures) {
-    doc.font("PTSans-Bold").fontSize(9).text(signature.displayName);
+    const frozenParty = input.snapshot.schemaVersion === "deal-signature-v2"
+      ? input.snapshot.parties.find(party => party.role === signature.role) : null;
+    doc.font("PTSans-Bold").fontSize(9).text(frozenParty ? fullName(frozenParty.profile) : signature.displayName);
     doc.font("PTSans").fillColor("#75645f").text(`${signature.role === "INITIATOR" ? "Инициатор" : "Контрагент"} · подписано ${formatDateTime(signature.signedAt)} · ПЭП ${signature.pepDocumentVersion} · канал ${signature.otpChannel}`);
     doc.moveDown(0.55);
   }

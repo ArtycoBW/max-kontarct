@@ -164,7 +164,7 @@ describe("ContractGenerationProcessor", () => {
       expect(markCompleted).toHaveBeenCalledTimes(1);
       expect(markCompleted.mock.calls[0]?.[0].draft.sections).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ heading: "Условия сделки" }),
+          expect.objectContaining({ heading: "Условия договора" }),
         ]),
       );
     },

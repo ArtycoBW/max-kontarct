@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { Prisma } from "@prisma/client";
+import type { PassportDetails } from "@max-contract/contracts";
 
 export interface FrozenDealParty {
   maxUserIdRef: string | null;
@@ -12,7 +13,9 @@ export interface FrozenDealParty {
     firstName: string;
     lastName: string;
     middleName: string | null;
+    passport?: PassportDetails | null;
   };
+  verifiedPhone?: string | null;
   role: "INITIATOR" | "COUNTERPARTY";
   userId: string;
   verifiedPhoneRef: string;
@@ -34,7 +37,7 @@ export interface FrozenDealSnapshot {
   };
   frozenAt: string;
   parties: FrozenDealParty[];
-  schemaVersion: "deal-signature-v1";
+  schemaVersion: "deal-signature-v1" | "deal-signature-v2";
   terms: Prisma.JsonValue;
 }
 

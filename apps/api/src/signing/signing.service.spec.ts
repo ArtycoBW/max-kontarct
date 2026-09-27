@@ -17,6 +17,16 @@ const partyId = "40000000-0000-4000-8000-000000000001";
 const documentHash = "a".repeat(64);
 
 describe("SigningService", () => {
+  it("rejects a phone different from the v2 frozen requisites", async () => {
+    const base = signingContext();
+    const context = { ...base, versions: base.versions.map(version => ({ ...version, frozenSnapshot: { schemaVersion: "deal-signature-v2", parties: [{ userId, verifiedPhoneRef: "old-phone" }] } })) };
+    const otp = { verify: jest.fn(async () => ({ channel: "MAX_TEST", phoneId: "phone-1" })) };
+    const prisma = prismaMock(context);
+    await expect(createService(prisma, otp).confirm(userId, dealId, { code: "1234", versionId }, { ipAddress: null, userAgent: null }))
+      .rejects.toMatchObject({ response: { code: "DEAL_SIGNING_PHONE_CHANGED" } });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
   it("rejects signing an obsolete version before consuming an OTP", async () => {
     const otp = { verify: jest.fn() };
     const service = createService(prismaMock(signingContext()), otp);

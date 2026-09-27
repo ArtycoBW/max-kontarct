@@ -25,6 +25,7 @@ import { PrismaService } from "../database/prisma.service";
 import { MaxBotService } from "../max-bot/max-bot.service";
 import { OtpService } from "./otp.service";
 import { pepAgreement } from "./pep-agreement";
+import type { FrozenDealSnapshot } from "../deals/deal-version-freeze";
 
 const signingContextSelect = {
   artifacts: {
@@ -45,7 +46,7 @@ const signingContextSelect = {
             select: { e164: true, id: true },
             take: 1,
           },
-          profile: { select: { firstName: true, lastName: true } },
+          profile: { select: { firstName: true, lastName: true, middleName: true } },
         },
       },
     },
@@ -56,6 +57,7 @@ const signingContextSelect = {
     select: {
       contractNumber: true,
       frozenAt: true,
+      frozenSnapshot: true,
       id: true,
       signatures: { select: { partyId: true, signedAt: true, userId: true } },
       snapshotHash: true,
@@ -100,6 +102,7 @@ export class SigningService {
     }
     const phone = party.user.phones[0];
     if (!phone) throw signingProfileRequired();
+    assertFrozenPhone(context, userId, phone.id);
     const agreement = pepAgreement(this.pepVersion);
     await this.prisma.$transaction([
       this.prisma.userConsent.upsert({
@@ -183,6 +186,7 @@ export class SigningService {
     let verified: Awaited<ReturnType<OtpService["verify"]>>;
     try {
       verified = await this.otp.verify({ code: input.code, dealId, userId, versionId: version.id });
+      assertFrozenPhone(context, userId, verified.phoneId);
     } catch (error) {
       await this.prisma.auditEvent.create({
         data: {
@@ -319,6 +323,7 @@ function assertSigningOpen(status: DealStatus): void {
 
 function toState(context: SigningContext, userId: string, pepVersion: string): DealSigningStateResponse {
   const version = requireFrozenVersion(context);
+  const snapshot = version.frozenSnapshot as unknown as FrozenDealSnapshot | null;
   const signatures = new Map(version.signatures.map((signature) => [signature.partyId, signature]));
   const finalPdf = context.artifacts.find(({ type }) => type === "FINAL_PDF");
   const evidencePackage = context.artifacts.find(({ type }) => type === "EVIDENCE_ZIP");
@@ -332,7 +337,9 @@ function toState(context: SigningContext, userId: string, pepVersion: string): D
     parties: [...context.parties]
       .sort((left, right) => left.role === DealPartyRole.INITIATOR ? -1 : right.role === DealPartyRole.INITIATOR ? 1 : 0)
       .map((party) => ({
-        displayName: displayName(party.user),
+        displayName: snapshot?.schemaVersion === "deal-signature-v2"
+          ? snapshot.parties.filter(frozen => frozen.userId === party.userId).map(frozen => [frozen.profile.lastName, frozen.profile.firstName, frozen.profile.middleName].filter(Boolean).join(" "))[0] ?? displayName(party.user)
+          : displayName(party.user),
         isCurrentUser: party.userId === userId,
         role: party.role,
         signedAt: signatures.get(party.id)?.signedAt.toISOString() ?? null,
@@ -348,7 +355,15 @@ function toState(context: SigningContext, userId: string, pepVersion: string): D
 
 function displayName(user: SigningContext["parties"][number]["user"]): string {
   const profile = user.profile ?? user.maxAccount;
-  return [profile?.lastName, profile?.firstName].filter(Boolean).join(" ") || "Участник сделки";
+  return [profile?.lastName, profile?.firstName, user.profile?.middleName].filter(Boolean).join(" ") || "Участник сделки";
+}
+
+function assertFrozenPhone(context: SigningContext, userId: string, phoneId: string) {
+  const snapshot = context.versions[0]?.frozenSnapshot as unknown as FrozenDealSnapshot | null;
+  if (snapshot?.schemaVersion !== "deal-signature-v2") return;
+  if (snapshot.parties.find(party => party.userId === userId)?.verifiedPhoneRef !== phoneId) {
+    throw new ConflictException({ code: "DEAL_SIGNING_PHONE_CHANGED", message: "Телефон изменился после согласования. Подготовьте и согласуйте новую версию договора" });
+  }
 }
 
 function errorCode(error: unknown): string {

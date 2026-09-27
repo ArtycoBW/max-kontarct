@@ -1,7 +1,25 @@
 import type { FrozenDealSnapshot } from "../deals/deal-version-freeze";
 import { renderFinalContractPdf } from "./final-contract-pdf";
+import PDFDocument from "pdfkit";
 
 describe("renderFinalContractPdf", () => {
+  it("renders full v2 frozen passport/contact details and frozen signature names", async () => {
+    const snapshot = fixture();
+    snapshot.schemaVersion = "deal-signature-v2";
+    for (const party of snapshot.parties) {
+      party.verifiedPhone = "+79990000001";
+      party.profile.passport = { series: "1234", number: "567890", issuedAt: "2020-01-02", issuer: "Тестовое подразделение", divisionCode: "123-456", birthPlace: "Тестовый город", gender: "М" };
+    }
+    const spy = jest.spyOn(PDFDocument.prototype, "text");
+    try {
+      await renderFinalContractPdf({ snapshot, signatureHash: "a".repeat(64), verifyUrl: "https://example.test/verify/test", signatures: [{ displayName: "Changed live profile", role: "INITIATOR", signedAt: new Date(), otpChannel: "MAX_TEST", pepDocumentVersion: "stage-pep-v1" }] });
+      const text = spy.mock.calls.map(call => call[0]).join("\n");
+      for (const value of ["Паспорт: 1234 567890", "Кем выдан: Тестовое подразделение", "Код подразделения: 123-456", "Место рождения: Тестовый город", "Подтверждённый телефон: +79990000001", "Электронная почта: ivan@example.test", "Иванов Иван Иванович"]) expect(text).toContain(value);
+      expect(text).not.toContain("реестр phone-");
+      expect(text).not.toContain("Changed live profile");
+    } finally { spy.mockRestore(); }
+  });
+
   it("creates a multi-section Cyrillic PDF with a QR verification link", async () => {
     const body = await renderFinalContractPdf({
       signatureHash: "a".repeat(64),

@@ -41,7 +41,7 @@ describe("confirmed contract terms", () => {
       sections: [{ heading: "Предмет", clauses: ["Ноутбук"] }],
     };
     expect(withConfirmedContractTerms(draft, terms).sections[0]).toEqual({
-      heading: "Условия сделки",
+      heading: "Условия договора",
       clauses: terms,
     });
     expect(draft.sections).toHaveLength(1);
@@ -110,5 +110,21 @@ describe("confirmed contract terms", () => {
     expect(result.sections.flatMap((section) => section.clauses)).toEqual(
       terms,
     );
+  });
+
+  it("keeps one authoritative conditions block, all confirmed facts and additional obligations", () => {
+    const terms = ["Цена: 300 рублей.", "Передача: 01.10.2026.", "Приёмка: на месте при встрече."];
+    const draft = { title: "Договор", preamble: "Стороны договорились", warnings: [], sections: [
+      { heading: "Условия сделки", clauses: ["ИИ пересказал цену и сроки."] },
+      { heading: "3. Условия договора", clauses: ["Другой пересказ тех же условий."] },
+      { heading: "Обязанности сторон", clauses: [terms[0]!, "Продавец передаёт имущество в согласованном состоянии."] },
+    ] };
+    const original = JSON.stringify(draft);
+    const result = withConfirmedContractTerms(draft, terms);
+    expect(result.sections).toEqual([
+      { heading: "Условия договора", clauses: terms },
+      { heading: "Обязанности сторон", clauses: ["Продавец передаёт имущество в согласованном состоянии."] },
+    ]);
+    expect(JSON.stringify(draft)).toBe(original);
   });
 });
