@@ -134,11 +134,12 @@ test("Android long invitation is compact and too_large_text retries only a link 
   await expect(page.getByText("Приглашение отправлено.", { exact: true })).toBeVisible();
 });
 
-test("Android downloads use a scoped prepared link and a fresh native click", async ({ page }) => {
+for (const platform of ["android", "ios"] as const) {
+test(`${platform} downloads use scoped links and fresh clicks; Android prefers the browser`, async ({ page }) => {
   await openMockDeal(page, workspaceFixture("COMPLETED", true));
-  await page.evaluate(() => {
-    Object.assign(window.WebApp!, { platform: "android", downloadFile: (url: string, filename: string) => { document.body.dataset.download = JSON.stringify({ url, filename, gesture: navigator.userActivation.isActive }); return Promise.resolve({}); } });
-  });
+  await page.evaluate(platform => {
+    Object.assign(window.WebApp!, { platform, openLink: (url: string) => { document.body.dataset.externalDownload = JSON.stringify({ url, gesture: navigator.userActivation.isActive }); }, downloadFile: (url: string, filename: string) => { document.body.dataset.download = JSON.stringify({ url, filename, gesture: navigator.userActivation.isActive }); return Promise.resolve({ status: "downloading" }); } });
+  }, platform);
   const artifact = (kind: string) => ({ id: kind, originalName: kind === "final-pdf" ? "Договор.pdf" : "Материалы.zip", mimeType: "application/pdf", sizeBytes: 1000, downloadUrl: `/api/v1/deals/review-deal/artifacts/${kind}` });
   await page.route("**/deals/review-deal/signing", route => route.fulfill({ json: { contractNumber: "Тест", currentUserSigned: true, dealId: "review-deal", documentHash: "a".repeat(64), finalPdf: artifact("final-pdf"), evidencePackage: artifact("evidence-package"), parties: [], pepAgreement: pepAgreement("v1"), requiredSignatures: 2, totalSignatures: 2, status: "COMPLETED", versionId: "version", versionNumber: 2 } }));
   const paths: string[] = [];
@@ -146,16 +147,25 @@ test("Android downloads use a scoped prepared link and a fresh native click", as
   await expect(page.getByRole("heading", { name: "Подпишите и сохраните" })).toBeVisible();
   await page.getByRole("link", { name: "Скачать подписанный PDF" }).click();
   const modal = page.getByRole("dialog", { name: "Скачать файл" });
-  await modal.getByRole("button", { name: "Скачать на устройство" }).click();
+  const actions = modal.locator(".download-actions");
+  await expect(actions.getByRole("button").first()).toHaveText(platform === "android" ? "Скачать через браузер" : "Скачать через MAX");
+  if (platform === "android") {
+    await actions.getByRole("button").first().click();
+    expect(JSON.parse((await page.locator("body").getAttribute("data-external-download"))!)).toEqual({ url: "https://example.test/api/v1/downloads/content?ticket=test-only", gesture: true });
+    expect(await page.locator("body").getAttribute("data-download")).toBeNull();
+  }
+  await modal.getByRole("button", { name: "Скачать через MAX" }).click();
   expect(paths).toEqual(["/api/v1/deals/review-deal/artifacts/final-pdf"]);
   const received = JSON.parse((await page.locator("body").getAttribute("data-download"))!);
   expect(received).toMatchObject({ gesture: true, filename: "Договор.pdf", url: "https://example.test/api/v1/downloads/content?ticket=test-only" });
-  await expect(modal.getByText("Файл передан в загрузки MAX.", { exact: false })).toBeVisible();
+  await expect(modal.getByText("MAX сообщил о начале загрузки.", { exact: false })).toBeVisible();
+  await expect(modal).not.toContainText("Файл передан в загрузки MAX");
   await expect(page.getByRole("button", { name: "Документы сделки", exact: true })).toHaveCount(0);
-  await page.screenshot({ path: "test-results/android-native-download.png" });
+  await page.screenshot({ path: `test-results/${platform}-native-download.png` });
 });
+}
 
-for (const scenario of ["error", "hang", "missing"] as const) {
+for (const scenario of ["error", "hang", "missing", "cancelled", "empty", "undefined"] as const) {
 test(`Android download ${scenario} offers a browser fallback without technical errors`, async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 740 });
   await openMockDeal(page, workspaceFixture("COMPLETED", true));
@@ -166,6 +176,9 @@ test(`Android download ${scenario} offers a browser fallback without technical e
     if (scenario !== "missing") window.WebApp!.downloadFile = (_url, filename) => {
       document.body.dataset.nativeFilename = filename;
       if (scenario === "error") return Promise.resolve({ error: { code: "client.download_file.invalid_params" } });
+      if (scenario === "cancelled") return Promise.resolve({ status: "cancelled" });
+      if (scenario === "empty") return Promise.resolve({});
+      if (scenario === "undefined") return Promise.resolve(undefined);
       return new Promise(resolve => { (window as unknown as { finishDownload: typeof resolve }).finishDownload = resolve; });
     };
   }, scenario);
@@ -177,13 +190,17 @@ test(`Android download ${scenario} offers a browser fallback without technical e
   await page.getByRole("link", { name: scenario === "hang" ? "Скачать пакет материалов" : "Скачать подписанный PDF", exact: true }).click();
   const modal = page.getByRole("dialog", { name: "Скачать файл" });
   if (scenario !== "missing") {
-    await modal.getByRole("button", { name: "Скачать на устройство" }).click();
+    await modal.getByRole("button", { name: "Скачать через MAX" }).click();
     const name = (await page.locator("body").getAttribute("data-native-filename"))!;
     expect(Buffer.byteLength(name, "utf8")).toBeLessThanOrEqual(100);
     expect(name).toMatch(scenario === "hang" ? /\.zip$/ : /\.pdf$/);
     if (scenario === "error") await expect(modal.getByRole("alert")).toContainText("Не удалось начать скачивание");
-    else await expect(modal.getByRole("button", { name: "Ожидаем ответ…" })).toBeDisabled();
+    else if (scenario === "hang") await expect(modal.getByRole("button", { name: "Ожидаем ответ…" })).toBeDisabled();
+    else if (scenario === "cancelled") await expect(modal.getByRole("status")).toContainText("Скачивание отменено");
+    else await expect(modal.getByRole("alert")).toContainText("MAX не подтвердил начало скачивания");
   }
+  expect(await page.locator("body").getAttribute("data-external-download")).toBeNull();
+  await expect(modal).not.toContainText(/Файл передан в загрузки MAX|MAX сообщил о начале загрузки/);
   await expect(modal).not.toContainText(/Код:|client\.|invalid_params/);
   await expect(modal.getByRole("link")).toHaveCount(0);
   await expect(modal.getByRole("button", { name: "Скачать через браузер" })).toBeInViewport();

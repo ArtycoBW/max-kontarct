@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/api/client";
 import { downloadFilename } from "@/lib/files/download-filename";
+import { nativeDownloadResult } from "@/lib/files/native-download-result";
 
 type PreparedDownload = { url: string; filename: string; expiresAt: string };
 
@@ -14,11 +15,15 @@ export function DownloadButton({ url, filename, children, className, iconOnly = 
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState("");
+  const [preferBrowser, setPreferBrowser] = useState(false);
   const attempt = useRef(0);
   useEffect(() => () => { attempt.current++; }, []);
   const prepare = async () => {
     const current = ++attempt.current;
     setOpen(true); setReady(null); setError(""); setNotice(""); setPending(false);
+    // Android clients can acknowledge downloadFile without saving a visible file.
+    // Prefer the verified external-browser path; keep native download optional.
+    setPreferBrowser(window.WebApp?.platform === "android" || (!window.WebApp?.platform && /Android/i.test(navigator.userAgent)) || !window.WebApp?.downloadFile);
     try {
       const resource = new URL(url, window.location.origin);
       if (resource.origin !== window.location.origin) throw new Error();
@@ -45,8 +50,12 @@ export function DownloadButton({ url, filename, children, className, iconOnly = 
       } else {
         if (!window.WebApp?.downloadFile) throw new Error();
         const result = await window.WebApp.downloadFile(ready.url, downloadFilename(ready.filename));
-        if (result && typeof result === "object" && "error" in result) throw new Error();
-        if (attempt.current === current) setNotice("Файл передан в загрузки MAX. Проверьте папку «Загрузки» на устройстве.");
+        const status = nativeDownloadResult(result);
+        if (attempt.current === current) {
+          if (status === "downloading") setNotice("MAX сообщил о начале загрузки. Если файл не появился, нажмите «Скачать через браузер».");
+          else if (status === "cancelled") setNotice("Скачивание отменено. Можно повторить или скачать через браузер.");
+          else setError("MAX не подтвердил начало скачивания. Нажмите «Скачать через браузер».");
+        }
       }
     } catch {
       if (attempt.current === current) setError(external ? "Не удалось открыть браузер. Попробуйте скачать через MAX или подготовьте файл заново." : "Не удалось начать скачивание. Попробуйте «Скачать через браузер».");
@@ -62,9 +71,10 @@ export function DownloadButton({ url, filename, children, className, iconOnly = 
     <Dialog open={open} onOpenChange={next => { setOpen(next); if (!next) ++attempt.current; }}><DialogContent className="app-modal"><DialogHeader className="app-modal-header is-stacked"><DialogTitle>Скачать файл</DialogTitle><DialogDescription className="download-filename" title={filename}>{filename}</DialogDescription></DialogHeader><div className="app-modal-body download-actions">
       {!ready && !error ? <p role="status">Подготавливаем файл…</p> : null}
       {ready ? <>
-        {window.WebApp?.downloadFile ? <Button type="button" disabled={pending} onClick={() => void download()}>{pending ? "Ожидаем ответ…" : "Скачать на устройство"}</Button> : <p>Скачивание внутри MAX недоступно. Используйте браузер.</p>}
-        <Button type="button" variant="secondary" onClick={() => void download(true)}>Скачать через браузер</Button>
-        <p>Если загрузка не началась, нажмите «Скачать через браузер». Ссылка действует две минуты и открывает только этот файл.</p>
+        {preferBrowser ? <Button type="button" onClick={() => void download(true)}>Скачать через браузер</Button> : null}
+        {window.WebApp?.downloadFile ? <Button type="button" variant={preferBrowser ? "secondary" : "primary"} disabled={pending} onClick={() => void download()}>{pending ? "Ожидаем ответ…" : "Скачать через MAX"}</Button> : null}
+        {!preferBrowser ? <Button type="button" variant="secondary" onClick={() => void download(true)}>Скачать через браузер</Button> : null}
+        <p>{preferBrowser ? "Браузер сохранит файл на устройство. В некоторых версиях MAX встроенное скачивание не срабатывает." : "Если загрузка не началась, нажмите «Скачать через браузер»."} Ссылка действует две минуты и открывает только этот файл.</p>
       </> : null}
       {notice ? <p role="status">{notice}</p> : null}{error ? <><p role="alert">{error}</p><Button type="button" variant="secondary" onClick={() => void prepare()}>Подготовить заново</Button></> : null}
     </div></DialogContent></Dialog>
