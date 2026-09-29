@@ -132,15 +132,6 @@ export function isInvitationTextTooLarge(error: unknown): boolean {
   return code.endsWith(".too_large_text");
 }
 
-export function invitationShareDiagnostic(error: unknown): string {
-  const code = error instanceof InvitationShareError ? error.code : readBridgeErrorCode(error);
-  // Never display arbitrary native messages, invitation URLs or initData.
-  const safeCode = /^(?:client\.[a-z_.]+|timeout)$/.test(code) && code.length < 100 ? code : "share_failed";
-  const app = typeof window === "undefined" ? undefined : window.WebApp;
-  const version = /^\d+(?:\.\d+){1,3}$/.test(app?.version ?? "") ? app!.version : "не определена";
-  return `Код: ${safeCode}. MAX: ${version}.`;
-}
-
 export async function shareInMax(text: string, link: string, alternate = false): Promise<InvitationShareResult> {
   text = invitationShareText(text, link);
   const webApp = typeof window === "undefined" ? undefined : window.WebApp;

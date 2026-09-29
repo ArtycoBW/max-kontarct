@@ -1,4 +1,4 @@
-import { getMaxInitData, getMaxStartPayload, notifyMaxWebAppReady, waitForMaxWebApp, shareInMax, invitationShareDiagnostic } from "./bridge";
+import { getMaxInitData, getMaxStartPayload, notifyMaxWebAppReady, waitForMaxWebApp, shareInMax } from "./bridge";
 
 function setWindow(value: Partial<Window>): void {
   Object.defineProperty(global, "window", {
@@ -51,12 +51,6 @@ describe("MAX Bridge startup", () => {
     setWindow({ WebApp: { initData: "test", platform: "ios", shareMaxContent, shareContent } });
     await expect(shareInMax("text", "https://example.test")).rejects.toBeDefined();
     expect(shareContent).not.toHaveBeenCalled();
-  });
-  it("diagnostics expose only a restricted error code and version, never arbitrary private messages", () => {
-    setWindow({ WebApp: { initData: "secret", version: "26.20.1" } });
-    expect(invitationShareDiagnostic({ error: { code: "client.web_app_share.request_timeout" } })).toContain("client.web_app_share.request_timeout");
-    const diagnostic = invitationShareDiagnostic({ error: { code: "https://private/#token" }, message: "passport" });
-    expect(diagnostic).toBe("Код: share_failed. MAX: 26.20.1.");
   });
   it("calls Android native sharing synchronously and waits for the actual result", async () => {
     const openMaxLink = jest.fn();

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { invitationShareDiagnostic, isInvitationTextTooLarge, shareInMax } from "@/lib/max/bridge";
+import { isInvitationTextTooLarge, shareInMax } from "@/lib/max/bridge";
 
 export function InvitationShareActions({ text, link, onConfirmed }: {
   text: string;
@@ -51,7 +51,7 @@ export function InvitationShareActions({ text, link, onConfirmed }: {
       }
       setError(mode === "copy"
         ? "Буфер обмена недоступен. Выделите ссылку ниже и скопируйте её через меню телефона."
-        : `Не удалось открыть отправку. Нажмите «Другой способ отправки» или скопируйте ссылку. ${invitationShareDiagnostic(failure)}`);
+        : "Не удалось открыть отправку. Нажмите «Другой способ отправки» или скопируйте ссылку.");
       return;
     }
     // A result from a previous, abandoned picker must not change the new UI.

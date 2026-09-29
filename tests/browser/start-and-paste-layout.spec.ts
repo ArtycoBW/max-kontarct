@@ -56,7 +56,8 @@ test("Android sharing marks sent only after shared, not opening, cancellation or
   expect(sent).toBe(0);
   await page.getByRole("button", { name: "Отправить в MAX", exact: true }).click();
   await page.evaluate(() => (window as unknown as { resolveShare: (result: unknown) => void }).resolveShare({ error: { code: "timeout" } }));
-  await expect(page.locator(".invitation-share-actions").getByRole("alert")).toContainText("Код: timeout");
+  await expect(page.locator(".invitation-share-actions").getByRole("alert")).toContainText("Не удалось открыть отправку");
+  await expect(page.locator(".invitation-share-actions")).not.toContainText(/Код:|client\.|share_failed/);
   expect(sent).toBe(0);
   await page.getByRole("button", { name: "Отправить в MAX", exact: true }).click();
   await page.evaluate(() => (window as unknown as { resolveShare: (result: unknown) => void }).resolveShare({ status: "shared" }));
@@ -149,9 +150,71 @@ test("Android downloads use a scoped prepared link and a fresh native click", as
   expect(paths).toEqual(["/api/v1/deals/review-deal/artifacts/final-pdf"]);
   const received = JSON.parse((await page.locator("body").getAttribute("data-download"))!);
   expect(received).toMatchObject({ gesture: true, filename: "Договор.pdf", url: "https://example.test/api/v1/downloads/content?ticket=test-only" });
-  await expect(modal.getByText("Файл передан в загрузки MAX.")).toBeVisible();
+  await expect(modal.getByText("Файл передан в загрузки MAX.", { exact: false })).toBeVisible();
   await expect(page.getByRole("button", { name: "Документы сделки", exact: true })).toHaveCount(0);
   await page.screenshot({ path: "test-results/android-native-download.png" });
+});
+
+for (const scenario of ["error", "hang", "missing"] as const) {
+test(`Android download ${scenario} offers a browser fallback without technical errors`, async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  await openMockDeal(page, workspaceFixture("COMPLETED", true));
+  await page.evaluate(scenario => {
+    Object.assign(window.WebApp!, { platform: "android", openLink: (url: string) => {
+      document.body.dataset.externalDownload = JSON.stringify({ url, gesture: navigator.userActivation.isActive });
+    } });
+    if (scenario !== "missing") window.WebApp!.downloadFile = (_url, filename) => {
+      document.body.dataset.nativeFilename = filename;
+      if (scenario === "error") return Promise.resolve({ error: { code: "client.download_file.invalid_params" } });
+      return new Promise(resolve => { (window as unknown as { finishDownload: typeof resolve }).finishDownload = resolve; });
+    };
+  }, scenario);
+  const artifact = (kind: string) => ({ id: kind, originalName: `${"Длинное название договора ".repeat(20)}${kind === "final-pdf" ? ".pdf" : ".zip"}`, mimeType: "application/pdf", sizeBytes: 1000, downloadUrl: `/api/v1/deals/review-deal/artifacts/${kind}` });
+  await page.route("**/deals/review-deal/signing", route => route.fulfill({ json: { contractNumber: "Тест", currentUserSigned: true, dealId: "review-deal", documentHash: "a".repeat(64), finalPdf: artifact("final-pdf"), evidencePackage: artifact("evidence-package"), parties: [], pepAgreement: pepAgreement("v1"), requiredSignatures: 2, totalSignatures: 2, status: "COMPLETED", versionId: "version", versionNumber: 2 } }));
+  const kind = scenario === "hang" ? "evidence-package" : "final-pdf";
+  const target = "https://example.test/api/v1/downloads/content?ticket=test-only";
+  await page.route("**/downloads/prepare", route => route.fulfill({ json: { url: target, filename: artifact(kind).originalName, expiresAt: new Date(Date.now() + 120000).toISOString() } }));
+  await page.getByRole("link", { name: scenario === "hang" ? "Скачать пакет материалов" : "Скачать подписанный PDF", exact: true }).click();
+  const modal = page.getByRole("dialog", { name: "Скачать файл" });
+  if (scenario !== "missing") {
+    await modal.getByRole("button", { name: "Скачать на устройство" }).click();
+    const name = (await page.locator("body").getAttribute("data-native-filename"))!;
+    expect(Buffer.byteLength(name, "utf8")).toBeLessThanOrEqual(100);
+    expect(name).toMatch(scenario === "hang" ? /\.zip$/ : /\.pdf$/);
+    if (scenario === "error") await expect(modal.getByRole("alert")).toContainText("Не удалось начать скачивание");
+    else await expect(modal.getByRole("button", { name: "Ожидаем ответ…" })).toBeDisabled();
+  }
+  await expect(modal).not.toContainText(/Код:|client\.|invalid_params/);
+  await expect(modal.getByRole("link")).toHaveCount(0);
+  await expect(modal.getByRole("button", { name: "Скачать через браузер" })).toBeInViewport();
+  if (scenario === "error") await page.screenshot({ path: "test-results/android-download-friendly-error.png" });
+  await modal.getByRole("button", { name: "Скачать через браузер" }).click();
+  expect(JSON.parse((await page.locator("body").getAttribute("data-external-download"))!)).toEqual({ url: target, gesture: true });
+  await expect(modal.getByText("Ссылка передана браузеру.", { exact: false })).toBeVisible();
+  if (scenario === "hang") {
+    await page.evaluate(() => (window as unknown as { finishDownload: (result: unknown) => void }).finishDownload({ error: { code: "client.download_file.request_timeout" } }));
+    await expect(modal.getByRole("alert")).toHaveCount(0);
+  }
+  expect(await modal.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+});
+}
+
+test("download preparation and expired-link failures never expose raw errors or call the native bridge", async ({ page }) => {
+  const workspace = { ...workspaceFixture("TERMS_REVIEW", true), currentUserRole: "COUNTERPARTY" };
+  await openMockDeal(page, workspace);
+  await page.evaluate(() => Object.assign(window.WebApp!, { platform: "android", downloadFile: () => { throw new Error("must not be called"); }, openLink: () => { document.body.dataset.unexpectedDownload = "true"; } }));
+  await page.route("**/deals/review-deal/files", route => route.fulfill({ json: { evidenceFiles: [{ id: "file", originalName: "Акт.pdf", mimeType: "application/pdf", sizeBytes: 100, visibility: "DEAL_PARTICIPANTS", owner: { isCurrentUser: false, displayName: "Тест" } }], requirements: [], canUploadEvidence: false } }));
+  await page.route("**/downloads/prepare", route => route.fulfill({ status: 500, json: { message: "client.internal_error token=private", code: "INTERNAL_ERROR" } }));
+  await page.getByRole("button", { name: /Приложения к договору/ }).click();
+  await page.getByRole("link", { name: "Скачать Акт.pdf" }).click();
+  const modal = page.getByRole("dialog", { name: "Скачать файл" });
+  await expect(modal.getByRole("alert")).toContainText("Не удалось подготовить файл");
+  await expect(modal).not.toContainText(/client\.|private|INTERNAL_ERROR/);
+  await page.route("**/downloads/prepare", route => route.fulfill({ json: { url: "https://example.test/api/v1/downloads/content?ticket=test-only", filename: "Акт.pdf", expiresAt: "2020-01-01T00:00:00Z" } }));
+  await modal.getByRole("button", { name: "Подготовить заново" }).click();
+  await modal.getByRole("button", { name: "Скачать через браузер" }).click();
+  await expect(modal.getByRole("alert")).toContainText("Ссылка истекла");
+  expect(await page.locator("body").getAttribute("data-unexpected-download")).toBeNull();
 });
 
 test("materials use role-specific empty text and uploader action; incomplete parties cannot view the contract", async ({ page }) => {
@@ -693,7 +756,8 @@ test("passport details precede invitation; sending gates parameters and uploads"
   await expect(page.getByRole("button", { name: "Я отправил приглашение", exact: true })).toHaveCount(0);
   await page.evaluate(() => Object.assign(window.WebApp!, { platform: "android", shareContent: () => Promise.reject({ error: { code: "client.web_app_share.request_timeout" } }) }));
   await page.getByRole("button", { name: "Отправить в MAX", exact: true }).click();
-  await expect(page.locator(".invitation-share-actions").getByRole("alert")).toContainText("client.web_app_share.request_timeout");
+  await expect(page.locator(".invitation-share-actions").getByRole("alert")).toContainText("Не удалось открыть отправку");
+  await expect(page.locator(".invitation-share-actions")).not.toContainText(/Код:|client\.|26\.31\.0/);
   await expect(page.getByRole("button", { name: "Другой способ отправки" })).toBeVisible();
   await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: () => Promise.reject(new Error("denied")) } }));
   await page.getByRole("button", { name: "Скопировать ссылку", exact: true }).click();
