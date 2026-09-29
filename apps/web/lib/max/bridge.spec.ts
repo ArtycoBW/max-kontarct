@@ -1,4 +1,4 @@
-import { getMaxInitData, getMaxStartPayload, notifyMaxWebAppReady, waitForMaxWebApp, shareInMax } from "./bridge";
+import { getMaxInitData, getMaxStartPayload, notifyMaxWebAppReady, waitForMaxWebApp, shareInMax, invitationShareDiagnostic } from "./bridge";
 
 function setWindow(value: Partial<Window>): void {
   Object.defineProperty(global, "window", {
@@ -12,6 +12,36 @@ function setWindow(value: Partial<Window>): void {
 }
 
 describe("MAX Bridge startup", () => {
+  it("uses Android system sharing even when the unresponsive MAX picker method exists", async () => {
+    const shareMaxContent = jest.fn(() => new Promise(() => undefined));
+    const shareContent = jest.fn().mockResolvedValue({ status: "shared" });
+    setWindow({ WebApp: { initData: "test", platform: "android", shareMaxContent, shareContent } });
+    const result = shareInMax("text", "https://example.test/#secret");
+    expect(shareContent).toHaveBeenCalledWith({ text: "text\nhttps://example.test/#secret" });
+    expect(shareMaxContent).not.toHaveBeenCalled();
+    await expect(result).resolves.toBe("shared");
+  });
+  it("uses the independent MAX picker only on an explicit alternate attempt", async () => {
+    const shareMaxContent = jest.fn().mockResolvedValue({ status: "cancelled" });
+    const shareContent = jest.fn();
+    setWindow({ WebApp: { initData: "test", platform: "android", shareMaxContent, shareContent } });
+    await expect(shareInMax("text", "https://example.test", true)).resolves.toBe("cancelled");
+    expect(shareMaxContent).toHaveBeenCalledTimes(1);
+    expect(shareContent).not.toHaveBeenCalled();
+  });
+  it("keeps iOS using MAX sharing and does not retry errors without a new gesture", async () => {
+    const shareMaxContent = jest.fn().mockRejectedValue({ error: { code: "client.web_app_max_share.request_timeout" } });
+    const shareContent = jest.fn();
+    setWindow({ WebApp: { initData: "test", platform: "ios", shareMaxContent, shareContent } });
+    await expect(shareInMax("text", "https://example.test")).rejects.toBeDefined();
+    expect(shareContent).not.toHaveBeenCalled();
+  });
+  it("diagnostics expose only a restricted error code and version, never arbitrary private messages", () => {
+    setWindow({ WebApp: { initData: "secret", version: "26.20.1" } });
+    expect(invitationShareDiagnostic({ error: { code: "client.web_app_share.request_timeout" } })).toContain("client.web_app_share.request_timeout");
+    const diagnostic = invitationShareDiagnostic({ error: { code: "https://private/#token" }, message: "passport" });
+    expect(diagnostic).toBe("Код: share_failed. MAX: 26.20.1.");
+  });
   it("calls Android native sharing synchronously and waits for the actual result", async () => {
     const openMaxLink = jest.fn();
     let complete!: (result: unknown) => void;

@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   Check,
   Clock3,
-  Copy,
   FileCheck2,
   Files,
   MessageCircle,
@@ -32,7 +31,7 @@ import {
   revokeDealInvitation,
 } from "@/lib/api/invitations";
 import { queryKeys } from "@/lib/api/query-keys";
-import { shareInMax } from "@/lib/max/bridge";
+import { InvitationShareActions } from "@/components/invitations/invitation-share-actions";
 import { materialsUploaderLabel, participantRoleLabel } from "@/lib/deals/party-responsibility";
 import { DealChat } from "./deal-chat";
 import { SharedDealAttachments } from "./shared-deal-attachments";
@@ -160,32 +159,6 @@ export function DealWorkspaceScreen({
     : !profilesReady ? `${!deal.initiator.profileCompleted ? deal.initiator.displayName : deal.counterparty.displayName} ещё заполняет реквизиты.`
     : `Ожидайте: ${participantRoleLabel(deal.template.slug, deal.draft.subjectDocumentsParty ?? null, "INITIATOR").toLocaleLowerCase("ru-RU")} заполняет договор.`;
 
-  const shareInvitation = async () => {
-    if (!issuedInvitation?.shareUrl || !issuedInvitation.shareText) return;
-    setNotice("");
-    let result;
-    try {
-      result = await shareInMax(issuedInvitation.shareText, issuedInvitation.shareUrl);
-    } catch {
-      setNotice("Не удалось открыть отправку. Повторите попытку или скопируйте ссылку.");
-      return;
-    }
-    if (result === "cancelled") { setNotice("Отправка отменена."); return; }
-    if (result === "unconfirmed") { setNotice("MAX не подтвердил отправку. Скопируйте ссылку или дождитесь присоединения второй стороны."); return; }
-    try {
-      await markDealInvitationSent(dealId, issuedInvitation.id);
-      setNotice(result === "copied" ? "Ссылка скопирована." : "Приглашение отправлено.");
-      void refreshWorkspace(queryClient, dealId);
-    } catch { setNotice("Не удалось сохранить отметку. Повторите отправку или копирование ссылки."); }
-  };
-  const copyInvitation = async () => {
-    if (!issuedInvitation?.shareUrl) return;
-    setNotice("");
-    try { await navigator.clipboard.writeText(issuedInvitation.shareUrl); }
-    catch { setNotice("Буфер обмена недоступен. Повторите попытку или нажмите «Отправить в MAX»."); return; }
-    try { await markDealInvitationSent(dealId, issuedInvitation.id); setNotice("Ссылка скопирована."); void refreshWorkspace(queryClient, dealId); }
-    catch { setNotice("Ссылка скопирована, но отметка не сохранена. Повторите копирование."); }
-  };
 
   return (
     <div className="screen-content deal-workspace-screen">
@@ -231,10 +204,11 @@ export function DealWorkspaceScreen({
         )}
 
         {!deal.counterparty && deal.initiator.profileCompleted && issuedInvitation?.shareUrl ? (
-          <div className="deal-invitation-actions">
-            <Button className="full-width" onClick={() => void shareInvitation()}><Send size={17} /> Отправить в MAX</Button>
-            <Button className="full-width" onClick={() => void copyInvitation()} variant="secondary"><Copy size={17} /> Скопировать ссылку</Button>
-          </div>
+          <InvitationShareActions key={issuedInvitation.id} link={issuedInvitation.shareUrl} text={issuedInvitation.shareText ?? "Приглашение в Макс-Контракт"} onConfirmed={async () => {
+            await markDealInvitationSent(dealId, issuedInvitation.id);
+            setNotice("");
+            void refreshWorkspace(queryClient, dealId);
+          }} />
         ) : null}
 
         {!deal.counterparty && deal.initiator.profileCompleted && !issuedInvitation?.shareUrl ? (

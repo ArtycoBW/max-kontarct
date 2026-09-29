@@ -56,13 +56,50 @@ test("Android sharing marks sent only after shared, not opening, cancellation or
   expect(sent).toBe(0);
   await page.getByRole("button", { name: "Отправить в MAX", exact: true }).click();
   await page.evaluate(() => (window as unknown as { resolveShare: (result: unknown) => void }).resolveShare({ error: { code: "timeout" } }));
-  await expect(page.getByText("Не удалось открыть отправку. Повторите попытку или скопируйте ссылку.")).toBeVisible();
+  await expect(page.locator(".invitation-share-actions").getByRole("alert")).toContainText("Код: timeout");
   expect(sent).toBe(0);
   await page.getByRole("button", { name: "Отправить в MAX", exact: true }).click();
   await page.evaluate(() => (window as unknown as { resolveShare: (result: unknown) => void }).resolveShare({ status: "shared" }));
   await expect.poll(() => sent).toBe(1);
   await expect(page.getByText("Приглашение отправлено.", { exact: true })).toBeVisible();
   await expect(page.locator('a[href*="max.ru/:share"]')).toHaveCount(0);
+});
+
+test("Android hung sharing has an independent fresh-click fallback and ignores stale responses", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  const workspace = { ...workspaceFixture("DRAFT", true), currentUserRole: "INITIATOR", counterparty: null };
+  await openMockDeal(page, workspace as unknown as ReturnType<typeof workspaceFixture>);
+  await page.evaluate(() => {
+    Object.assign(window.WebApp!, {
+      platform: "android", version: "26.20.1",
+      shareContent: (params: unknown) => {
+        document.body.dataset.systemShare = JSON.stringify({ params, gesture: navigator.userActivation.isActive });
+        return new Promise(resolve => { (window as unknown as { lateShare: typeof resolve }).lateShare = resolve; });
+      },
+      shareMaxContent: () => {
+        document.body.dataset.alternateGesture = String(navigator.userActivation.isActive);
+        return Promise.resolve({ status: "shared" });
+      },
+    });
+  });
+  await page.route("**/deals/review-deal/invitations", route => route.fulfill({ json: { id: "invite", state: "ACTIVE", shareText: "Создание презентации за 10000 рублей", shareUrl: "https://example.test/invite/1#secret", expiresAt: "2099-01-01T00:00:00Z" } }));
+  let sent = 0;
+  await page.route("**/deals/review-deal/invitations/invite/sent", route => { sent++; return route.fulfill({ json: { sentAt: new Date().toISOString() } }); });
+  await page.getByRole("button", { name: "Создать приглашение", exact: true }).click();
+  await page.getByRole("button", { name: "Отправить в MAX", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Ожидаем ответ MAX…" })).toBeDisabled();
+  expect(sent).toBe(0);
+  expect(JSON.parse((await page.locator("body").getAttribute("data-system-share"))!)).toEqual({ gesture: true, params: { text: "Создание презентации за 10000 рублей\nhttps://example.test/invite/1#secret" } });
+  await page.getByRole("button", { name: "Другой способ отправки" }).click();
+  expect(await page.locator("body").getAttribute("data-alternate-gesture")).toBe("true");
+  await expect.poll(() => sent).toBe(1);
+  await page.evaluate(() => (window as unknown as { lateShare: (result: unknown) => void }).lateShare({ status: "shared" }));
+  await expect(page.getByText("Приглашение отправлено.", { exact: true })).toBeVisible();
+  expect(sent).toBe(1);
+  expect(await page.locator(".mini-app-scroll").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.getByRole("button", { name: "Показать ссылку" }).click();
+  await expect(page.getByRole("textbox", { name: "Ссылка-приглашение" })).toHaveValue("https://example.test/invite/1#secret");
+  await page.screenshot({ path: "test-results/android-sharing-recovery.png" });
 });
 
 test("Android downloads use a scoped prepared link and a fresh native click", async ({ page }) => {
@@ -623,9 +660,13 @@ test("passport details precede invitation; sending gates parameters and uploads"
   await page.getByRole("button", { name: "Перевыпустить приглашение", exact: true }).click();
   await expect(page.getByRole("button", { name: "Отправить в MAX", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Я отправил приглашение", exact: true })).toHaveCount(0);
+  await page.evaluate(() => Object.assign(window.WebApp!, { platform: "android", shareContent: () => Promise.reject({ error: { code: "client.web_app_share.request_timeout" } }) }));
+  await page.getByRole("button", { name: "Отправить в MAX", exact: true }).click();
+  await expect(page.locator(".invitation-share-actions").getByRole("alert")).toContainText("client.web_app_share.request_timeout");
+  await expect(page.getByRole("button", { name: "Другой способ отправки" })).toBeVisible();
   await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: () => Promise.reject(new Error("denied")) } }));
   await page.getByRole("button", { name: "Скопировать ссылку", exact: true }).click();
-  await expect(page.getByText("Не удалось передать ссылку. Повторите отправку или скопируйте её.")).toBeVisible();
+  await expect(page.getByText(/Буфер обмена недоступен/)).toBeVisible();
   await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeDisabled();
   expect(sentAt).toBeNull();
   await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: () => Promise.resolve() } }));

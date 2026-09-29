@@ -116,22 +116,45 @@ export type InvitationShareResult = "shared" | "copied" | "cancelled" | "unconfi
 
 function confirmedShareResult(result: unknown): InvitationShareResult {
   if (typeof result === "object" && result !== null) {
-    if ("error" in result) throw new Error("MAX не смог отправить приглашение");
+    if ("error" in result) throw new InvitationShareError(readBridgeErrorCode(result));
     if ("status" in result && (result.status === "shared" || result.status === "cancelled")) return result.status;
   }
   return "unconfirmed";
 }
 
-export async function shareInMax(text: string, link: string): Promise<InvitationShareResult> {
+export class InvitationShareError extends Error {
+  constructor(readonly code: string) { super("MAX не смог открыть отправку"); }
+}
+
+export function invitationShareDiagnostic(error: unknown): string {
+  const code = error instanceof InvitationShareError ? error.code : readBridgeErrorCode(error);
+  // Never display arbitrary native messages, invitation URLs or initData.
+  const safeCode = /^(?:client\.[a-z_.]+|timeout)$/.test(code) && code.length < 100 ? code : "share_failed";
+  const app = typeof window === "undefined" ? undefined : window.WebApp;
+  const version = /^\d+(?:\.\d+){1,3}$/.test(app?.version ?? "") ? app!.version : "не определена";
+  return `Код: ${safeCode}. MAX: ${version}.`;
+}
+
+export async function shareInMax(text: string, link: string, alternate = false): Promise<InvitationShareResult> {
   const webApp = typeof window === "undefined" ? undefined : window.WebApp;
+  // Some Android hosts expose shareMaxContent but never open its picker.
+  // Use the independent native system sheet there; alternate is a fresh click,
+  // never an automatic retry after a rejected promise has lost user activation.
+  const systemFirst = webApp?.platform === "android" ? !alternate : alternate;
+  if (systemFirst && webApp?.shareContent) return shareThroughSystem(text, link);
   // Invoke the bridge before any await to preserve Android's click gesture.
   // Only its documented `shared` status confirms actual sending; opening a
   // deeplink or resolving an OS share sheet is not a delivery confirmation.
   if (webApp?.shareMaxContent) {
     return confirmedShareResult(await webApp.shareMaxContent({ link, text }));
   }
-  if (webApp?.shareContent) {
-    return confirmedShareResult(await webApp.shareContent({ link, text }));
+  return shareThroughSystem(text, link);
+}
+
+async function shareThroughSystem(text: string, link: string): Promise<InvitationShareResult> {
+  const webApp = typeof window === "undefined" ? undefined : window.WebApp;
+  if (webApp?.shareContent && webApp.platform !== "web" && webApp.platform !== "desktop") {
+    return confirmedShareResult(await webApp.shareContent({ text: `${text}\n${link}` }));
   }
   if (typeof navigator !== "undefined" && navigator.share) {
     await navigator.share({ text, title: "Приглашение в Макс-Контракт", url: link });

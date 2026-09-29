@@ -3378,6 +3378,11 @@ button.service-status {
 .inline-deal-requisites { display: grid; gap: 16px; margin-top: 16px; min-width: 0; }
 .inline-deal-requisites > .deal-requisites { min-width: 0; }
 .inline-deal-requisites > .field-description { margin: 0; }
+.invitation-share-actions, .invitation-share-recovery { display: grid; gap: 12px; min-width: 0; }
+.invitation-share-actions p { margin: 0; overflow-wrap: anywhere; }
+.invitation-share-recovery { padding: 12px; border-radius: 12px; background: var(--surface-soft, #faf7f5); }
+.invitation-share-recovery p { font-size: 12px; line-height: 1.5; }
+.invitation-share-actions textarea { overflow-wrap: anywhere; min-height: 96px; }
 .invitation-step-screen { min-height: 100dvh; container-type: inline-size; }
 .invitation-step-screen > .flow-header { flex: none; gap: 10px; }
 .invitation-step-screen .flow-header-title { width: 100%; gap: 8px; }
