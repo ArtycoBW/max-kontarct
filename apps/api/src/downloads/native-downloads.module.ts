@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
-import { Body, Controller, Get, Header, Injectable, Module, NotFoundException, Post, Query, Req, StreamableFile, UseGuards, Inject } from "@nestjs/common";
+import { Body, Controller, Get, Header, Injectable, Module, NotFoundException, Post, Query, Req, Res, Param, Logger, StreamableFile, UseGuards, Inject } from "@nestjs/common";
+import type { Request, Response } from "express";
 import { ConfigService } from "@nestjs/config";
 import { Matches } from "class-validator";
 import { AuthModule } from "../auth/auth.module";
@@ -9,6 +10,7 @@ import { PrismaService } from "../database/prisma.service";
 import { RedisService } from "../redis/redis.service";
 import { STORAGE_SERVICE, type StorageService } from "../storage/storage.service";
 import { normalizeUploadedFilename } from "../files/file-validation";
+import { downloadMetadata } from "./download-metadata";
 
 const uuid = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}";
 const PATH = new RegExp(`^/api/v1/deals/(${uuid})/(?:files/(${uuid})/content|artifacts/(final-pdf|evidence-package))$`, "i");
@@ -31,7 +33,9 @@ export class NativeDownloadsService {
     const token = randomBytes(32).toString("base64url");
     const grant: Grant = { userId, sessionId, kind: fileId ? "file" : "artifact", id: record.id };
     await this.redis.setWithExpiry(this.key(token), JSON.stringify(grant), 120);
-    return { url: `${this.config.getOrThrow<string>("PUBLIC_WEB_URL")}/api/v1/downloads/content?ticket=${token}`, filename: normalizeUploadedFilename(record.originalName), expiresAt: new Date(Date.now() + 120_000).toISOString() };
+    const metadata = downloadMetadata(record.originalName, record.mimeType);
+    const base = `${this.config.getOrThrow<string>("PUBLIC_WEB_URL")}/api/v1/downloads/content`;
+    return { url: `${base}?ticket=${token}`, nativeUrl: `${base}/file.${metadata.extension}?ticket=${token}`, filename: metadata.filename, nativeFilename: metadata.nativeFilename, expiresAt: new Date(Date.now() + 120_000).toISOString() };
   }
 
   async redeem(token: string) {
@@ -53,6 +57,7 @@ export class NativeDownloadsService {
 
 @Controller("downloads")
 export class NativeDownloadsController {
+  private readonly logger = new Logger(NativeDownloadsController.name);
   constructor(private readonly downloads: NativeDownloadsService) {}
   @Post("prepare")
   @UseGuards(SessionAuthGuard)
@@ -61,12 +66,18 @@ export class NativeDownloadsController {
 
   // Android's native downloader has no WebView session cookie. A short-lived,
   // resource-scoped capability is used instead; query strings are redacted in logs.
-  @Get("content")
+  @Get(["content", "content/:filename"])
   @Header("Cache-Control", "private, no-store")
   @Header("Referrer-Policy", "no-referrer")
-  async content(@Query("ticket") ticket: string) {
+  async content(@Query("ticket") ticket: string, @Param("filename") filename: string | undefined, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const file = await this.downloads.redeem(ticket);
-    return new StreamableFile(file.object.body, { type: file.mimeType, disposition: `attachment; filename*=UTF-8''${encodeURIComponent(file.filename)}` });
+    const metadata = downloadMetadata(file.filename, file.mimeType);
+    if (filename !== undefined && filename !== `file.${metadata.extension}`) throw unavailable();
+    const native = filename !== undefined;
+    // Never record capability tokens, file names, session IDs or file contents.
+    // This confirms HTTP delivery only, not persistence in Android Downloads.
+    res.once("finish", () => this.logger.log({ event: "download.response", mode: native ? "native" : "browser", method: req.method, statusCode: res.statusCode, sizeBytes: file.object.body.length }));
+    return new StreamableFile(file.object.body, { type: file.mimeType, length: file.object.body.length, disposition: native ? metadata.nativeDisposition : metadata.browserDisposition });
   }
 }
 

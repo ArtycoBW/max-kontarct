@@ -52,4 +52,27 @@ describe("native downloads HTTP", () => {
     service.redeem.mockRejectedValue(new NotFoundException());
     await request(app.getHttpServer()).get("/api/v1/downloads/content").expect(404);
   });
+  it.each([["application/pdf", "pdf"], ["application/zip", "zip"]])("serves %s to the native downloader with an ASCII filename and exact length", async (mimeType, extension) => {
+    service.redeem.mockResolvedValue({ object: { body: Buffer.from("test-file") }, filename: `Договор.${extension}`, mimeType });
+    const response = await request(app.getHttpServer()).get(`/api/v1/downloads/content/file.${extension}?ticket=test-grant`).expect(200)
+      .expect("Content-Type", mimeType).expect("Content-Length", "9").expect("Cache-Control", "private, no-store")
+      .expect("Content-Disposition", `attachment; filename="Dogovor.${extension}"`);
+    expect(response.headers["set-cookie"]).toBeUndefined();
+    expect(service.redeem).toHaveBeenCalledWith("test-grant");
+  });
+  it("answers HEAD probes without consuming the grant or returning a body", async () => {
+    service.redeem.mockResolvedValue({ object: { body: Buffer.from("test-file") }, filename: "Договор.pdf", mimeType: "application/pdf" });
+    const response = await request(app.getHttpServer()).head("/api/v1/downloads/content/file.pdf?ticket=test-grant").expect(200).expect("Content-Length", "9");
+    expect(response.text).toBeUndefined();
+    await request(app.getHttpServer()).get("/api/v1/downloads/content/file.pdf?ticket=test-grant").expect(200);
+  });
+  it("does not allow the native path to override the authorized file type", async () => {
+    service.redeem.mockResolvedValue({ object: { body: Buffer.from("test-file") }, filename: "Договор.pdf", mimeType: "application/pdf" });
+    await request(app.getHttpServer()).get("/api/v1/downloads/content/file.exe?ticket=test-grant").expect(404);
+  });
+  it("rejects expired native grants even on HEAD probes", async () => {
+    service.redeem.mockRejectedValue(new NotFoundException());
+    await request(app.getHttpServer()).get("/api/v1/downloads/content/file.pdf?ticket=expired").expect(404);
+    await request(app.getHttpServer()).head("/api/v1/downloads/content/file.pdf?ticket=expired").expect(404);
+  });
 });

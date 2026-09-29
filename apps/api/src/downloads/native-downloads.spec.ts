@@ -17,6 +17,9 @@ describe("native download capabilities", () => {
     const { service, prisma, redis, storage } = setup();
     const prepared = await service.prepare("user1", "session1", path);
     const token = new URL(prepared.url).searchParams.get("ticket")!;
+    expect(prepared.nativeFilename).toBe("Test.pdf");
+    expect(new URL(prepared.nativeUrl).pathname).toBe("/api/v1/downloads/content/file.pdf");
+    expect(new URL(prepared.nativeUrl).searchParams.get("ticket")).toBe(token);
     expect(token).toHaveLength(43);
     expect(redis.setWithExpiry).toHaveBeenCalledWith(expect.stringMatching(/^native-download:[a-f0-9]{64}$/), JSON.stringify({ userId: "user1", sessionId: "session1", kind: "file", id: "file1" }), 120);
     await service.redeem(token);

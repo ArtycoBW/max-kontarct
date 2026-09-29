@@ -143,7 +143,7 @@ test(`${platform} downloads use scoped links and fresh clicks; Android prefers t
   const artifact = (kind: string) => ({ id: kind, originalName: kind === "final-pdf" ? "Договор.pdf" : "Материалы.zip", mimeType: "application/pdf", sizeBytes: 1000, downloadUrl: `/api/v1/deals/review-deal/artifacts/${kind}` });
   await page.route("**/deals/review-deal/signing", route => route.fulfill({ json: { contractNumber: "Тест", currentUserSigned: true, dealId: "review-deal", documentHash: "a".repeat(64), finalPdf: artifact("final-pdf"), evidencePackage: artifact("evidence-package"), parties: [], pepAgreement: pepAgreement("v1"), requiredSignatures: 2, totalSignatures: 2, status: "COMPLETED", versionId: "version", versionNumber: 2 } }));
   const paths: string[] = [];
-  await page.route("**/downloads/prepare", route => { expect(route.request().headers()["content-type"]).toBe("application/json"); paths.push(route.request().postDataJSON().path); return route.fulfill({ json: { url: "https://example.test/api/v1/downloads/content?ticket=test-only", filename: "Договор.pdf", expiresAt: new Date(Date.now() + 120000).toISOString() } }); });
+  await page.route("**/downloads/prepare", route => { expect(route.request().headers()["content-type"]).toBe("application/json"); paths.push(route.request().postDataJSON().path); return route.fulfill({ json: { url: "https://example.test/api/v1/downloads/content?ticket=test-only", nativeUrl: "https://example.test/api/v1/downloads/content/file.pdf?ticket=test-only", nativeFilename: "Dogovor.pdf", filename: "Договор.pdf", expiresAt: new Date(Date.now() + 120000).toISOString() } }); });
   await expect(page.getByRole("heading", { name: "Подпишите и сохраните" })).toBeVisible();
   await page.getByRole("link", { name: "Скачать подписанный PDF" }).click();
   const modal = page.getByRole("dialog", { name: "Скачать файл" });
@@ -157,7 +157,7 @@ test(`${platform} downloads use scoped links and fresh clicks; Android prefers t
   await modal.getByRole("button", { name: "Скачать через MAX" }).click();
   expect(paths).toEqual(["/api/v1/deals/review-deal/artifacts/final-pdf"]);
   const received = JSON.parse((await page.locator("body").getAttribute("data-download"))!);
-  expect(received).toMatchObject({ gesture: true, filename: "Договор.pdf", url: "https://example.test/api/v1/downloads/content?ticket=test-only" });
+  expect(received).toMatchObject({ gesture: true, filename: "Dogovor.pdf", url: "https://example.test/api/v1/downloads/content/file.pdf?ticket=test-only" });
   await expect(modal.getByText("MAX сообщил о начале загрузки.", { exact: false })).toBeVisible();
   await expect(modal).not.toContainText("Файл передан в загрузки MAX");
   await expect(page.getByRole("button", { name: "Документы сделки", exact: true })).toHaveCount(0);
@@ -227,6 +227,12 @@ test("download preparation and expired-link failures never expose raw errors or 
   const modal = page.getByRole("dialog", { name: "Скачать файл" });
   await expect(modal.getByRole("alert")).toContainText("Не удалось подготовить файл");
   await expect(modal).not.toContainText(/client\.|private|INTERNAL_ERROR/);
+  for (const nativeUrl of ["http://example.test/api/v1/downloads/content/file.pdf?ticket=test-only", "https://other.test/api/v1/downloads/content/file.pdf?ticket=test-only", "https://example.test/api/v1/downloads/content/file.pdf?ticket=other", "https://example.test/unrelated?ticket=test-only"]) {
+    await page.route("**/downloads/prepare", route => route.fulfill({ json: { url: "https://example.test/api/v1/downloads/content?ticket=test-only", nativeUrl, filename: "Акт.pdf", nativeFilename: "Akt.pdf", expiresAt: new Date(Date.now() + 120000).toISOString() } }));
+    await modal.getByRole("button", { name: "Подготовить заново" }).click();
+    await expect(modal.getByRole("alert")).toContainText("Не удалось подготовить файл");
+    await expect(modal.getByRole("button", { name: "Скачать через MAX" })).toHaveCount(0);
+  }
   await page.route("**/downloads/prepare", route => route.fulfill({ json: { url: "https://example.test/api/v1/downloads/content?ticket=test-only", filename: "Акт.pdf", expiresAt: "2020-01-01T00:00:00Z" } }));
   await modal.getByRole("button", { name: "Подготовить заново" }).click();
   await modal.getByRole("button", { name: "Скачать через браузер" }).click();

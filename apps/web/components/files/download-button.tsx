@@ -7,7 +7,7 @@ import { apiRequest } from "@/lib/api/client";
 import { downloadFilename } from "@/lib/files/download-filename";
 import { nativeDownloadResult } from "@/lib/files/native-download-result";
 
-type PreparedDownload = { url: string; filename: string; expiresAt: string };
+type PreparedDownload = { url: string; nativeUrl?: string; filename: string; nativeFilename?: string; expiresAt: string };
 
 export function DownloadButton({ url, filename, children, className, iconOnly = false, variant = "outline" }: { url: string; filename: string; children?: ReactNode; className?: string; iconOnly?: boolean; variant?: "primary" | "outline" }) {
   const [open, setOpen] = useState(false);
@@ -30,6 +30,10 @@ export function DownloadButton({ url, filename, children, className, iconOnly = 
       const result = await apiRequest<PreparedDownload>("downloads/prepare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: resource.pathname }) });
       const target = new URL(result.url);
       if (target.protocol !== "https:" || target.pathname !== "/api/v1/downloads/content") throw new Error();
+      if (result.nativeUrl) {
+        const nativeTarget = new URL(result.nativeUrl);
+        if (nativeTarget.origin !== target.origin || !/^\/api\/v1\/downloads\/content\/file\.[a-z0-9]{1,10}$/.test(nativeTarget.pathname) || nativeTarget.search !== target.search) throw new Error();
+      }
       if (attempt.current === current) setReady(result);
     } catch {
       if (attempt.current === current) setError("Не удалось подготовить файл. Проверьте подключение к интернету и попробуйте ещё раз.");
@@ -49,7 +53,7 @@ export function DownloadButton({ url, filename, children, className, iconOnly = 
         if (attempt.current === current) setNotice("Ссылка передана браузеру. Сохраните файл в открывшемся окне.");
       } else {
         if (!window.WebApp?.downloadFile) throw new Error();
-        const result = await window.WebApp.downloadFile(ready.url, downloadFilename(ready.filename));
+        const result = await window.WebApp.downloadFile(ready.nativeUrl ?? ready.url, downloadFilename(ready.nativeFilename ?? ready.filename));
         const status = nativeDownloadResult(result);
         if (attempt.current === current) {
           if (status === "downloading") setNotice("MAX сообщил о начале загрузки. Если файл не появился, нажмите «Скачать через браузер».");
