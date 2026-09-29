@@ -89,7 +89,7 @@ test("Android hung sharing has an independent fresh-click fallback and ignores s
   await page.getByRole("button", { name: "Отправить в MAX", exact: true }).click();
   await expect(page.getByRole("button", { name: "Ожидаем ответ MAX…" })).toBeDisabled();
   expect(sent).toBe(0);
-  expect(JSON.parse((await page.locator("body").getAttribute("data-system-share"))!)).toEqual({ gesture: true, params: { text: "Создание презентации за 10000 рублей\nhttps://example.test/invite/1#secret" } });
+  expect(JSON.parse((await page.locator("body").getAttribute("data-system-share"))!)).toEqual({ gesture: true, params: { text: "Создание презентации за 10000 рублей", link: "https://example.test/invite/1#secret" } });
   await page.getByRole("button", { name: "Другой способ отправки" }).click();
   expect(await page.locator("body").getAttribute("data-alternate-gesture")).toBe("true");
   await expect.poll(() => sent).toBe(1);
@@ -100,6 +100,37 @@ test("Android hung sharing has an independent fresh-click fallback and ignores s
   await page.getByRole("button", { name: "Показать ссылку" }).click();
   await expect(page.getByRole("textbox", { name: "Ссылка-приглашение" })).toHaveValue("https://example.test/invite/1#secret");
   await page.screenshot({ path: "test-results/android-sharing-recovery.png" });
+});
+
+test("Android long invitation is compact and too_large_text retries only a link on a fresh click", async ({ page }) => {
+  const workspace = { ...workspaceFixture("DRAFT", true), currentUserRole: "INITIATOR", counterparty: null };
+  await openMockDeal(page, workspace as unknown as ReturnType<typeof workspaceFixture>);
+  await page.evaluate(() => {
+    let calls = 0;
+    Object.assign(window.WebApp!, { platform: "android", version: "26.31.0", shareContent: (params: { text?: string; link: string }) => {
+      document.body.dataset.sharePayload = JSON.stringify(params);
+      document.body.dataset.shareGesture = String(navigator.userActivation.isActive);
+      if (++calls === 1) return Promise.reject({ error: { code: "client.web_app_share.too_large_text" } });
+      return Promise.resolve({ status: "shared" });
+    } });
+  });
+  const link = "https://example.test/invite/abcdefghijkl#0123456789abcdefghijklmnopqrstuv";
+  await page.route("**/deals/review-deal/invitations", route => route.fulfill({ json: { id: "invite", state: "ACTIVE", shareText: `Артур приглашает вас в сделку «Макс-Контракт».\n\nПредмет: ${"Презентация на 10 слайдов ".repeat(50)}\n\nСтоимость: 10000 ₽\n\nНе пересылайте посторонним.`, shareUrl: link, expiresAt: "2099-01-01T00:00:00Z" } }));
+  let sent = 0;
+  await page.route("**/deals/review-deal/invitations/invite/sent", route => { sent++; return route.fulfill({ json: { sentAt: new Date().toISOString() } }); });
+  await page.getByRole("button", { name: "Создать приглашение", exact: true }).click();
+  await page.getByRole("button", { name: "Отправить в MAX", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Отправить только ссылку" })).toBeEnabled();
+  const payload = JSON.parse((await page.locator("body").getAttribute("data-share-payload"))!);
+  expect(payload.link).toBe(link);
+  expect(Buffer.byteLength(`${payload.text}\n${payload.link}`, "utf8")).toBeLessThanOrEqual(240);
+  expect(payload.text).toContain("10000 ₽");
+  expect(sent).toBe(0);
+  await page.getByRole("button", { name: "Отправить только ссылку" }).click();
+  await expect.poll(() => sent).toBe(1);
+  expect(JSON.parse((await page.locator("body").getAttribute("data-share-payload"))!)).toEqual({ link });
+  expect(await page.locator("body").getAttribute("data-share-gesture")).toBe("true");
+  await expect(page.getByText("Приглашение отправлено.", { exact: true })).toBeVisible();
 });
 
 test("Android downloads use a scoped prepared link and a fresh native click", async ({ page }) => {

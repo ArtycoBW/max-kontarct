@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { invitationShareDiagnostic, shareInMax } from "@/lib/max/bridge";
+import { invitationShareDiagnostic, isInvitationTextTooLarge, shareInMax } from "@/lib/max/bridge";
 
 export function InvitationShareActions({ text, link, onConfirmed }: {
   text: string;
@@ -15,6 +15,7 @@ export function InvitationShareActions({ text, link, onConfirmed }: {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [manual, setManual] = useState(false);
+  const [linkOnly, setLinkOnly] = useState(false);
   const attempt = useRef(0);
   const saving = useRef(false);
   useEffect(() => () => { attempt.current++; }, []);
@@ -33,7 +34,7 @@ export function InvitationShareActions({ text, link, onConfirmed }: {
         await navigator.clipboard.writeText(link);
         result = "copied";
       } else {
-        result = await shareInMax(text, link, mode === "alternate");
+        result = await shareInMax(linkOnly ? "" : text, link, mode === "alternate");
       }
     } catch (failure) {
       if (attempt.current !== current) return;
@@ -43,6 +44,11 @@ export function InvitationShareActions({ text, link, onConfirmed }: {
         return;
       }
       setManual(true);
+      if (isInvitationTextTooLarge(failure)) {
+        setLinkOnly(true);
+        setError("MAX отклонил длину сообщения. Нажмите «Отправить только ссылку» — описание сделки будет доступно получателю по ней.");
+        return;
+      }
       setError(mode === "copy"
         ? "Буфер обмена недоступен. Выделите ссылку ниже и скопируйте её через меню телефона."
         : `Не удалось открыть отправку. Нажмите «Другой способ отправки» или скопируйте ссылку. ${invitationShareDiagnostic(failure)}`);
@@ -68,7 +74,7 @@ export function InvitationShareActions({ text, link, onConfirmed }: {
   };
 
   return <div className="invitation-share-actions">
-    <Button type="button" className="full-width" disabled={pending} onClick={() => void send("primary")}>{pending ? "Ожидаем ответ MAX…" : "Отправить в MAX"}</Button>
+    <Button type="button" className="full-width" disabled={pending} onClick={() => void send("primary")}>{pending ? "Ожидаем ответ MAX…" : linkOnly ? "Отправить только ссылку" : "Отправить в MAX"}</Button>
     <Button type="button" className="full-width" variant="secondary" onClick={() => void send("copy")}>Скопировать ссылку</Button>
     {attempted ? <div className="invitation-share-recovery">
       <p>Если окно не появилось, попробуйте другой способ. В системном меню «Поделиться» выберите MAX.</p>

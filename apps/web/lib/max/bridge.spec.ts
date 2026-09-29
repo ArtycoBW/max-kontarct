@@ -12,12 +12,28 @@ function setWindow(value: Partial<Window>): void {
 }
 
 describe("MAX Bridge startup", () => {
+  it.each([false, true])("bounds long native messages, preserving the entire link (alternate=%s)", async alternate => {
+    const native = jest.fn().mockResolvedValue({ status: "shared" });
+    const link = "https://example.test/invite/abcdefghijkl#0123456789abcdefghijklmnopqrstuv";
+    setWindow({ WebApp: { initData: "test", platform: "android", shareContent: native, shareMaxContent: native } });
+    await expect(shareInMax(`Предмет: ${"Презентация 📊 ".repeat(200)}\nСтоимость: 10000 ₽`, link, alternate)).resolves.toBe("shared");
+    const payload = native.mock.calls[0]![0] as { text: string; link: string };
+    expect(payload.link).toBe(link);
+    expect(new TextEncoder().encode(`${payload.text}\n${payload.link}`).length).toBeLessThanOrEqual(240);
+    expect(payload.text).toContain("10000 ₽");
+  });
+  it.each([false, true])("sends only the intact link for a minimal retry (alternate=%s)", async alternate => {
+    const native = jest.fn().mockResolvedValue({ status: "shared" });
+    setWindow({ WebApp: { initData: "test", platform: "android", shareContent: native, shareMaxContent: native } });
+    await shareInMax("", "https://example.test/#secret", alternate);
+    expect(native).toHaveBeenCalledWith({ link: "https://example.test/#secret" });
+  });
   it("uses Android system sharing even when the unresponsive MAX picker method exists", async () => {
     const shareMaxContent = jest.fn(() => new Promise(() => undefined));
     const shareContent = jest.fn().mockResolvedValue({ status: "shared" });
     setWindow({ WebApp: { initData: "test", platform: "android", shareMaxContent, shareContent } });
     const result = shareInMax("text", "https://example.test/#secret");
-    expect(shareContent).toHaveBeenCalledWith({ text: "text\nhttps://example.test/#secret" });
+    expect(shareContent).toHaveBeenCalledWith({ text: "text", link: "https://example.test/#secret" });
     expect(shareMaxContent).not.toHaveBeenCalled();
     await expect(result).resolves.toBe("shared");
   });

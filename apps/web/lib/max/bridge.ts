@@ -2,6 +2,7 @@
 
 import type { MaxContactRequest } from "@max-contract/contracts";
 import { reportBootStage } from "../diagnostics/boot-client";
+import { invitationShareText } from "./invitation-share-text";
 
 export type MaxContactBridgeResult =
   | { kind: "development" }
@@ -126,6 +127,11 @@ export class InvitationShareError extends Error {
   constructor(readonly code: string) { super("MAX не смог открыть отправку"); }
 }
 
+export function isInvitationTextTooLarge(error: unknown): boolean {
+  const code = error instanceof InvitationShareError ? error.code : readBridgeErrorCode(error);
+  return code.endsWith(".too_large_text");
+}
+
 export function invitationShareDiagnostic(error: unknown): string {
   const code = error instanceof InvitationShareError ? error.code : readBridgeErrorCode(error);
   // Never display arbitrary native messages, invitation URLs or initData.
@@ -136,6 +142,7 @@ export function invitationShareDiagnostic(error: unknown): string {
 }
 
 export async function shareInMax(text: string, link: string, alternate = false): Promise<InvitationShareResult> {
+  text = invitationShareText(text, link);
   const webApp = typeof window === "undefined" ? undefined : window.WebApp;
   // Some Android hosts expose shareMaxContent but never open its picker.
   // Use the independent native system sheet there; alternate is a fresh click,
@@ -146,7 +153,7 @@ export async function shareInMax(text: string, link: string, alternate = false):
   // Only its documented `shared` status confirms actual sending; opening a
   // deeplink or resolving an OS share sheet is not a delivery confirmation.
   if (webApp?.shareMaxContent) {
-    return confirmedShareResult(await webApp.shareMaxContent({ link, text }));
+    return confirmedShareResult(await webApp.shareMaxContent({ link, ...(text ? { text } : {}) }));
   }
   return shareThroughSystem(text, link);
 }
@@ -154,7 +161,7 @@ export async function shareInMax(text: string, link: string, alternate = false):
 async function shareThroughSystem(text: string, link: string): Promise<InvitationShareResult> {
   const webApp = typeof window === "undefined" ? undefined : window.WebApp;
   if (webApp?.shareContent && webApp.platform !== "web" && webApp.platform !== "desktop") {
-    return confirmedShareResult(await webApp.shareContent({ text: `${text}\n${link}` }));
+    return confirmedShareResult(await webApp.shareContent({ link, ...(text ? { text } : {}) }));
   }
   if (typeof navigator !== "undefined" && navigator.share) {
     await navigator.share({ text, title: "Приглашение в Макс-Контракт", url: link });
