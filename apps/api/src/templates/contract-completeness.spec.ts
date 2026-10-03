@@ -5,6 +5,11 @@ import { invalidRequiredTermAnswers, knownContractTerms, missingContractTerms } 
 type Case = { slug: string; input: Record<string, unknown>; answers: Record<string, string>; completeField: string };
 const cases = JSON.parse(readFileSync(resolve(__dirname, "../../../../tests/fixtures/contract-cases.json"), "utf8")) as Case[];
 describe("Contract completeness: all five templates", () => {
+  it.each(["100% предоплата", "100% ПРЕДОПЛАТА", "Полная предоплата", "Предоплата 100 %"])("keeps an explicit full advance without inventing an acceptance deadline: %s", termsPayment => {
+    expect(invalidRequiredTermAnswers("movable-property-sale", {}, { termsPayment })).toEqual([]);
+    expect(missingContractTerms("movable-property-sale", {}, { termsPayment }).map(q => q.id)).not.toContain("termsPayment");
+    expect(missingContractTerms("paid-services", {}, { termsPayment }).map(q => q.id)).not.toContain("termsPayment");
+  });
   it.each([
     "Заказчик проверяет PDF и подтверждает приёмку ответом в чате в течение трёх дней",
     "Письменное подтверждение результата",

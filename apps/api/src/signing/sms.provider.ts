@@ -6,6 +6,7 @@ export interface SendOtpInput {
   code: string;
   maxUserId: string | null;
   phone: string;
+  startPayload?: string;
 }
 
 export interface SendOtpResult {

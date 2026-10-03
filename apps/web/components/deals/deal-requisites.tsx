@@ -28,7 +28,7 @@ export function DealRequisites({ onSaved, onReadyChange }: { onSaved: () => void
       <Button type="button" variant="outline" className="full-width" onClick={() => open({})}>
         <PenLine size={18} /> Заполнить реквизиты вручную
       </Button>
-      {hasSavedDetails ? <Button type="button" variant="outline" className="full-width" onClick={() => open({})}>Выбрать реквизиты из профиля</Button> : null}
+      {hasSavedDetails ? <><p className="validation-success" role="status">Реквизиты заполнены и автоматически используются в договоре.</p><Button type="button" variant="outline" className="full-width" onClick={() => open({})}>Проверить или изменить реквизиты</Button></> : null}
       <p>Каждый участник указывает свои реквизиты. Фото паспорта загружать не обязательно.</p>
       {saved ? <p className="validation-success" role="status">Реквизиты сохранены</p> : null}
     </Card>

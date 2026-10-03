@@ -5,12 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 /** One scroll surface for reading, with actions kept outside the document text. */
-export function DealPanel({ title, description, icon, children, footer, className = "" }: {
-  title: string; description: string; icon: ReactNode; children: ReactNode; footer?: ReactNode; className?: string;
+export function DealPanel({ title, description, icon, children, footer, className = "", highlighted = false }: {
+  title: string; description: string; icon: ReactNode; children: ReactNode; footer?: ReactNode; className?: string; highlighted?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return <Dialog open={open} onOpenChange={setOpen}>
-    <DialogTrigger asChild><Button variant="outline" className="deal-panel-trigger">
+    <DialogTrigger asChild><Button variant="outline" className={`deal-panel-trigger${highlighted ? " is-ready" : ""}`}>
       <span className="deal-panel-icon" aria-hidden="true">{icon}</span>
       <span><strong>{title}</strong><small>{description}</small></span>
       <span className="deal-panel-open">Открыть</span>

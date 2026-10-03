@@ -58,6 +58,25 @@ describe("OtpService", () => {
     });
   });
 
+  it("restores delivery metadata for the exact participant, version and phone without returning or consuming a code", async () => {
+    expect(await service.pending(input)).toBeNull();
+    const issued = await service.issue(input);
+    expect(provider.last?.startPayload).toBe(`deal_${input.dealId.replaceAll("-", "")}`);
+    expect(await service.pending(input)).toEqual(issued);
+    expect(await service.pending({ ...input, userId: "other-user" })).toBeNull();
+    expect(await service.pending({ ...input, dealId: "other-deal" })).toBeNull();
+    expect(await service.pending({ ...input, versionId: "other-version" })).toBeNull();
+    expect(await service.pending({ ...input, phoneId: "other-phone" })).toBeNull();
+    await service.verify({ ...input, code: provider.last!.code });
+    expect(await service.pending(input)).toBeNull();
+  });
+
+  it("does not restore expired delivery metadata", async () => {
+    await service.issue(input);
+    const clock = jest.spyOn(Date, "now").mockReturnValue(Date.now() + 301_000);
+    try { expect(await service.pending(input)).toBeNull(); } finally { clock.mockRestore(); }
+  });
+
   it("invalidates a challenge after the maximum number of wrong attempts", async () => {
     await service.issue(input);
     const wrongCode = provider.last?.code === "9999" ? "8888" : "9999";

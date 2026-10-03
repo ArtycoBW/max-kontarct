@@ -2,6 +2,12 @@ import { contractLocationIssue } from "./contract-location";
 import { missingContractTerms, invalidRequiredTermAnswers } from "./contract-completeness";
 
 describe("contract location syntax", () => {
+  it.each(["Иркутск", "г. Иркутск", "Ростов-на-Дону", "Нижний Новгород", "Самовывоз из г. Тюмень"])("allows a locality for transfer, not for identifying rented real estate: %s", termsLocation => {
+    expect(invalidRequiredTermAnswers("movable-property-sale", {}, { termsLocation })).toEqual([]);
+    expect(missingContractTerms("movable-property-sale", {}, { termsLocation }).map(q => q.id)).not.toContain("termsLocation");
+    expect(missingContractTerms("paid-services", { serviceLocation: termsLocation }).map(q => q.id)).not.toContain("termsLocation");
+    expect(invalidRequiredTermAnswers("property-rental", {}, { termsProperty: termsLocation })).toHaveLength(1);
+  });
   it.each([
     "Казань Примерная 10", "Тверь, Примерная, 10", "Дербент Буйнакского 68",
     "г. Омск, ул. Примерная, д. 8А, корп. 2", "п. Берёзовый, дом 3",

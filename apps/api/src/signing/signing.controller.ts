@@ -43,6 +43,12 @@ export class SigningController {
     );
   }
 
+  @Get(":dealId/signing/otp")
+  @ApiOperation({ summary: "Восстановить экран действующего кода без повторной отправки" })
+  pendingOtp(@Param() params: SigningDealParamsDto, @Req() request: AuthenticatedRequest): Promise<IssueSigningOtpResponse | null> {
+    return this.signing.pendingOtp(request.auth.user.id, params.dealId);
+  }
+
   @Post(":dealId/signing/confirm")
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })

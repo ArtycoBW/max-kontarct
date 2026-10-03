@@ -13,7 +13,6 @@ import type {
   DealDraftStep,
   OnboardingStateResponse,
   TemplateAnswerValidationError,
-  TemplateDocumentRequirementResponse,
   VerifiedPhone,
 } from "@max-contract/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -1466,12 +1465,7 @@ function CreateDealScreen({
               errors={fieldErrors}
               onChange={changeAnswer}
             />
-            <TemplateDocuments
-              requirements={
-                template.data.currentVersion.documentRequirements
-              }
-            />
-            {activeDraftId && subjectDocumentsParty === "INITIATOR" ? <DocumentsScreen materialsOnly beforeUpload={() => enqueueDraftSave()} dealId={activeDraftId} onBack={() => undefined} onSelectDeal={() => undefined} /> : null}
+            {activeDraftId && subjectDocumentsParty === "INITIATOR" ? <section className="questionnaire-materials" aria-label="Фото предмета сделки и сопроводительные документы"><DocumentsScreen materialsOnly beforeUpload={() => enqueueDraftSave()} dealId={activeDraftId} onBack={() => undefined} onSelectDeal={() => undefined} /></section> : null}
           </>
         ) : null}
 
@@ -1934,64 +1928,6 @@ function SelectedTemplateSummary({
       </span>
     </Card>
   );
-}
-
-function TemplateDocuments({
-  requirements,
-}: {
-  requirements: TemplateDocumentRequirementResponse[];
-}) {
-  requirements = requirements.filter(requirement => !/identity|passport/i.test(requirement.key) && !/удостоверяющ|паспорт/i.test(requirement.title));
-  if (!requirements.length) return null;
-  return (
-    <Card className="template-documents">
-      <div className="template-documents-heading">
-        <FileCheck2 size={18} />
-        <span>
-          <strong>Документы по шаблону</strong>
-          <small>Состав определён выбранной версией</small>
-        </span>
-      </div>
-      {requirements.length > 0 ? (
-        <ul>
-          {requirements.map((requirement) => (
-            <li key={requirement.id}>
-              <span>
-                <strong>{getDocumentDisplayTitle(requirement)}</strong>
-                {requirement.description ? (
-                  <small>{getDocumentDisplayDescription(requirement)}</small>
-                ) : null}
-              </span>
-              <em>Дополнительный</em>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p>Дополнительные документы не требуются.</p>
-      )}
-    </Card>
-  );
-}
-
-function getDocumentDisplayTitle(
-  requirement: TemplateDocumentRequirementResponse,
-): string {
-  return getTemplateDisplayTitle(requirement.title);
-}
-
-function getDocumentDisplayDescription(
-  requirement: TemplateDocumentRequirementResponse,
-): string {
-  if (!/^Демонстрационное(?:\s|$)/i.test(requirement.description ?? "")) {
-    return requirement.description ?? "";
-  }
-  if (/identity|passport/i.test(requirement.key)) {
-    return "Паспорт или иной документ, удостоверяющий личность.";
-  }
-  if (/property|ownership/i.test(requirement.key)) {
-    return "Документ, подтверждающий право на имущество.";
-  }
-  return "Документ, подтверждающий сведения по договору.";
 }
 
 function RequestErrorCard({

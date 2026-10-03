@@ -7,9 +7,10 @@ const VAGUE = /^(не знаю|потом|позже|нет|да|неважно|
 const NOT_ADDRESS = /(рубл|стоимост|оплат|ремонт|подготов|предоплат|паспорт|регистраци|проживани|комнат|мебел|ноутбук|модель)/u;
 
 export const LOCATION_EXAMPLE = "Например: «г. Казань, ул. Примерная, д. 10, кв. 2». Если помещения нет, квартиру или офис указывать не нужно.";
+export const TRANSFER_LOCATION_EXAMPLE = "Например: «Иркутск» или «Самовывоз из г. Тюмень». Улицу и дом добавьте, если договорились о конкретном адресе. Для удалённого исполнения: «Онлайн, результат по электронной почте».";
 
 /** Syntax/completeness only: this is not a registry check or proof that an address exists. */
-export function contractLocationIssue(value: string, allowRemote = true, allowShorthand = true): string | null {
+export function contractLocationIssue(value: string, allowRemote = true, allowShorthand = true, allowLocality = false): string | null {
   const text = value.toLocaleLowerCase("ru-RU").replaceAll("ё", "е").replace(/\s+/g, " ").trim();
   if (!text || VAGUE.test(text)) return "Пока нет конкретного места исполнения. Напишите адрес или способ удалённой работы.";
   const remoteText = text.replace(/не\s+(?:онлайн|дистанционно|удаленно|по видеосвязи)/gu, " ");
@@ -17,6 +18,12 @@ export function contractLocationIssue(value: string, allowRemote = true, allowSh
   const street = [...text.matchAll(new RegExp(STREET, "gu"))].find(match =>
     !/^\d+\s*(?:кв\.|м(?:етр)?(?:\s|$))/u.test(text.slice(match.index + match[0].length)));
   const hasHouse = HOUSE.test(text);
+  // A transfer/service location is not the address identifying rented real estate.
+  // Keep the user's chosen level of detail; do not invent a street or house.
+  const locality = text.replace(/^(?:самовывоз\s+(?:из\s+)?|встреча\s+в\s+|в\s+)?(?:г\.\s*|город\s+)?/u, "");
+  if (allowLocality && !street && !hasHouse && !NOT_ADDRESS.test(text)
+    && !/^(?:у|на|по|место|квартира|офис|работы|договор|не)(?:\s|$)/u.test(locality)
+    && /^[а-яa-z][а-яa-z-]{2,}(?:[ -][а-яa-z][а-яa-z-]*){0,3}$/u.test(locality)) return null;
   if (street) {
     const prefix = text.slice(0, street.index).split(/(?:\.\s+|;\s*)/u).at(-1)!.replace(/[\s,;]+$/u, "").split(",").at(-1)!.trim();
     const hasCity = SETTLEMENT.test(text) || (/[а-яa-z]{2,}/u.test(prefix) && !NOT_ADDRESS.test(prefix) && !/^(на|по адресу|адрес|работы)$/u.test(prefix));

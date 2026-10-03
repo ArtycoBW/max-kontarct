@@ -39,10 +39,11 @@ export async function noOverflow(page: Page) {
 }
 
 export async function openDealPanel(page: Page, title: "Договор" | "Приложения к договору" | "Чат сделки") {
-  const dialog = page.getByRole("dialog", { name: title, exact: true });
+  const panelTitle = title === "Договор" ? /^Договор(?: готов — ознакомьтесь)?$/ : new RegExp(`^${title}$`);
+  const dialog = page.getByRole("dialog", { name: panelTitle });
   if (await dialog.isVisible()) return;
   if (await page.locator(".deal-panel-dialog").isVisible()) await page.keyboard.press("Escape");
-  await page.locator(".deal-panel-trigger").filter({ has: page.locator("strong", { hasText: new RegExp(`^${title}$`) }) }).click();
+  await page.locator(".deal-panel-trigger").filter({ has: page.locator("strong", { hasText: panelTitle }) }).click();
   await expect(dialog).toBeVisible();
 }
 

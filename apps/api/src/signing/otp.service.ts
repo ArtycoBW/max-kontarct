@@ -24,6 +24,7 @@ interface OtpChallenge {
   messageId: string | null;
   phoneId: string;
   versionId: string;
+  resendAvailableAt?: string;
 }
 
 export interface IssueOtpInput {
@@ -94,6 +95,7 @@ export class OtpService {
       messageId: null,
       phoneId: input.phoneId,
       versionId: input.versionId,
+      resendAvailableAt: new Date(Date.now() + this.resendSeconds * 1_000).toISOString(),
     };
     const challengeKey = this.challengeKey(input.dealId, input.userId);
     const attemptsKey = this.attemptsKey(input.dealId, input.userId);
@@ -105,6 +107,7 @@ export class OtpService {
         code,
         maxUserId: input.maxUserId,
         phone: input.phone,
+        startPayload: `deal_${input.dealId.replaceAll("-", "")}`,
       });
       challenge.channel = delivery.channel;
       challenge.messageId = delivery.messageId;
@@ -113,7 +116,7 @@ export class OtpService {
         channel: delivery.channel,
         expiresAt: challenge.expiresAt,
         maskedPhone: maskPhone(input.phone),
-        resendAvailableAt: new Date(Date.now() + this.resendSeconds * 1_000).toISOString(),
+        resendAvailableAt: challenge.resendAvailableAt!,
       };
     } catch (error) {
       await Promise.all([
@@ -122,6 +125,19 @@ export class OtpService {
       ]);
       throw error;
     }
+  }
+
+  /** Restore delivery metadata only. The code stays hashed and is never returned. */
+  async pending(input: Pick<IssueOtpInput, "dealId" | "userId" | "versionId" | "phoneId" | "phone">): Promise<IssueOtpResult | null> {
+    const challenge = parseChallenge(await this.redis.get(this.challengeKey(input.dealId, input.userId)));
+    if (!challenge?.channel || challenge.versionId !== input.versionId || challenge.phoneId !== input.phoneId
+      || new Date(challenge.expiresAt).getTime() <= Date.now()) return null;
+    return {
+      channel: challenge.channel,
+      expiresAt: challenge.expiresAt,
+      maskedPhone: maskPhone(input.phone),
+      resendAvailableAt: challenge.resendAvailableAt ?? new Date(new Date(challenge.expiresAt).getTime() - (this.ttlSeconds - this.resendSeconds) * 1_000).toISOString(),
+    };
   }
 
   async verify(input: VerifyOtpInput): Promise<VerifiedOtp> {

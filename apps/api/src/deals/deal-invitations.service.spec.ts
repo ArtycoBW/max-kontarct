@@ -255,6 +255,19 @@ describe("DealInvitationsService", () => {
     );
   });
 
+  it("reopens an accepted invitation only for its original participant, including after expiry", async () => {
+    const token = "correct-token-value-1234567890ab";
+    invitationFindUnique.mockResolvedValue({ ...joinInvitation(token), acceptedAt: new Date(), acceptedByUserId: counterpartyId, expiresAt: new Date(0) });
+    const workspace = jest.spyOn(service, "workspace").mockResolvedValue({ id: dealId } as never);
+    try {
+      await expect(service.join(counterpartyId, { publicCode: "AbCdEfGhIjKl", token })).resolves.toMatchObject({ id: dealId });
+      expect(workspace).toHaveBeenCalledWith(counterpartyId, dealId);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      await expect(service.join("another-user", { publicCode: "AbCdEfGhIjKl", token })).rejects.toMatchObject({ status: 409 });
+      expect(workspace).toHaveBeenCalledTimes(1);
+    } finally { workspace.mockRestore(); }
+  });
+
   it("moves an existing deal to terms review when both profiles already contain passport data", async () => {
     const updatedAt = new Date("2026-08-31T12:00:00.000Z");
     const profile = {

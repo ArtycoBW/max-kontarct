@@ -11,7 +11,7 @@ export class MaxTestSmsProvider implements SmsProvider {
     const delivered = await this.maxBot.sendUserNotification(
       input.maxUserId,
       `Тестовый код подписания Макс-Контракт: ${input.code}. Никому не сообщайте его.`,
-      undefined,
+      input.startPayload,
       "signing",
     );
     if (!delivered) throw deliveryUnavailable();

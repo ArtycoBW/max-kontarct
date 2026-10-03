@@ -17,6 +17,33 @@ const partyId = "40000000-0000-4000-8000-000000000001";
 const documentHash = "a".repeat(64);
 
 describe("SigningService", () => {
+  it("restores pending OTP metadata without issuing a code or creating a signature", async () => {
+    const context = signingContext();
+    const pending = { channel: "MAX_TEST", expiresAt: new Date().toISOString(), resendAvailableAt: new Date().toISOString(), maskedPhone: "***0001" };
+    const otp = { pending: jest.fn(async () => pending), issue: jest.fn(), verify: jest.fn() };
+    const prisma = prismaMock(context);
+    await expect(createService(prisma, otp).pendingOtp(userId, dealId)).resolves.toEqual(pending);
+    expect(otp.pending).toHaveBeenCalledWith(expect.objectContaining({ userId, dealId, versionId, phoneId: "phone-1" }));
+    expect(otp.issue).not.toHaveBeenCalled();
+    expect(otp.verify).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("does not restore a pending code once the current participant has signed", async () => {
+    const context = signingContext();
+    context.versions[0]!.signatures.push({ partyId, userId, signedAt: new Date() });
+    const otp = { pending: jest.fn() };
+    expect(await createService(prismaMock(context), otp).pendingOtp(userId, dealId)).toBeNull();
+    expect(otp.pending).not.toHaveBeenCalled();
+  });
+
+  it("does not disclose pending OTP metadata to a non-participant", async () => {
+    const prisma = prismaMock(signingContext());
+    (prisma.deal as { findFirst: jest.Mock }).findFirst.mockResolvedValue(null);
+    const otp = { pending: jest.fn() };
+    await expect(createService(prisma, otp).pendingOtp("stranger", dealId)).rejects.toMatchObject({ status: 404 });
+    expect(otp.pending).not.toHaveBeenCalled();
+  });
   it("rejects a phone different from the v2 frozen requisites", async () => {
     const base = signingContext();
     const context = { ...base, versions: base.versions.map(version => ({ ...version, frozenSnapshot: { schemaVersion: "deal-signature-v2", parties: [{ userId, verifiedPhoneRef: "old-phone" }] } })) };

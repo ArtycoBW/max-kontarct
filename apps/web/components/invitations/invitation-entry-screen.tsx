@@ -6,7 +6,7 @@ import { ArrowRight, Check, FileCheck2, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { getProtectedInvitation } from "@/lib/api/invitations";
+import { getProtectedInvitation, getPublicInvitation } from "@/lib/api/invitations";
 
 export function InvitationEntryScreen({
   onContinue,
@@ -15,16 +15,26 @@ export function InvitationEntryScreen({
   onContinue: () => void;
   payload: Extract<MaxStartPayload, { kind: "invitation" }>;
 }) {
+  const state = useQuery({
+    queryFn: () => getPublicInvitation(payload.publicCode),
+    queryKey: ["public-invitation", payload.publicCode],
+    retry: false,
+    staleTime: 0,
+  });
   const invitation = useQuery({
+    enabled: state.data?.state === "ACTIVE",
     queryFn: () => getProtectedInvitation({ publicCode: payload.publicCode, token: payload.token }),
     queryKey: ["protected-invitation", payload.publicCode],
     gcTime: 0,
     retry: false,
   });
 
-  if (invitation.isPending) {
+  if (state.isPending) {
     return <EntryState title="Проверяем приглашение" copy="Загружаем безопасный предпросмотр условий." />;
   }
+  if (state.data?.state === "ACCEPTED") return <EntryState title="Вернуться к сделке" copy="Откройте сделку под тем же аккаунтом MAX, с которого вы приняли приглашение." action={<Button className="full-width" onClick={onContinue}>Открыть мою сделку</Button>} />;
+  if (state.isError || state.data?.state !== "ACTIVE") return <EntryState title="Приглашение недоступно" copy="Ссылка отозвана или истекла. Попросите инициатора прислать новую." />;
+  if (invitation.isPending) return <EntryState title="Проверяем приглашение" copy="Загружаем безопасный предпросмотр условий." />;
   if (invitation.isError || !invitation.data) {
     return <EntryState title="Приглашение недоступно" copy={invitation.error?.message ?? "Попросите инициатора прислать новую ссылку."} />;
   }
@@ -73,10 +83,10 @@ export function InvitationEntryScreen({
   );
 }
 
-function EntryState({ copy, title }: { copy: string; title: string }) {
+function EntryState({ copy, title, action }: { copy: string; title: string; action?: React.ReactNode }) {
   return (
     <main className="app-viewport"><section className="mini-app"><div className="center-state auth-error">
-      <span className="state-icon"><ShieldCheck size={30} /></span><h1>{title}</h1><p>{copy}</p>
+      <span className="state-icon"><ShieldCheck size={30} /></span><h1>{title}</h1><p>{copy}</p>{action}
     </div></section></main>
   );
 }

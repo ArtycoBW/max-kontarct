@@ -31,6 +31,7 @@ import {
   revokeDealInvitation,
 } from "@/lib/api/invitations";
 import { queryKeys } from "@/lib/api/query-keys";
+import { getDealDocuments } from "@/lib/api/files";
 import { InvitationShareActions } from "@/components/invitations/invitation-share-actions";
 import { materialsUploaderLabel, participantRoleLabel } from "@/lib/deals/party-responsibility";
 import { DealChat } from "./deal-chat";
@@ -68,6 +69,15 @@ export function DealWorkspaceScreen({
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     staleTime: 0,
+  });
+  // Fetch shared-file availability before opening the panel, and keep it current
+  // when the other participant uploads. Never count private identity documents.
+  const documents = useQuery({
+    queryKey: queryKeys.files.workspace(dealId),
+    queryFn: () => getDealDocuments(dealId),
+    enabled: Boolean(workspace.data),
+    refetchInterval: (query) => dealRefreshInterval(workspace.data?.status) || (query.state.data ? 30_000 : false),
+    refetchOnWindowFocus: true,
   });
   const issueInvitation = useMutation({
     mutationFn: async (replaceActive: boolean) => {
@@ -154,6 +164,11 @@ export function DealWorkspaceScreen({
   const profilesReady = deal.initiator.profileCompleted && deal.counterparty?.profileCompleted;
   const materialsAvailable = deal.status !== "DRAFT" || !["DESCRIPTION", "REQUISITES", "INVITATION"].includes(deal.draft.currentStep);
   const contractAvailable = Boolean(deal.contractDraft) && (signingVisible || Boolean(profilesReady)) && (deal.status !== "DRAFT" || deal.draft.currentStep === "INITIATOR");
+  const recipientIntroduction = deal.currentUserRole === "COUNTERPARTY" && !contractAvailable && !signingVisible && deal.status !== "CANCELED";
+  const sharedFiles = documents.data ? [...documents.data.evidenceFiles, ...documents.data.requirements.flatMap(item => item.uploads)].filter(file => file.visibility === "DEAL_PARTICIPANTS") : [];
+  const reviewMaterials = sharedFiles.length > 0 && deal.currentUserRole !== deal.draft.subjectDocumentsParty && !signingVisible && deal.status !== "CANCELED";
+  const reviewContract = deal.currentUserRole === "COUNTERPARTY" && !versionApproved && !signingVisible && deal.status !== "CANCELED";
+  const uploaderLabel = materialsUploaderLabel(deal.template.slug, deal.draft.subjectDocumentsParty);
   const waitingFor = !deal.counterparty ? "Пригласите вторую сторону в сделку."
     : !deal.initiator.profileCompleted && !deal.counterparty.profileCompleted ? "Обеим сторонам нужно заполнить реквизиты."
     : !profilesReady ? `${!deal.initiator.profileCompleted ? deal.initiator.displayName : deal.counterparty.displayName} ещё заполняет реквизиты.`
@@ -174,17 +189,21 @@ export function DealWorkspaceScreen({
         </div>
       </header>
 
-      <Card className="deal-workspace-summary">
+      {!recipientIntroduction ? <Card className="deal-workspace-summary">
         <span className="state-icon"><FileCheck2 size={24} /></span>
         <div><small>Тип сделки</small><strong>{deal.template.title}</strong><span>Редакция условий № {deal.versionNumber}</span></div>
         <ShieldCheck size={19} />
-      </Card>
+      </Card> : null}
 
       {notice ? <p className="deal-workspace-notice" role="status"><Check size={15} />{notice}</p> : null}
       {!notice && deal.approvals.currentUserApproved ? <p className="deal-workspace-notice" role="status"><Check size={15} />Версия согласована · {deal.approvals.totalApproved} из {deal.approvals.required}</p> : null}
 
 
-      {!signingVisible ? <section className="deal-workspace-section">
+      {recipientIntroduction ? <section className="deal-workspace-section recipient-introduction">
+        <Card className="form-message"><p>Вы перешли по ссылке для заключения договора «{deal.draft.description || deal.title}».</p><span>{profileRequired ? "Для дальнейшего просмотра, подписания и комментирования договора вам необходимо заполнить свои реквизиты. Это можно сделать тремя способами:" : "Ваши реквизиты уже заполнены и используются автоматически. Дождитесь подготовки договора — затем сможете ознакомиться с ним, обсудить условия и подписать."}</span></Card>
+        {profileRequired ? <DealRequisites onSaved={() => { void refreshWorkspace(queryClient, dealId); }} /> : null}
+      </section> : null}
+      {!signingVisible && !recipientIntroduction ? <section className="deal-workspace-section">
         <h2>Стороны и приглашения</h2>
         {deal.status === "DRAFT" ? <>
           <Card className="form-message"><strong>{contractAvailable ? "Проект договора готов" : "Договор ещё не сформирован"}</strong><p>{deal.draft.description}</p><span>{contractAvailable ? "Проверьте проект и передайте итоговые условия обеим сторонам на согласование." : waitingFor}</span><span>Договор формируется после заполнения реквизитов обеими сторонами.</span></Card>
@@ -235,7 +254,7 @@ export function DealWorkspaceScreen({
       </section> : null}
 
       <div className="deal-panel-grid">
-      {contractAvailable ? <DealPanel title="Договор" description={`Версия ${deal.versionNumber} · ${deal.approvals.totalApproved} из ${deal.approvals.required} согласовано`} icon={<FileCheck2 size={22} />}>
+      {contractAvailable ? <DealPanel title={reviewContract ? "Договор готов — ознакомьтесь" : "Договор"} highlighted={reviewContract} description={`Версия ${deal.versionNumber} · ${deal.approvals.totalApproved} из ${deal.approvals.required} согласовано`} icon={<FileCheck2 size={22} />}>
       <section className="deal-workspace-section">
         <div className="deal-workspace-section-heading">
           <h2>Текст договора</h2>
@@ -248,8 +267,8 @@ export function DealWorkspaceScreen({
       </section>
 
       {deal.versionNumber > 1 ? <DealVersionHistory dealId={dealId} versionId={deal.versionId} /> : null}
-      </DealPanel> : <Card className="form-message" role="status"><strong>Договор пока недоступен</strong><span>{waitingFor}</span></Card>}
-      {materialsAvailable ? <DealPanel title={deal.currentUserRole === deal.draft.subjectDocumentsParty && !["SIGNED", "COMPLETED", "CANCELED"].includes(deal.status) ? "Загрузите материалы сделки" : "Приложения к договору"} description="Фото предмета сделки, документы на имущество, акты и другие общие файлы. Без паспортов и личных документов." icon={<Files size={22} />}>
+      </DealPanel> : !recipientIntroduction ? <Card className="form-message" role="status"><strong>Договор пока недоступен</strong><span>{waitingFor}</span></Card> : null}
+      {materialsAvailable ? <DealPanel title={deal.currentUserRole === deal.draft.subjectDocumentsParty && !["SIGNED", "COMPLETED", "CANCELED"].includes(deal.status) ? "Загрузите материалы сделки" : "Приложения к договору"} highlighted={reviewMaterials} description={reviewMaterials ? `${uploaderLabel} добавил материалы — посмотрите перед согласованием. Общих файлов: ${sharedFiles.length}.` : "Фото предмета сделки, документы на имущество, акты и другие общие файлы. Без паспортов и личных документов."} icon={<Files size={22} />}>
         <SharedDealAttachments dealId={dealId} uploaderLabel={materialsUploaderLabel(deal.template.slug, deal.draft.subjectDocumentsParty)} allowUpload={deal.currentUserRole === deal.draft.subjectDocumentsParty && !["SIGNED", "COMPLETED", "CANCELED"].includes(deal.status)} />
       </DealPanel> : null}
       {deal.counterparty ? <DealPanel title="Чат сделки" description="Обсудить детали и предложить изменения" icon={<MessageCircle size={22} />} className="deal-chat-dialog">
@@ -259,7 +278,7 @@ export function DealWorkspaceScreen({
 
       <section className="deal-workspace-actions" aria-label="Действия по сделке">
       {documentsPending ? <Card className="form-message"><strong>Готовим согласование</strong><span>Дождитесь подключения второй стороны и подготовки договора. Загружать документы не обязательно.</span></Card> : null}
-      {profileRequired && !signingVisible && deal.status !== "CANCELED" && deal.status !== "DRAFT" ? (
+      {profileRequired && !recipientIntroduction && !signingVisible && deal.status !== "CANCELED" && deal.status !== "DRAFT" ? (
         <Card className="form-message is-warning">
           <strong>Сначала заполните профиль</strong>
           <span>Для согласования заполните профиль и подтвердите номер телефона.</span>

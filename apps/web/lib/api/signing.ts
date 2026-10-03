@@ -11,6 +11,10 @@ export function getDealSigningState(dealId: string): Promise<DealSigningStateRes
   return apiRequest(`deals/${encodeURIComponent(dealId)}/signing`);
 }
 
+export function getPendingSigningOtp(dealId: string): Promise<IssueSigningOtpResponse | null> {
+  return apiRequest(`deals/${encodeURIComponent(dealId)}/signing/otp`);
+}
+
 export function issueDealSigningOtp(
   dealId: string,
   body: IssueSigningOtpRequest,

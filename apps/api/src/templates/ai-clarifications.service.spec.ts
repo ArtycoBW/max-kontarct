@@ -346,6 +346,17 @@ describe("AiClarificationsService", () => {
     expect(update).toHaveBeenCalledWith(expect.objectContaining({ answers, status: "READY_TO_GENERATE", questions: [], expectedUpdatedAt: createdAt }));
     expect((update.mock.calls[0]?.[0] as { metadata: unknown }).metadata).toMatchObject({ completenessVersion: COMPLETENESS_VERSION });
   });
+
+  it("accepts a city and full prepayment even when AI asks for street/house or a payment event again", async () => {
+    const input = { materialsIncluded: true };
+    const questions = missingContractTerms("work-contract", input).map(question => ({ ...question, options: [] }));
+    findOwned.mockResolvedValue(record({ inputAnswers: input, providerMetadata: { completenessVersion: "1.0.0", questionHistory: questions }, questions }));
+    generateStructured.mockResolvedValue(aiResult({ status: "NEED_MORE_INFO", questions: [shortTextQuestion("otherAddress", "Укажите адрес"), shortTextQuestion("paymentTerms", "Порядок оплаты")] }));
+    update.mockResolvedValue(record({ status: "READY_TO_GENERATE", questions: [] }));
+    const answers = { termsLocation: "Иркутск", termsPayment: "100% предоплата", termsAcceptance: "Приёмка по акту" };
+    await service.answer("work-contract", sessionId, userId, { answers });
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ answers, status: "READY_TO_GENERATE", questions: [] }));
+  });
 });
 
 function needMoreInfo() {

@@ -2,7 +2,7 @@
 
 import type { DealSigningStateResponse, IssueSigningOtpResponse } from "@max-contract/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CheckCircle2, ChevronDown, Clock3, KeyRound, LockKeyhole, RefreshCw, ShieldCheck } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, ClipboardPaste, Clock3, KeyRound, LockKeyhole, RefreshCw, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { REGEXP_ONLY_DIGITS } from "input-otp";
 import { toast } from "sonner";
@@ -15,7 +15,8 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/component
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { queryKeys } from "@/lib/api/query-keys";
 import { ACTIVE_DEAL_REFRESH_MS } from "@/lib/api/deal-refresh";
-import { confirmDealSignature, getDealSigningState, issueDealSigningOtp } from "@/lib/api/signing";
+import { confirmDealSignature, getDealSigningState, getPendingSigningOtp, issueDealSigningOtp } from "@/lib/api/signing";
+import { signatureCodeFromClipboard } from "@/lib/signing/clipboard-code";
 import { FilePreviewButton } from "@/components/files/file-preview";
 import { DownloadButton } from "@/components/files/download-button";
 
@@ -36,6 +37,19 @@ export function SigningFlow({ dealId }: { dealId: string }) {
     refetchOnReconnect: true,
     staleTime: 0,
   });
+  const pendingOtp = useQuery({
+    queryKey: ["pending-signing-otp", dealId, signing.data?.versionId],
+    queryFn: () => getPendingSigningOtp(dealId),
+    enabled: Boolean(signing.data && !signing.data.currentUserSigned),
+    retry: false,
+    staleTime: Infinity,
+    gcTime: 0,
+  });
+  useEffect(() => {
+    if (!pendingOtp.data || signing.data?.currentUserSigned) return;
+    const timer = window.setTimeout(() => { setDelivery(pendingOtp.data!); setOpen(true); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [pendingOtp.data, signing.data?.currentUserSigned]);
   const issue = useMutation({
     mutationFn: () => {
       if (!signing.data) throw new Error("Версия договора ещё загружается");
@@ -146,11 +160,19 @@ function OtpStep({ delivery, code, isConfirming, isResending, onBack, onConfirm,
       <div className="signing-state-icon"><KeyRound size={32} /></div>
       <div className="signing-title"><p>Подписание договора</p><h2>Введите код</h2><span>{delivery.channel === "MAX_TEST" ? "Отправили 4 цифры в личное сообщение MAX" : `Отправили 4 цифры на номер ${delivery.maskedPhone}`}</span></div>
       <div className="signing-otp-inputs">
-        <InputOTP aria-label="Код подписи из 4 цифр" maxLength={4} pattern={REGEXP_ONLY_DIGITS}
+        <InputOTP aria-label="Код подписи из 4 цифр" autoComplete="one-time-code" inputMode="numeric" maxLength={4} pattern={REGEXP_ONLY_DIGITS}
           value={code} onChange={onCode} disabled={isConfirming || isResending || expiresSeconds === 0}>
           <InputOTPGroup>{[0, 1, 2, 3].map(index => <InputOTPSlot key={index} index={index} />)}</InputOTPGroup>
         </InputOTP>
       </div>
+      <p className="field-description">{delivery.channel === "MAX_TEST" ? "Посмотрите код в уведомлении MAX, не закрывая сделку. Если телефон предлагает скопировать код, нажмите «Вставить код». Если откроете чат, вернитесь по кнопке «Открыть сделку» — экран кода сохранится." : "Вставьте код из сообщения или выберите подсказку над клавиатурой, если она появилась."}</p>
+      <Button variant="outline" className="full-width" disabled={isConfirming || isResending || expiresSeconds === 0} onClick={async () => {
+        try {
+          const copied = signatureCodeFromClipboard(await navigator.clipboard.readText());
+          if (!copied) { toast.info("Скопируйте четыре цифры кода из сообщения"); return; }
+          onCode(copied);
+        } catch { toast.info("Нажмите на поле кода и выберите «Вставить»", { description: "На этом устройстве вставка по кнопке недоступна." }); }
+      }}><ClipboardPaste size={17} />Вставить код</Button>
       <div className="signing-resend"><Clock3 size={14} /><span>Код действует ещё {formatTimer(expiresSeconds)}</span></div>
       <Button className="full-width" disabled={code.length !== 4 || isConfirming || isResending || expiresSeconds === 0} onClick={onConfirm}>
         <Check size={18} /> {isConfirming ? "Проверяем код…" : "Подписать договор"}

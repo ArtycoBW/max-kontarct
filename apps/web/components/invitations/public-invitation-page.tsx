@@ -134,8 +134,10 @@ export function PublicInvitationPage({
         ) : (
           <Card className="public-invite-error" role="status">
             {stateMessage(invitation.state)}
+            {invitation.state === "ACCEPTED" && deeplink ? <><p>Если вы уже присоединились, откройте сделку под тем же аккаунтом MAX.</p><Button asChild className="full-width"><a href={deeplink}>Открыть мою сделку в MAX <ArrowRight size={18} /></a></Button></> : null}
           </Card>
         )}
+        {invitation.state === "ACTIVE" || invitation.state === "ACCEPTED" ? <div className="public-invite-actions"><Button asChild variant="outline" className="full-width"><a href={`https://max.ru/${encodeURIComponent(invitation.botUsername)}`}>Открыть чат-бот Макс-Контракт</a></Button><p>Запустите чат-бота и закрепите чат. Позже приложение можно открыть из него, а сделку — в разделе «Мои сделки».</p></div> : null}
       </section>
     </main>
   );

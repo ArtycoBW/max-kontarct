@@ -182,7 +182,7 @@ function DealDocuments({ dealId, onBack, materialsOnly, beforeUpload }: { dealId
       </section> : null}
 
       <section className="documents-section">
-        <header><span><FileImage size={18} /><strong>{materialsOnly ? "Фото предмета сделки" : "Все материалы сделки"}</strong></span></header>
+        <header><span><FileImage size={18} /><strong>{materialsOnly ? "Фото предмета сделки и сопроводительные документы" : "Все материалы сделки"}</strong></span></header>
         <p className="field-description">Добавьте фото предмета сделки. Эти фото видны второй стороне. Здесь также можно загрузить документы на имущество, акты и другие общие файлы. Не добавляйте паспорта и личные документы.</p>
         {data.canUploadEvidence !== false ? <UploadButton
           accept={data.allowedMimeTypes.join(",")}

@@ -5239,6 +5239,12 @@ button.service-status {
 .deal-workspace-actions > .form-message > strong { font-size: 16px; line-height: 1.4; }
 .deal-workspace-actions > .form-message > span { font-size: 14px; line-height: 1.5; }
 .deal-panel-trigger { display: flex; justify-content: flex-start; align-items: center; gap: 14px; width: 100%; padding: 18px; min-height: 90px; border-radius: 18px; text-align: left; white-space: normal; }
+.deal-panel-trigger.is-ready { border-color: var(--accent); background: var(--accent-soft, #fff0eb); }
+.deal-panel-trigger.is-ready small { color: var(--foreground); }
+.questionnaire-materials { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border); }
+.questionnaire-materials > .documents-screen { padding: 0; }
+.questionnaire-materials .documents-section > header > span { align-items: flex-start; }
+.recipient-introduction .form-message p { margin: 0; line-height: 1.6; }
 .deal-panel-icon { display: grid; place-items: center; flex: 0 0 44px; height: 44px; color: var(--accent); background: #fff0eb; border-radius: 14px; }
 .deal-panel-trigger > span:nth-child(2) { display: grid; gap: 5px; min-width: 0; }
 .deal-panel-trigger strong { font-size: 16px; line-height: 1.35; font-weight: 650; }

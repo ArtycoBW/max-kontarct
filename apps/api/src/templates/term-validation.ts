@@ -21,7 +21,7 @@ export function hasPaymentTime(text: string): boolean {
 }
 
 export function paymentIssue(text: string, direct = false): string | null {
-  const value = text.trim();
+  const value = text.toLocaleLowerCase("ru-RU").replaceAll("ё", "е").replace(/\s+/g, " ").trim();
   if (!value || VAGUE.test(value)) return "Не указан момент оплаты. Например: «В день приёмки, аванса нет».";
   for (const match of value.matchAll(/(?<!\d)(\d{1,2})[./](\d{1,2})[./](\d{4})(?!\d)|(\d{4})-(\d{2})-(\d{2})/gu)) {
     const day = Number(match[1] ?? match[6]), month = Number(match[2] ?? match[5]), year = Number(match[3] ?? match[4]);

@@ -87,6 +87,17 @@ export class SigningService {
     return toState(await this.loadContext(userId, dealId), userId, this.pepVersion);
   }
 
+  async pendingOtp(userId: string, dealId: string): Promise<IssueSigningOtpResponse | null> {
+    const context = await this.loadContext(userId, dealId);
+    if (context.status !== DealStatus.READY_TO_SIGN && context.status !== DealStatus.SIGNED_BY_ONE) return null;
+    const version = requireFrozenVersion(context);
+    if (version.signatures.some(signature => signature.userId === userId)) return null;
+    const party = requireParty(context, userId);
+    const phone = party.user.phones[0]!;
+    assertFrozenPhone(context, userId, phone.id);
+    return this.otp.pending({ dealId, userId, versionId: version.id, phoneId: phone.id, phone: phone.e164 });
+  }
+
   async issueOtp(
     userId: string,
     dealId: string,

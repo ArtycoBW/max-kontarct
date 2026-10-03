@@ -64,19 +64,6 @@ export function DealIntakePanel({ initialDescription = "", isCreating, active = 
           <strong>{proposal.mode === "INDIVIDUAL" ? "Индивидуальный проект" : proposal.template.title}</strong>
           <p>Основа договора готова. Сначала укажите свои паспортные данные, затем пригласите вторую сторону и уточните условия.</p>
           {proposal.mode === "INDIVIDUAL" ? <p className="deal-intake-warning">Это индивидуальный проект ИИ, а не проверенный шаблон. Проверьте условия перед подписанием.</p> : null}
-          <div className="intake-result-details">
-          <p>{proposal.reason}</p><p>Название: {proposal.title}</p>
-          <dl>
-            {Object.entries(proposal.answers).map(([key, value]) => {
-              const fields = proposal.template.currentVersion.questionnaireSchema.properties as Record<string, { title?: string; format?: string }>;
-              const field = fields[key];
-              const formatted = field?.format === "date" && typeof value === "string" ? value.split("-").reverse().join(".") : typeof value === "boolean" ? value ? "Да" : "Нет" : String(value);
-              return <div key={key}><dt>{field?.title ?? key}</dt><dd>{formatted}</dd></div>;
-            })}
-          </dl>
-          {!Object.keys(proposal.answers).length ? <p>Недостающие условия можно заполнить на следующем шаге.</p> : null}
-          {proposal.warnings.map((warning, index) => <p className="deal-intake-warning" key={index}>{warning}</p>)}
-          </div>
           {!children ? <div className="inline-deal-requisites">
             <DealRequisites onReadyChange={setRequisitesReady} onSaved={() => undefined} />
             {!requisitesReady ? <p className="field-description">Заполните паспортные данные, чтобы перейти к приглашению.</p> : null}

@@ -357,7 +357,7 @@ test("generation waits for both profiles and submits the actual deal id", async 
   await expect(action).toBeDisabled();
   await expect(page.getByRole("heading", { name: "Мои реквизиты для договора" })).toHaveCount(0);
   await expect(page.getByText("Шаг 4 из 5", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Пригласите вторую сторону уже сейчас", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Теперь нужно пригласить к сделке вторую сторону", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Ждём, пока вторая сторона присоединится по ранее отправленному приглашению и заполнит реквизиты.")).toBeVisible();
   joined = true;
   workspace.initiator.profileCompleted = true;
@@ -450,14 +450,77 @@ test("final contract is edited in one modal; errors retain the text and save use
 
 test("draft recipient sees all three entry methods and cannot open a premature contract", async ({ page }) => {
   await openMockDeal(page, workspaceFixture());
-  await expect(page.getByRole("heading", { name: "Стороны и приглашения" })).toBeVisible();
-  await expect(page.getByText("Обеим сторонам нужно заполнить реквизиты.").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Стороны и приглашения" })).toHaveCount(0);
+  await expect(page.getByText("Вы перешли по ссылке для заключения договора «Продажа тестового предмета».")).toBeVisible();
+  await expect(page.getByText(/Это можно сделать тремя способами/)).toBeVisible();
+  await expect(page.locator(".deal-workspace-summary")).toHaveCount(0);
+  await expect(page.getByText("Договор ещё не сформирован", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Вставить из Цифрового ID / Госуслуг" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Считать данные паспорта или загрузить скриншот" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Заполнить реквизиты вручную" })).toBeVisible();
   await expect(page.locator(".deal-panel-trigger").filter({ hasText: /^Договор/ })).toHaveCount(0);
   await expect(page.getByText(/Ваша роль:/)).toHaveCount(0);
   await expect(page.locator(".deal-version-label")).toHaveCSS("background-color", "rgb(255, 242, 191)");
+});
+
+test("recipient is prompted about a ready contract and newly uploaded shared files, not private identity scans", async ({ page }) => {
+  await openMockDeal(page, workspaceFixture("TERMS_REVIEW", true));
+  const files = [{ id: "private", originalName: "Личный документ.pdf", visibility: "OWNER_ONLY", mimeType: "application/pdf", sizeBytes: 100, owner: { isCurrentUser: false } }];
+  await page.route("**/deals/review-deal/files", route => route.fulfill({ json: { evidenceFiles: files, requirements: [], canUploadEvidence: false } }));
+  await expect(page.getByRole("button", { name: /Договор готов — ознакомьтесь/ })).toHaveClass(/is-ready/);
+  const materials = page.locator(".deal-panel-trigger").filter({ hasText: "Приложения к договору" });
+  await expect(materials).not.toHaveClass(/is-ready/);
+  files.push({ id: "shared", originalName: "Фото предмета.png", visibility: "DEAL_PARTICIPANTS", mimeType: "image/png", sizeBytes: 100, owner: { isCurrentUser: false } });
+  await expect(materials).toContainText("Продавец добавил материалы — посмотрите перед согласованием.");
+  await expect(materials).toContainText("Общих файлов: 1.");
+  await expect(materials).toHaveClass(/is-ready/);
+  await materials.click();
+  await expect(page.getByRole("dialog").getByText("Личный документ.pdf")).toHaveCount(0);
+  await expect(page.getByRole("dialog").getByText("Фото предмета.png")).toBeVisible();
+});
+
+test("accepted invitation resumes through authentication without fetching its private preview or joining another deal", async ({ page }) => {
+  await mockApp(page);
+  const publicCode = "AbCdEfGhIjKl", token = "T".repeat(32);
+  let privatePreviews = 0, joins = 0;
+  await page.route(`**/api/v1/public/invitations/${publicCode}`, route => route.fulfill({ json: { state: "ACCEPTED" } }));
+  await page.route("**/api/v1/public/invitations/preview", route => { privatePreviews++; return route.fulfill({ status: 409 }); });
+  await page.route("**/api/v1/deal-invitations/join", route => {
+    joins++;
+    expect(route.request().postDataJSON()).toEqual({ publicCode, token });
+    return route.fulfill({ json: workspaceFixture() });
+  });
+  await page.route("**/api/v1/deals/review-deal/workspace", route => route.fulfill({ json: workspaceFixture() }));
+  await page.goto(`/?WebAppStartParam=invite_${publicCode}_${token}`);
+  await page.getByRole("button", { name: "Открыть мою сделку", exact: true }).click();
+  await expect(page.getByText(/Вы перешли по ссылке для заключения договора/)).toBeVisible();
+  expect(privatePreviews).toBe(0);
+  expect(joins).toBe(1);
+});
+
+test("returning to a pending signing code restores the form; clipboard paste does not sign automatically", async ({ page }) => {
+  await mockApp(page);
+  let issued = 0, confirmed = 0;
+  await page.route("**/api/v1/deals/10000000-0000-4000-8000-000000000001/workspace", route => route.fulfill({ json: workspaceFixture("READY_TO_SIGN", true) }));
+  await page.route("**/api/v1/deals/10000000-0000-4000-8000-000000000001/signing", route => route.fulfill({ json: {
+    contractNumber: "MK-TEST", currentUserSigned: false, dealId: "10000000-0000-4000-8000-000000000001", documentHash: "a".repeat(64), evidencePackage: null, finalPdf: null,
+    parties: [], pepAgreement: pepAgreement("v1"), requiredSignatures: 2, status: "READY_TO_SIGN", totalSignatures: 0, versionId: "version", versionNumber: 2,
+  } }));
+  await page.route("**/api/v1/deals/10000000-0000-4000-8000-000000000001/signing/otp", route => {
+    if (route.request().method() === "POST") issued++;
+    return route.fulfill({ json: { channel: "MAX_TEST", expiresAt: new Date(Date.now() + 300_000).toISOString(), resendAvailableAt: new Date(Date.now() + 60_000).toISOString(), maskedPhone: "***0000" } });
+  });
+  await page.route("**/api/v1/deals/10000000-0000-4000-8000-000000000001/signing/confirm", route => { confirmed++; return route.fulfill({ status: 400, json: { message: "Неверный код" } }); });
+  await page.goto("/?WebAppStartParam=deal_10000000000040008000000000000001");
+  const dialog = page.getByRole("dialog", { name: "Подписание договора" });
+  await expect(dialog.getByRole("heading", { name: "Введите код" })).toBeVisible();
+  await page.evaluate(() => Object.defineProperty(navigator, "clipboard", { configurable: true, value: { readText: async () => "1234" } }));
+  await dialog.getByRole("button", { name: "Вставить код", exact: true }).click();
+  await expect(dialog.getByRole("textbox", { name: "Код подписи из 4 цифр" })).toHaveValue("1234");
+  expect(issued).toBe(0);
+  expect(confirmed).toBe(0);
+  await dialog.getByRole("button", { name: "Подписать договор", exact: true }).click();
+  expect(confirmed).toBe(1);
 });
 
 test("saved passport details can be chosen from the profile without re-entering them", async ({ page }) => {
@@ -470,7 +533,8 @@ test("saved passport details can be chosen from the profile without re-entering 
   await page.route("**/api/v1/deals/review-deal/workspace", route => route.fulfill({ json: workspace }));
   await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
   await page.getByRole("button", { name: /Тестовая сделка/ }).click();
-  await page.getByRole("button", { name: "Выбрать реквизиты из профиля" }).click();
+  await expect(page.getByText("Реквизиты заполнены и автоматически используются в договоре.")).toBeVisible();
+  await page.getByRole("button", { name: "Проверить или изменить реквизиты" }).click();
   const modal = page.getByRole("dialog");
   await expect(modal.getByLabel("Серия паспорта", { exact: true })).toHaveValue("1234");
   await expect(modal.getByLabel("Номер паспорта", { exact: true })).toHaveValue("567890");
@@ -478,7 +542,7 @@ test("saved passport details can be chosen from the profile without re-entering 
 });
 
 test("profile link opens the expanded passport section, not the top", async ({ page }) => {
-  await openMockDeal(page, workspaceFixture("DOCUMENTS_PENDING"));
+  await openMockDeal(page, { ...workspaceFixture("DOCUMENTS_PENDING"), currentUserRole: "INITIATOR" });
   await page.getByRole("button", { name: "Заполнить профиль", exact: true }).click();
   await expect(page.getByLabel("Серия паспорта", { exact: true })).toBeInViewport();
   await expect.poll(() => page.locator(".mini-app-scroll").evaluate(el => el.scrollTop)).toBeGreaterThan(100);
@@ -505,7 +569,7 @@ for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 650 }
       evidencePackage: null, finalPdf: null, parties: [], pepAgreement: pepAgreement("v1"), requiredSignatures: 2,
       status: "READY_TO_SIGN", totalSignatures: 0, versionId: "version", versionNumber: 2,
     } }));
-    await page.route("**/api/v1/deals/review-deal/signing/otp", route => route.fulfill({ json: {
+    await page.route("**/api/v1/deals/review-deal/signing/otp", route => route.fulfill({ json: route.request().method() === "GET" ? null : {
       channel: "MAX_TEST", expiresAt: new Date(Date.now() + 300_000).toISOString(), resendAvailableAt: new Date(Date.now() + 60_000).toISOString(), maskedPhone: "+7***0000",
     } }));
     await page.getByRole("button", { name: "Подписать договор", exact: true }).click();
@@ -517,9 +581,14 @@ for (const viewport of [{ width: 320, height: 568 }, { width: 390, height: 650 }
     await dialog.getByRole("checkbox").check();
     await dialog.getByRole("button", { name: "Получить код подписи" }).click();
     await expect(dialog.getByRole("heading", { name: "Введите код" })).toBeVisible();
-    await expect(dialog.getByRole("button", { name: "Вернуться к соглашению" })).toBeInViewport({ ratio: 1 });
-    expect(await dialog.locator(".deal-panel-body").evaluate(el => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
+    await expect(dialog.getByRole("button", { name: "Вставить код", exact: true })).toBeVisible();
+    await dialog.getByRole("button", { name: "Вернуться к соглашению" }).scrollIntoViewIfNeeded();
+    // Allow sub-pixel rounding at the scroll edge, then verify the action works.
+    await expect(dialog.getByRole("button", { name: "Вернуться к соглашению" })).toBeInViewport({ ratio: .99 });
+    expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
     await page.screenshot({ path: `test-results/signing-otp-${viewport.width}.png` });
+    await dialog.getByRole("button", { name: "Вернуться к соглашению" }).click();
+    await expect(dialog.getByRole("button", { name: "Получить код подписи" })).toBeVisible();
   });
 }
 
@@ -702,26 +771,24 @@ test("passport details precede invitation; sending gates parameters and uploads"
   await expect(page.getByText("Данные и материалы", { exact: true })).toHaveCount(0);
   await page.getByRole("textbox", { name: "Что хотите оформить?" }).fill(draft.draft.description);
   await page.getByRole("button", { name: "Подобрать договор с ИИ" }).click();
-  await expect(page.getByText("Определена продажа")).toBeVisible();
+  await expect(page.getByText("Определена продажа")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Что определил ИИ" })).toHaveCount(0);
-  const fieldsBox = await page.locator(".intake-result-details dl").boundingBox();
-  const warningBox = await page.locator(".intake-result-details .deal-intake-warning").boundingBox();
-  expect(warningBox!.y - fieldsBox!.y - fieldsBox!.height).toBeGreaterThanOrEqual(16);
-  await page.locator(".intake-result-details").scrollIntoViewIfNeeded();
-  await page.screenshot({ path: "test-results/intake-expanded.png" });
+  await expect(page.locator(".intake-result-details")).toHaveCount(0);
+  await expect(page.getByText("Проверьте и дополните поля анкеты.")).toHaveCount(0);
+  await page.screenshot({ path: "test-results/intake-simplified.png" });
   await expect(page.getByRole("heading", { name: "Мои реквизиты для договора" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Загрузить фото или файл" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Перевыпустить приглашение", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Отправить в MAX", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Перейти к приглашению" })).toBeDisabled();
   await expect(page.getByRole("heading", { name: "Мои реквизиты для договора" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Выбрать реквизиты из профиля" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Проверить или изменить реквизиты" })).toHaveCount(0);
   for (const viewport of [{ width: 768, height: 900 }, { width: 390, height: 700 }, { width: 320, height: 568 }, { width: 740, height: 390 }]) {
     await page.setViewportSize(viewport);
     const inlineCard = page.locator(".deal-intake-result .inline-deal-requisites .deal-requisites");
     await inlineCard.scrollIntoViewIfNeeded();
     const card = await inlineCard.boundingBox();
-    const details = await page.locator(".intake-result-details").boundingBox();
+    const details = await page.locator(".deal-intake-result > p").first().boundingBox();
     const action = await page.getByRole("button", { name: "Перейти к приглашению" }).boundingBox();
     expect(card!.y - details!.y - details!.height).toBeGreaterThanOrEqual(16);
     expect(action!.y - card!.y - card!.height).toBeGreaterThanOrEqual(16);
@@ -776,6 +843,9 @@ test("passport details precede invitation; sending gates parameters and uploads"
   await expect(page.getByRole("button", { name: "Сохранить и продолжить" })).toBeDisabled();
   await page.getByRole("button", { name: "Перевыпустить приглашение", exact: true }).click();
   await expect(page.getByRole("button", { name: "Отправить в MAX", exact: true })).toBeVisible();
+  await expect(page.getByText("Теперь нужно пригласить к сделке вторую сторону", { exact: true })).toBeVisible();
+  await expect(page.locator(".invitation-share-preview")).toHaveCount(0);
+  await expect(page.getByText("Сообщение получателю", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Я отправил приглашение", exact: true })).toHaveCount(0);
   await page.evaluate(() => Object.assign(window.WebApp!, { platform: "android", shareContent: () => Promise.reject({ error: { code: "client.web_app_share.request_timeout" } }) }));
   await page.getByRole("button", { name: "Отправить в MAX", exact: true }).click();
@@ -797,6 +867,11 @@ test("passport details precede invitation; sending gates parameters and uploads"
   await expect(page.locator('a[href*="max.ru/:share"]')).toHaveCount(0);
   await page.getByRole("button", { name: "Сохранить и продолжить" }).click();
   await expect(page.getByRole("textbox", { name: "Цена", exact: true })).toHaveValue("1000");
+  await expect(page.getByText("Документы по шаблону", { exact: true })).toHaveCount(0);
+  await expect(page.locator(".questionnaire-materials")).toContainText("Фото предмета сделки и сопроводительные документы");
+  const lastField = await page.locator(".questionnaire-deal-form .form-field").last().boundingBox();
+  const materialsSection = await page.locator(".questionnaire-materials").boundingBox();
+  expect(materialsSection!.y - lastField!.y - lastField!.height).toBeGreaterThanOrEqual(24);
   await expect(page.getByRole("button", { name: "Загрузить фото или файл" })).toBeVisible();
   await page.locator('.subject-materials input[type="file"]').setInputFiles({ name: "test.png", mimeType: "image/png", buffer: Buffer.from("test-image") });
   await expect.poll(() => uploads).toBe(1);

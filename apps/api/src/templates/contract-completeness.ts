@@ -1,8 +1,8 @@
 import type { AiClarificationQuestion } from "@max-contract/contracts";
-import { contractLocationIssue, LOCATION_EXAMPLE } from "./contract-location";
+import { contractLocationIssue, TRANSFER_LOCATION_EXAMPLE } from "./contract-location";
 import { acceptanceIssue, paymentIssue } from "./term-validation";
 
-export const COMPLETENESS_VERSION = "1.2.0";
+export const COMPLETENESS_VERSION = "1.3.0";
 type Answers = Record<string, unknown>;
 /** Keep clarification, enqueue and worker checks on the same source context. */
 export function withCompletenessContext(input: Answers, metadata: unknown): Answers {
@@ -44,7 +44,7 @@ const rule = (
 const place = rule(
   "termsLocation",
   "Где именно выполняется сделка?",
-  `${LOCATION_EXAMPLE} Для удалённого исполнения: «Онлайн, результат отправляю по электронной почте».`,
+  TRANSFER_LOCATION_EXAMPLE,
   [
     "workLocation",
     "serviceLocation",
@@ -53,7 +53,7 @@ const place = rule(
     "address",
     "location",
   ],
-  (text, direct) => location(text, true, direct),
+  (text, direct) => contractLocationIssue(text, true, direct, Boolean(direct)) === null,
 );
 const pay = rule(
   "termsPayment",
@@ -280,7 +280,7 @@ export function invalidRequiredTermAnswers(
       message: item.id === "termsPayment" ? paymentIssue(answerText(answers[item.id]), true)!
         : item.id === "termsAcceptance" ? acceptanceIssue(answerText(answers[item.id]))!
         : item.id === "termsLocation"
-        ? `${contractLocationIssue(answerText(answers[item.id]))} ${LOCATION_EXAMPLE}`
+        ? `${contractLocationIssue(answerText(answers[item.id]), true, true, true)} ${TRANSFER_LOCATION_EXAMPLE}`
         : item.id === "termsProperty"
           ? `Не удалось определить конкретный объект. Для помещения укажите населённый пункт, улицу и дом; для вещи — модель и идентификатор. ${item.description}`
           : `${termIssue[item.id] ?? "Ответ пока не содержит конкретного условия."} ${item.description}`,
