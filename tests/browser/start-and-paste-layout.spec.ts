@@ -463,6 +463,43 @@ test("draft recipient sees all three entry methods and cannot open a premature c
   await expect(page.locator(".deal-version-label")).toHaveCSS("background-color", "rgb(255, 242, 191)");
 });
 
+for (const width of [320, 430]) {
+test(`recipient waits below the chat until the contract is prepared at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 740 });
+  const workspace = workspaceFixture("DRAFT", true);
+  await openMockDeal(page, workspace);
+  const waiting = page.locator(".deal-preparation-waiting");
+  await expect(waiting).toContainText("Ожидаем вторую сторону");
+  await expect(waiting).toContainText("Договор появится здесь после завершения подготовки");
+  const chat = await page.getByRole("button", { name: /Чат сделки/ }).boundingBox();
+  const notice = await waiting.boundingBox();
+  expect(notice!.y).toBeGreaterThanOrEqual(chat!.y + chat!.height + 10);
+  expect(await page.locator(".mini-app-scroll").evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await waiting.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `test-results/recipient-waiting-${width}.png` });
+  workspace.draft.currentStep = "INITIATOR";
+  workspace.status = "TERMS_REVIEW";
+  await expect(page.getByRole("button", { name: /Договор готов — ознакомьтесь/ })).toBeVisible();
+  await expect(waiting).toHaveCount(0);
+});
+}
+
+for (const scenario of ["missing-profile", "initiator", "canceled", "documents-pending"] as const) {
+test(`preparation waiting notice respects the ${scenario} state`, async ({ page }) => {
+  const workspace = workspaceFixture(scenario === "canceled" ? "CANCELED" : scenario === "documents-pending" ? "DOCUMENTS_PENDING" : "DRAFT", scenario !== "missing-profile");
+  if (scenario === "initiator") workspace.currentUserRole = "INITIATOR";
+  if (scenario === "documents-pending") workspace.contractDraft = null as unknown as typeof workspace.contractDraft;
+  await openMockDeal(page, workspace);
+  if (scenario === "documents-pending") {
+    await expect(page.locator(".deal-preparation-waiting")).toBeVisible();
+    await expect(page.getByText("Готовим согласование", { exact: true })).toHaveCount(0);
+  } else {
+    await expect(page.locator(".deal-workspace-screen")).toBeVisible();
+    await expect(page.locator(".deal-preparation-waiting")).toHaveCount(0);
+  }
+});
+}
+
 test("recipient is prompted about a ready contract and newly uploaded shared files, not private identity scans", async ({ page }) => {
   await openMockDeal(page, workspaceFixture("TERMS_REVIEW", true));
   const files = [{ id: "private", originalName: "Личный документ.pdf", visibility: "OWNER_ONLY", mimeType: "application/pdf", sizeBytes: 100, owner: { isCurrentUser: false } }];

@@ -165,6 +165,7 @@ export function DealWorkspaceScreen({
   const materialsAvailable = deal.status !== "DRAFT" || !["DESCRIPTION", "REQUISITES", "INVITATION"].includes(deal.draft.currentStep);
   const contractAvailable = Boolean(deal.contractDraft) && (signingVisible || Boolean(profilesReady)) && (deal.status !== "DRAFT" || deal.draft.currentStep === "INITIATOR");
   const recipientIntroduction = deal.currentUserRole === "COUNTERPARTY" && !contractAvailable && !signingVisible && deal.status !== "CANCELED";
+  const waitingForOtherParty = recipientIntroduction && !profileRequired;
   const sharedFiles = documents.data ? [...documents.data.evidenceFiles, ...documents.data.requirements.flatMap(item => item.uploads)].filter(file => file.visibility === "DEAL_PARTICIPANTS") : [];
   const reviewMaterials = sharedFiles.length > 0 && deal.currentUserRole !== deal.draft.subjectDocumentsParty && !signingVisible && deal.status !== "CANCELED";
   const reviewContract = deal.currentUserRole === "COUNTERPARTY" && !versionApproved && !signingVisible && deal.status !== "CANCELED";
@@ -277,7 +278,8 @@ export function DealWorkspaceScreen({
       </div>
 
       <section className="deal-workspace-actions" aria-label="Действия по сделке">
-      {documentsPending ? <Card className="form-message"><strong>Готовим согласование</strong><span>Дождитесь подключения второй стороны и подготовки договора. Загружать документы не обязательно.</span></Card> : null}
+      {waitingForOtherParty ? <Card className="form-message deal-preparation-waiting" role="status"><strong>Ожидаем вторую сторону</strong><span>Вторая сторона заполняет данные и условия сделки. Договор появится здесь после завершения подготовки — вы сможете ознакомиться с ним и согласовать условия.</span></Card> : null}
+      {documentsPending && !waitingForOtherParty ? <Card className="form-message"><strong>Готовим согласование</strong><span>Дождитесь подключения второй стороны и подготовки договора. Загружать документы не обязательно.</span></Card> : null}
       {profileRequired && !recipientIntroduction && !signingVisible && deal.status !== "CANCELED" && deal.status !== "DRAFT" ? (
         <Card className="form-message is-warning">
           <strong>Сначала заполните профиль</strong>
