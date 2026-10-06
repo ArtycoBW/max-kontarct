@@ -39,6 +39,8 @@
     "concurrently": "10.0.5"
   },
   "overrides": {
+    "proxy-addr": "2.0.8",
+    "source-map-js": "1.2.2",
     "@nestjs/platform-express": {
       "multer": "2.3.0"
     }
