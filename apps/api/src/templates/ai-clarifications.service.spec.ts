@@ -64,7 +64,7 @@ describe("AiClarificationsService", () => {
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
         promptId: "contract-clarification",
-        promptVersion: "1.3.0",
+        promptVersion: "1.4.0",
         status: AiGenerationStatus.NEED_MORE_INFO,
         templateVersionId: versionId,
         userId,
@@ -267,13 +267,29 @@ describe("AiClarificationsService", () => {
     });
   });
 
-  it("stops after five questions across the whole session", async () => {
+  it("keeps vehicle document questions, filters personal passports and does not repeat known year/mileage", async () => {
+    const input = { vehicleDescription: "Toyota Corolla", manufactureYear: 2001, mileage: 150000, transferLocation: "Иркутск", paymentProcedure: "100% предоплата", acceptanceProcedure: "Покупатель осматривает автомобиль при встрече и подтверждает приёмку актом" };
+    validateAnswers.mockResolvedValue({ answers: input, snapshot: { templateTitle: "Купля-продажа автомобиля", templateVersionId: versionId } });
+    generateStructured.mockResolvedValue(aiResult({ status: "NEED_MORE_INFO", questions: [
+      shortTextQuestion("vehicleYear", "Год выпуска автомобиля?"), shortTextQuestion("vehicleMileage", "Какой пробег?"),
+      shortTextQuestion("vehiclePts", "Номер паспорта транспортного средства (ПТС)?"),
+      shortTextQuestion("vehicleSts", "Номер СТС?"), shortTextQuestion("personalPassport", "Паспорт продавца?"),
+    ] }));
+    create.mockResolvedValue(record());
+    await service.start("vehicle-sale", userId, { answers: input, templateVersionId: versionId });
+    const created = create.mock.calls[0]![0] as { questions: { id: string }[] };
+    expect(created.questions.map(question => question.id)).toEqual(["vehiclePts", "vehicleSts"]);
+    expect(generateStructured.mock.calls[0]![0].prompt.trustedInstruction).toContain("Автомобиль:");
+  });
+
+  it("stops after twelve questions across the whole session", async () => {
     const questionHistory = [
       ...needMoreInfo().questions,
       shortTextQuestion("address", "Адрес имущества"),
       shortTextQuestion("area", "Площадь имущества"),
       shortTextQuestion("restrictions", "Ограничения использования"),
       shortTextQuestion("contents", "Что находится в помещении"),
+      ...Array.from({ length: 7 }, (_, i) => shortTextQuestion(`extra${i}`, `Уточнение ${i}`)),
     ];
     findOwned.mockResolvedValue(record({
       providerMetadata: { questionHistory },

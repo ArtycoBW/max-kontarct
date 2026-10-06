@@ -32,6 +32,30 @@ const workspaceFixture = (status = "DRAFT", ready = false) => ({
   contractDraft: { title: "Договор", preamble: "Стороны договорились", sections: [{ heading: "Предмет", clauses: ["Тестовый предмет"] }], warnings: [] },
 });
 
+test("private mini-app protects browser closing and retries a late MAX capability", async ({ page }) => {
+  await mockApp(page);
+  await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
+  await page.evaluate(() => {
+    window.WebApp!.enableClosingConfirmation = () => { document.body.dataset.nativeCloseWarning = "enabled"; };
+  });
+  await expect(page.locator("body")).toHaveAttribute("data-native-close-warning", "enabled");
+  const canceled = await page.evaluate(() => {
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+  expect(canceled).toBe(true);
+  // A public read-only invitation should not trap someone closing a browser tab.
+  page.once("dialog", dialog => dialog.accept());
+  await page.goto("/invite/test");
+  await expect(page.locator(".mini-app")).toHaveCount(0);
+  expect(await page.evaluate(() => {
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  })).toBe(false);
+});
+
 test("Android sharing marks sent only after shared, not opening, cancellation or an unknown result", async ({ page }) => {
   const workspace = { ...workspaceFixture("DRAFT", true), currentUserRole: "INITIATOR", counterparty: null };
   await openMockDeal(page, workspace as unknown as ReturnType<typeof workspaceFixture>);

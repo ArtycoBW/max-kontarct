@@ -151,6 +151,7 @@ function rulesFor(slug: string, input: Answers): Rule[] {
             ]
           : []),
       ];
+    case "vehicle-sale":
     case "movable-property-sale":
       return [
         { ...place, label: "Где или каким способом передаётся имущество?" },

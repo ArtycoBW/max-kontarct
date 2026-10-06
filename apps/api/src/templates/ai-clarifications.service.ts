@@ -21,6 +21,7 @@ import type { AiClarificationRecord } from "./ai-clarifications.repository";
 import { AiClarificationsRepository } from "./ai-clarifications.repository";
 import { TemplatesService } from "./templates.service";
 import { readSubjectDocumentsParty } from "../deals/declared-party-roles";
+import { templateAiInstructions } from "./template-ai-instructions";
 import {
   COMPLETENESS_VERSION,
   invalidRequiredTermAnswers,
@@ -31,8 +32,8 @@ import {
 } from "./contract-completeness";
 
 const PROMPT_ID = "contract-clarification";
-const PROMPT_VERSION = "1.3.0";
-const MAX_TOTAL_QUESTIONS = 5;
+const PROMPT_VERSION = "1.4.0";
+const MAX_TOTAL_QUESTIONS = 12;
 
 type ClarificationAiOutput = {
   questions: AiClarificationQuestion[];
@@ -273,6 +274,7 @@ export class AiClarificationsService {
   ) {
     try {
       const result = await this.ai.generateStructured({
+        maxTokens: 3_500,
         output: {
           description:
             "Решение о готовности данных и необходимые уточняющие вопросы",
@@ -283,6 +285,7 @@ export class AiClarificationsService {
           id: PROMPT_ID,
           trustedInstruction: [
             "Оцени, достаточно ли данных для подготовки проекта договора.",
+            templateAiInstructions(data.templateSlug),
             `Если данных недостаточно, верни NEED_MORE_INFO и не более ${maxQuestions} конкретных вопросов.`,
             `За всю сессию можно задать не более ${MAX_TOTAL_QUESTIONS} вопросов.`,
             "Не повторяй вопросы из previousQuestions и не переспрашивай сведения, которые уже есть в inputAnswers или clarificationAnswers, даже если ключи или формулировки отличаются.",
@@ -527,6 +530,8 @@ function withQuestionHistory(
 
 function isPersonalQuestion(question: AiClarificationQuestion): boolean {
   const text = normalizeText(`${question.id} ${question.label}`);
+  if (/(птс|эптс|стс|паспорт транспортного средства)/u.test(text)
+    && !/(личн.*паспорт|паспорт.*(продав|покуп|участ)|телефон|email|фио)/u.test(text)) return false;
   return (
     /(passport|phone|email|e mail|contact|full name|personal data|fio)/.test(
       text,
@@ -540,6 +545,11 @@ function isPersonalQuestion(question: AiClarificationQuestion): boolean {
 
 function questionTopic(value: string): string | null {
   const text = normalizeText(value);
+  if (/(vehicleyear|manufactureyear|год.*выпуск)/u.test(text)) return "vehicle_year";
+  if (/(mileage|пробег)/u.test(text)) return "vehicle_mileage";
+  if (/(vehiclevin|\bvin\b|вин.*номер)/u.test(text)) return "vehicle_vin";
+  if (/(vehiclepts|ptsdocument|птс|эптс|паспорт транспортного средства)/u.test(text)) return "vehicle_pts";
+  if (/(vehiclests|stsdocument|стс|свидетельств.*регистрац)/u.test(text)) return "vehicle_sts";
   if (
     /(termsacceptance|acceptance|handover|прием|принима|переда.*возвращ)/.test(
       text,

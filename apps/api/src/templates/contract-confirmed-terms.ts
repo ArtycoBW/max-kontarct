@@ -49,7 +49,7 @@ export function confirmedContractTerms(
     const field = object(properties[key]);
     if (typeof field.title !== "string" || !field.title.trim())
       throw new Error("CONTRACT_FIELD_LABEL_MISSING");
-    terms.push(`${field.title}: ${display(value, field.format === "date")}.`);
+    terms.push(`${field.title}: ${key === "manufactureYear" && typeof value === "number" ? String(value) : display(value, field.format === "date")}.`);
   }
   for (const key of new Set([...history.map(question => question.id), ...Object.keys(answers)])) {
     if (!(key in answers)) continue;

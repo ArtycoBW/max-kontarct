@@ -2,7 +2,7 @@ import type { DealPartyRole } from "@max-contract/contracts";
 
 export function subjectRoleLabels(slug: string): [string, string] {
   switch (slug) {
-    case "movable-property-sale": return ["Продавец", "Покупатель"];
+    case "vehicle-sale": case "movable-property-sale": return ["Продавец", "Покупатель"];
     case "property-rental": return ["Арендодатель", "Арендатор"];
     case "work-contract": case "paid-services": return ["Исполнитель", "Заказчик"];
     case "personal-loan": return ["Займодавец", "Заёмщик"];

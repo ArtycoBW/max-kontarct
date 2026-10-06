@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import Script from "next/script";
 
 import { Toaster } from "@/components/ui/sonner";
-import { notifyMaxWebAppReady } from "@/lib/max/bridge";
+import { enableMaxClosingConfirmation, notifyMaxWebAppReady } from "@/lib/max/bridge";
 import { reportBootStage } from "@/lib/diagnostics/boot-client";
 import { isPublicRoute } from "@/lib/routing/public-routes";
 
@@ -35,6 +35,17 @@ export function AppProviders({ children }: { children: ReactNode }) {
       notifyMaxWebAppReady();
     }
   }, [useMaxBridge]);
+
+  useEffect(() => {
+    if (isPublicRoute(pathname)) return;
+    // MAX controls its own X/back gesture; the browser controls tab/reload confirmation.
+    const protectClose = () => { enableMaxClosingConfirmation(); };
+    const beforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    protectClose();
+    const retry = window.setInterval(protectClose, 1_000);
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => { window.clearInterval(retry); window.removeEventListener("beforeunload", beforeUnload); };
+  }, [pathname]);
 
   return (
     <QueryClientProvider client={queryClient}>

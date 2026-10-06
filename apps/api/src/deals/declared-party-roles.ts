@@ -10,6 +10,7 @@ export function readSubjectDocumentsParty(metadata: unknown): DealPartyRole | nu
 export function declaredRoleTerm(slug: string, party: DealPartyRole | null): string | null {
   if (!party) return null;
   const roles: Record<string, [string, string]> = {
+    "vehicle-sale": ["продавец", "покупатель"],
     "movable-property-sale": ["продавец", "покупатель"], "property-rental": ["арендодатель", "арендатор"],
     "work-contract": ["исполнитель", "заказчик"], "paid-services": ["исполнитель", "заказчик"], "personal-loan": ["займодавец", "заёмщик"],
   };

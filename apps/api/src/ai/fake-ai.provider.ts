@@ -25,7 +25,7 @@ export class FakeAiProvider implements AiProvider {
     this.outputValidator.assertSchema(request.output.name, request.output.schema);
     const redacted = this.piiRedactor.redact(request.userData, request.piiPaths);
     const generated =
-      request.prompt.id === "deal-intake"
+      request.prompt.id === "deal-intake" || request.prompt.id === "deal-intake-fields"
         ? generateIntake(redacted.data)
         : request.prompt.id === "contract-clarification"
         ? generateClarification(redacted.data)
@@ -61,12 +61,12 @@ function generateIntake(data: AiJsonObject): AiJsonObject {
     : /ремонт|работ/i.test(description) ? "work-contract"
       : /аренд/i.test(description) ? "property-rental"
         : /за[её]м|одолж/i.test(description) ? "personal-loan"
-          : /прода|купить/i.test(description) ? "movable-property-sale" : "individual-agreement";
+          : /прода|купить/i.test(description) ? (/автомобил|машин|toyota|тойот/i.test(description) && !/запчаст|бампер|двигател|колес|шин/i.test(description) ? "vehicle-sale" : "movable-property-sale") : "individual-agreement";
   const candidates = Array.isArray(data.candidates) ? data.candidates : [];
   const candidate = candidates.find(item => isJsonObject(item) && item.slug === slug);
-  const actualSlug = isJsonObject(candidate) ? slug : "individual-agreement";
+  const actualSlug = isJsonObject(candidate) ? slug : candidates.length === 1 && isJsonObject(candidates[0]) && typeof candidates[0].slug === "string" ? candidates[0].slug : "individual-agreement";
   const fields: AiJsonValue[] = [];
-  const key = ({ "paid-services": "serviceDescription", "work-contract": "workDescription", "property-rental": "propertyDescription", "individual-agreement": "subject" } as Record<string, string>)[actualSlug];
+  const key = ({ "paid-services": "serviceDescription", "work-contract": "workDescription", "property-rental": "propertyDescription", "movable-property-sale": "propertyDescription", "vehicle-sale": "vehicleDescription", "individual-agreement": "subject" } as Record<string, string>)[actualSlug];
   if (key) {
     const subject = description.split(/\s+(?:за\s+\d|стоимость\s+\d|до\s+\d{4}-)/i)[0] ?? description;
     fields.push({ key, value: subject, evidence: subject });

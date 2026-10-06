@@ -3,6 +3,7 @@ import { materialsUploaderLabel } from "./party-responsibility";
 describe("materials uploader labels", () => {
   it.each([
     ["movable-property-sale", "Продавец"],
+    ["vehicle-sale", "Продавец"],
     ["paid-services", "Исполнитель"],
     ["work-contract", "Исполнитель"],
     ["property-rental", "Арендодатель"],

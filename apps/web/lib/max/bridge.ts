@@ -21,17 +21,29 @@ export class MaxContactBridgeError extends Error {
 const MAX_BRIDGE_POLL_INTERVAL_MS = 25;
 const MAX_BRIDGE_TIMEOUT_MS = 5_000;
 const readyWebApps = new WeakSet<MaxWebApp>();
+const closingProtectedWebApps = new WeakSet<MaxWebApp>();
+
+export function enableMaxClosingConfirmation(): boolean {
+  const webApp = typeof window === "undefined" ? undefined : window.WebApp;
+  if (!webApp || typeof webApp.enableClosingConfirmation !== "function") return false;
+  if (closingProtectedWebApps.has(webApp)) return true;
+  try {
+    webApp.enableClosingConfirmation();
+    closingProtectedWebApps.add(webApp);
+    return true;
+  } catch { return false; }
+}
 
 // Call after the initial UI mounts, not after authentication or data loading.
 export function notifyMaxWebAppReady(): boolean {
   const webApp = typeof window === "undefined" ? undefined : window.WebApp;
   if (!webApp || typeof webApp.ready !== "function") return false;
+  enableMaxClosingConfirmation();
   if (readyWebApps.has(webApp)) return true;
 
   try {
     webApp.ready();
     // The native X and back gestures belong to MAX, not the page.
-    try { webApp.enableClosingConfirmation?.(); } catch { /* Older hosts may not support this capability. */ }
     readyWebApps.add(webApp);
     reportBootStage("ready-called");
     return true;

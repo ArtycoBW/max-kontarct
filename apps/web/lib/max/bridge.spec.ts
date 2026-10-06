@@ -98,6 +98,28 @@ describe("MAX Bridge startup", () => {
     setWindow({ WebApp: { initData: "", ready: jest.fn(), enableClosingConfirmation: () => { throw new Error("unsupported"); } } });
     expect(notifyMaxWebAppReady()).toBe(true);
   });
+
+  it("protects closing when the capability appears after ready", () => {
+    const webApp = { initData: "", ready: jest.fn() } as MaxWebApp;
+    setWindow({ WebApp: webApp });
+    notifyMaxWebAppReady();
+    const protect = jest.fn();
+    webApp.enableClosingConfirmation = protect;
+    notifyMaxWebAppReady();
+    notifyMaxWebAppReady();
+    expect(protect).toHaveBeenCalledTimes(1);
+    expect(webApp.ready).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a rejected closing capability without repeating ready", () => {
+    const protect = jest.fn().mockImplementationOnce(() => { throw new Error("not ready"); });
+    const ready = jest.fn();
+    setWindow({ WebApp: { initData: "", ready, enableClosingConfirmation: protect } });
+    notifyMaxWebAppReady();
+    notifyMaxWebAppReady();
+    expect(protect).toHaveBeenCalledTimes(2);
+    expect(ready).toHaveBeenCalledTimes(1);
+  });
   beforeEach(() => {
     jest.useFakeTimers();
   });

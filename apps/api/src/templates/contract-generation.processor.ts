@@ -20,9 +20,10 @@ import {
 import { normalizeContractDraft } from "./contract-draft-presentation";
 import { INDIVIDUAL_TEMPLATE_SLUG, INDIVIDUAL_WARNING } from "./deal-intake.service";
 import { declaredRoleTerm, readSubjectDocumentsParty } from "../deals/declared-party-roles";
+import { templateAiInstructions } from "./template-ai-instructions";
 
 const PROMPT_ID = "contract-draft";
-const PROMPT_VERSION = "1.4.0";
+const PROMPT_VERSION = "1.5.0";
 
 @Injectable()
 export class ContractGenerationProcessor {
@@ -73,6 +74,7 @@ export class ContractGenerationProcessor {
         prompt: {
           id: PROMPT_ID,
           trustedInstruction: [
+            templateAiInstructions(generation.templateVersion.template.slug),
             "Подготовь структурированный проект договора на русском языке.",
             "Используй только переданные условия сделки и ответы пользователя.",
             "Не придумывай реквизиты сторон, даты, суммы, адреса или иные факты.",
