@@ -20,10 +20,9 @@ import {
 import { normalizeContractDraft } from "./contract-draft-presentation";
 import { INDIVIDUAL_TEMPLATE_SLUG, INDIVIDUAL_WARNING } from "./deal-intake.service";
 import { declaredRoleTerm, readSubjectDocumentsParty } from "../deals/declared-party-roles";
-import { templateAiInstructions } from "./template-ai-instructions";
+import { assertNoDraftBlanks, contractDraftingInstructions, CONTRACT_DRAFT_PROMPT_VERSION } from "./contract-drafting-instructions";
 
 const PROMPT_ID = "contract-draft";
-const PROMPT_VERSION = "1.5.0";
 
 @Injectable()
 export class ContractGenerationProcessor {
@@ -65,7 +64,7 @@ export class ContractGenerationProcessor {
       const roleTerm = declaredRoleTerm(generation.templateVersion.template.slug, readSubjectDocumentsParty(generation.providerMetadata));
       if (roleTerm) confirmedTerms.unshift(roleTerm);
       const result = await this.ai.generateStructured({
-        maxTokens: 4_000,
+        maxTokens: 6_000,
         output: {
           description: "Структурированный проект договора на русском языке",
           name: "contract_draft_v1",
@@ -73,23 +72,8 @@ export class ContractGenerationProcessor {
         },
         prompt: {
           id: PROMPT_ID,
-          trustedInstruction: [
-            templateAiInstructions(generation.templateVersion.template.slug),
-            "Подготовь структурированный проект договора на русском языке.",
-            "Используй только переданные условия сделки и ответы пользователя.",
-            "Не придумывай реквизиты сторон, даты, суммы, адреса или иные факты.",
-            "sourceDescription — контекст задачи, не отдельная подтверждённая редакция условий. При противоречии приоритет имеют confirmedTerms, inputAnswers и clarificationAnswers. Не переноси из исходного описания отменённые пользователем суммы и даты.",
-            "Автор описания («я») — инициатор, второй участник — контрагент. Если роли указаны явно, включи в договор их соответствие: например, «Инициатор — исполнитель, контрагент — заказчик». Не назначай инициатору роль заказчика автоматически. Если роли не заданы, используй только обозначения Инициатор и Контрагент.",
-            "Для individual-agreement составь индивидуальный проект по предмету и обязанностям сторон, а не договор произвольного типового вида. Инициатор и контрагент — технические роли: не меняй их обязанности местами. Не заявляй о юридической проверке проекта.",
-            "clarificationQuestions содержит формулировки вопросов и подписи вариантов: используй их для точного понимания clarificationAnswers.",
-            "confirmedTerms — точные условия с единицами измерения из анкеты и уточнений. Сервер сформирует из них единственный раздел «Условия договора» без изменений. Не создавай разделы «Условия договора», «Условия сделки», «Основные условия», не пересказывай эти факты вторым списком и не повторяй суммы, даты, адреса, предмет и роли. В остальных разделах ссылайся на согласованные условия без повторного перечисления. Не меняй годовую ставку на разовую и не добавляй требования о бумажных экземплярах: стороны оформляют электронный документ.",
-            "Не заменяй конкретные сроки оплаты, приёмки и передачи общими словами «по согласованию». Не добавляй штрафы, проценты, сроки или обязанности, которых стороны не указали.",
-            "Сформулируй конкретные взаимные обязательства, порядок оплаты, исполнения, приёмки, ответственности и расторжения, когда они применимы к выбранному типу сделки.",
-            "Не добавляй комментарии о работе модели и не включай персональные данные, которых нет во входных данных.",
-            "В строках используй обычный текст без Markdown, технических меток, typeSectionTitle и пустых пунктов. Не создавай раздел «Подтверждённые условия»: confirmedTerms добавит сервер.",
-            "В warnings перечисли только юридически значимые сведения, которые сторонам нужно проверить перед подписанием; если таких сведений нет, верни пустой массив.",
-          ].join(" "),
-          version: PROMPT_VERSION,
+          trustedInstruction: contractDraftingInstructions(generation.templateVersion.template.slug),
+          version: CONTRACT_DRAFT_PROMPT_VERSION,
         },
         safetyIdentifier: generation.userId,
         userData: toAiObject({
@@ -114,10 +98,9 @@ export class ContractGenerationProcessor {
           templateVersion: generation.templateVersion.versionNumber,
         }),
       });
-      const draft = withConfirmedContractTerms(
-        normalizeContractDraft(parseContractDraft(result.data)),
-        confirmedTerms,
-      );
+      const normalizedDraft = normalizeContractDraft(parseContractDraft(result.data));
+      assertNoDraftBlanks(normalizedDraft);
+      const draft = withConfirmedContractTerms(normalizedDraft, confirmedTerms);
       if (generation.templateVersion.template.slug === INDIVIDUAL_TEMPLATE_SLUG) {
         draft.warnings = [...new Set([INDIVIDUAL_WARNING, ...draft.warnings])];
       }
@@ -181,7 +164,7 @@ const contractDraftSchema: AiJsonObject = {
           clauses: {
             items: { maxLength: 2_000, minLength: 1, type: "string" },
             maxItems: 20,
-            minItems: 1,
+            minItems: 2,
             type: "array",
           },
           heading: { maxLength: 200, minLength: 1, type: "string" },
@@ -189,8 +172,8 @@ const contractDraftSchema: AiJsonObject = {
         required: ["clauses", "heading"],
         type: "object",
       },
-      maxItems: 20,
-      minItems: 3,
+      maxItems: 8,
+      minItems: 8,
       type: "array",
     },
     title: { maxLength: 240, minLength: 1, type: "string" },

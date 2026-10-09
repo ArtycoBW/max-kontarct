@@ -14,6 +14,9 @@ import { ContractGenerationsRepository } from "./contract-generations.repository
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { missingContractTerms } from "./contract-completeness";
+import { assertAiRequest } from "../ai/ai-request.builder";
+import { contractDraftingInstructions } from "./contract-drafting-instructions";
+import { AiOutputValidator } from "../ai/ai-output.validator";
 
 const cases = JSON.parse(
   readFileSync(
@@ -84,6 +87,8 @@ describe("ContractGenerationProcessor", () => {
     expect(markGenerating).toHaveBeenCalledWith(generationId, 1);
     const request = generateStructured.mock.calls[0]?.[0];
     expect(request?.prompt.id).toBe("contract-draft");
+    expect(request?.prompt.version).toBe("1.6.0");
+    expect(request?.maxTokens).toBe(6000);
     expect(request?.userData).toMatchObject({
       inputAnswers: { price: 1000 },
       templateTitle: "Оказание услуг",
@@ -99,6 +104,38 @@ describe("ContractGenerationProcessor", () => {
     });
   });
 
+  it.each(["vehicle-sale", "paid-services", "work-contract", "movable-property-sale", "personal-loan", "property-rental", "individual-agreement", "custom-template"])(
+    "keeps the full drafting instructions within the provider request limit for %s",
+    async (slug) => {
+      generateStructured.mockResolvedValue({ data: draft(), metadata: metadata() });
+      await processor.process(job());
+      const request = generateStructured.mock.calls[0]![0];
+      expect(() => assertAiRequest({ ...request, prompt: { ...request.prompt, trustedInstruction: contractDraftingInstructions(slug) } })).not.toThrow();
+    },
+  );
+
+  it.each(["[УКАЖИТЕ VIN-НОМЕР]", "[КАДАСТРОВЫЙ НОМЕР]", "[СУММА ЦИФРАМИ И ПРОПИСЬЮ]", "г. [Город]", "«___» ________ 202_ г."])(
+    "does not publish a generated blank form containing %s",
+    async (blank) => {
+      generateStructured.mockResolvedValue({ data: { ...draft(), preamble: blank }, metadata: metadata() });
+      await expect(processor.process(job(0, 1))).rejects.toThrow("CONTRACT_DRAFT_UNFILLED_PLACEHOLDERS");
+      expect(markCompleted).not.toHaveBeenCalled();
+      expect(markFailed).toHaveBeenCalledWith(generationId, "AI_GENERATION_FAILED");
+    },
+  );
+
+  it("keeps review warnings separate from the contract and permits ordinary bracketed text", async () => {
+    generateStructured.mockResolvedValue({
+      data: { ...draft(), preamble: "Стороны заключили договор о передаче комплекта [A].", warnings: ["Необходимо уточнить [КАДАСТРОВЫЙ НОМЕР]."] },
+      metadata: metadata(),
+    });
+    await processor.process(job());
+    expect(markCompleted.mock.calls[0]?.[0].draft).toMatchObject({
+      preamble: "Стороны заключили договор о передаче комплекта [A].",
+      warnings: ["Необходимо уточнить [КАДАСТРОВЫЙ НОМЕР]."],
+    });
+  });
+
   it("marks only the final failed attempt as terminal", async () => {
     generateStructured.mockRejectedValue(new Error("provider timeout"));
 
@@ -109,6 +146,19 @@ describe("ContractGenerationProcessor", () => {
       generationId,
       "AI_GENERATION_FAILED",
     );
+  });
+
+  it("requires the provider to return all eight sections with substantive clauses", async () => {
+    generateStructured.mockResolvedValue({ data: draft(), metadata: metadata() });
+    await processor.process(job());
+    const schema = generateStructured.mock.calls[0]![0].output.schema;
+    const validator = new AiOutputValidator();
+    expect(() => validator.validateObject(draft(), schema)).toThrow();
+    const complete = {
+      ...draft(),
+      sections: Array.from({ length: 8 }, (_, index) => ({ heading: `Раздел ${index + 1}`, clauses: ["Первое условие.", "Второе условие."] })),
+    };
+    expect(() => validator.validateObject(complete, schema)).not.toThrow();
   });
 
   it("generates an individual contract with source context, confirmed terms and a review warning", async () => {
