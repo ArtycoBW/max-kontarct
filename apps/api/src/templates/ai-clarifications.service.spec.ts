@@ -46,6 +46,24 @@ describe("AiClarificationsService", () => {
     });
   });
 
+  it("accepts the client's exact short answers in an existing vehicle session without another AI round", async () => {
+    const input = { vehicleDescription: "Toyota corolla", manufactureYear: 2002, mileage: 456860, price: 400000, transferLocation: "Иркутск", transferDate: "2026-10-12", paymentMethod: "Наличные" };
+    const questions = [
+      ...missingContractTerms("vehicle-sale", input).map(question => ({ ...question, options: [] })),
+      shortTextQuestion("vehicleColor", "Укажите цвет автомобиля"),
+      shortTextQuestion("vehicleCondition", "Укажите состояние автомобиля"),
+    ];
+    const answers = { termsPayment: "В день продажи", termsAcceptance: "Лично", vehicleColor: "Белый", vehicleCondition: "Хорошее" };
+    findOwned.mockResolvedValue(record({ inputAnswers: input, questions, providerMetadata: { completenessVersion: "1.3.0", questionHistory: questions } }));
+    generateStructured.mockRejectedValue(new AiProviderError("AI_PROVIDER_TIMEOUT", "timeout", true));
+    update.mockResolvedValue(record({ clarificationAnswers: answers, status: "READY_TO_GENERATE", questions: [] }));
+
+    await expect(service.answer("vehicle-sale", sessionId, userId, { answers })).resolves.toMatchObject({ status: "READY_TO_GENERATE", answers });
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ answers, questions: [], status: "READY_TO_GENERATE" }));
+    expect(generateStructured).not.toHaveBeenCalled();
+    expect(missingContractTerms("vehicle-sale", input, answers, questions)).toEqual([]);
+  });
+
   it("creates a persisted session when more information is required", async () => {
     generateStructured.mockResolvedValue(aiResult(needMoreInfo()));
     create.mockResolvedValue(record());
@@ -64,7 +82,7 @@ describe("AiClarificationsService", () => {
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({
         promptId: "contract-clarification",
-        promptVersion: "1.4.0",
+        promptVersion: "1.5.0",
         status: AiGenerationStatus.NEED_MORE_INFO,
         templateVersionId: versionId,
         userId,
@@ -114,13 +132,7 @@ describe("AiClarificationsService", () => {
       status: "READY_TO_GENERATE",
     });
 
-    expect(generateStructured.mock.calls[0]?.[0].userData).toMatchObject({
-      description: "Исходный контекст сделки",
-      clarificationAnswers: {
-        depositRequired: true,
-        utilitiesPayer: "tenant",
-      },
-    });
+    expect(generateStructured).not.toHaveBeenCalled();
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({
         answers: { depositRequired: true, utilitiesPayer: "tenant" },
@@ -335,12 +347,33 @@ describe("AiClarificationsService", () => {
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ status: "READY_TO_GENERATE", questions: [] }));
   });
 
-  it("rejects a vague mandatory answer and leaves the saved session unchanged", async () => {
+  it("accepts any nonempty wording without an AI review", async () => {
     const input = { materialsIncluded: true };
     findOwned.mockResolvedValue(record({ inputAnswers: input, providerMetadata: { completenessVersion: "1.0.0" }, questions: missingContractTerms("work-contract", input).map(question => ({ ...question, options: question.options.map(option => ({ ...option })) })) }));
-    await expect(service.answer("work-contract", sessionId, userId, { answers: { termsLocation: "потом", termsPayment: "После приёмки", termsAcceptance: "По акту" } })).rejects.toMatchObject({ response: { details: { errors: [expect.objectContaining({ path: "termsLocation" })] } } });
-    expect(update).not.toHaveBeenCalled();
+    update.mockResolvedValue(record({ status: "READY_TO_GENERATE", questions: [] }));
+    const answers = { termsLocation: "потом", termsPayment: "После приёмки", termsAcceptance: "По акту" };
+    await expect(service.answer("work-contract", sessionId, userId, { answers })).resolves.toMatchObject({ status: "READY_TO_GENERATE" });
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ answers, questions: [], status: "READY_TO_GENERATE" }));
     expect(generateStructured).not.toHaveBeenCalled();
+  });
+
+  it("recovers unanswered topics in a legacy session without losing earlier answers or labels", async () => {
+    const history = Array.from({ length: 12 }, (_, i) => shortTextQuestion(`extra${i}`, `Уточнение ${i}`));
+    const input = { transferLocation: "Иркутск", paymentMethod: "Наличные" };
+    findOwned.mockResolvedValue(record({ inputAnswers: input, questions: [history[11]!], clarificationAnswers: { extra0: "Ранее указано" }, providerMetadata: { completenessVersion: "1.0.0", questionHistory: history } }));
+    update.mockImplementation(value => {
+      const saved = value as { answers: Record<string, string>; questions: AiClarificationRecord["questions"]; metadata: AiClarificationRecord["providerMetadata"]; status: AiGenerationStatus };
+      const savedRecord = record({ inputAnswers: input, clarificationAnswers: saved.answers, questions: saved.questions, providerMetadata: saved.metadata, status: saved.status });
+      findOwned.mockResolvedValue(savedRecord);
+      return Promise.resolve(savedRecord);
+    });
+    const next = await service.answer("vehicle-sale", sessionId, userId, { answers: { extra11: "Да" } });
+    expect(next.questions.map(question => question.id)).toEqual(["termsPayment", "termsAcceptance"]);
+    const saved = update.mock.calls[0]![0] as { metadata: { questionHistory: unknown[] } };
+    expect(saved.metadata.questionHistory).toHaveLength(14);
+    await expect(service.answer("vehicle-sale", sessionId, userId, { answers: { termsPayment: "В день продажи", termsAcceptance: "Лично" } })).resolves.toMatchObject({ status: "READY_TO_GENERATE", answers: { extra0: "Ранее указано", extra11: "Да", termsPayment: "В день продажи", termsAcceptance: "Лично" } });
+    expect(generateStructured).not.toHaveBeenCalled();
+    update.mockReset();
   });
   it("honours concrete conditions in the initial description without copying them into questionnaire fields", async () => {
     const input = { workDescription: "Ремонт", workLocation: "У заказчика", materialsIncluded: true };

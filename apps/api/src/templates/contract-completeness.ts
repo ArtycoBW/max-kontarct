@@ -2,7 +2,7 @@ import type { AiClarificationQuestion } from "@max-contract/contracts";
 import { contractLocationIssue, TRANSFER_LOCATION_EXAMPLE } from "./contract-location";
 import { acceptanceIssue, paymentIssue } from "./term-validation";
 
-export const COMPLETENESS_VERSION = "1.3.0";
+export const COMPLETENESS_VERSION = "1.4.0";
 type Answers = Record<string, unknown>;
 /** Keep clarification, enqueue and worker checks on the same source context. */
 export function withCompletenessContext(input: Answers, metadata: unknown): Answers {
@@ -230,9 +230,10 @@ export function missingContractTerms(
   return rulesFor(slug, input)
     .filter((item) => {
       const direct = answerText(answers[item.id]);
-      // An explicit correction wins over older questionnaire/description text,
-      // including an empty or incomplete correction that still needs clarification.
-      if (item.id in answers) return !item.valid(direct, true);
+      // A user's explicit answer is authoritative, even when it is short or
+      // does not match the heuristics used to discover missing topics initially.
+      // This also applies to sessions created before free-form answers were enabled.
+      if (item.id in answers) return !direct;
       if (
         item.keys.some((key) =>
           item.valid(
@@ -271,32 +272,13 @@ export function invalidRequiredTermAnswers(
     .filter(
       (item) =>
         item.id in answers &&
-        !item.valid(
-          answerText(answers[item.id]),
-          true,
-        ),
+        !answerText(answers[item.id]),
     )
     .map((item) => ({
       path: item.id,
-      message: item.id === "termsPayment" ? paymentIssue(answerText(answers[item.id]), true)!
-        : item.id === "termsAcceptance" ? acceptanceIssue(answerText(answers[item.id]))!
-        : item.id === "termsLocation"
-        ? `${contractLocationIssue(answerText(answers[item.id]), true, true, true)} ${TRANSFER_LOCATION_EXAMPLE}`
-        : item.id === "termsProperty"
-          ? `Не удалось определить конкретный объект. Для помещения укажите населённый пункт, улицу и дом; для вещи — модель и идентификатор. ${item.description}`
-          : `${termIssue[item.id] ?? "Ответ пока не содержит конкретного условия."} ${item.description}`,
+      message: "Введите ответ",
     }));
 }
-
-const termIssue: Record<string, string> = {
-  termsMaterials: "Не удалось определить, какая сторона предоставляет и оплачивает материалы.",
-  termsUtilities: "Не удалось определить плательщика коммунальных расходов и основание расчёта.",
-  termsDeposit: "Не удалось определить срок возврата обеспечительного платежа или условия удержаний.",
-  termsPaymentMethod: "Не удалось определить способ расчёта. Например: «Через СБП».",
-  termsLoanTransfer: "Не удалось определить дату/событие передачи денег и способ передачи.",
-  termsLoanRepayment: "Не удалось определить, возвращается ли сумма целиком или по графику.",
-  termsInterest: "Не удалось определить, когда уплачиваются проценты.",
-};
 
 export function knownContractTerms(
   slug: string,

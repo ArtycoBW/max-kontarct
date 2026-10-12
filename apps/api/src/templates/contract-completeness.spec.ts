@@ -18,8 +18,9 @@ describe("Contract completeness: all five templates", () => {
     expect(invalidRequiredTermAnswers("paid-services", {}, { termsAcceptance })).toEqual([]);
     expect(missingContractTerms("paid-services", {}, { termsAcceptance }).map(item => item.id)).not.toContain("termsAcceptance");
   });
-  it.each(["Обсудим потом в чате", "Пока не знаю", "Отправить PDF"])("still asks for an acceptance procedure when only a vague delivery is given: %s", termsAcceptance => {
-    expect(invalidRequiredTermAnswers("paid-services", {}, { termsAcceptance })).toHaveLength(1);
+  it.each(["Обсудим потом в чате", "Пока не знаю", "Отправить PDF", "Лично"])("accepts the user's own acceptance wording: %s", termsAcceptance => {
+    expect(invalidRequiredTermAnswers("paid-services", {}, { termsAcceptance })).toEqual([]);
+    expect(missingContractTerms("paid-services", {}, { termsAcceptance }).map(item => item.id)).not.toContain("termsAcceptance");
   });
   it.each(cases)("$slug: cannot silently pass a minimal questionnaire", item => {
     expect(missingContractTerms(item.slug, item.input).map(question => question.id)).toEqual(Object.keys(item.answers));
@@ -34,10 +35,17 @@ describe("Contract completeness: all five templates", () => {
     const input = { ...item.input, [item.completeField]: `${String(item.input[item.completeField])}. ${Object.values(item.answers).join(". ")}` };
     expect(missingContractTerms(item.slug, input)).toEqual([]);
   });
-  it.each(["", "  ", "не знаю", "потом", "по согласованию", "как обычно", "да", "нет"])("rejects vague mandatory answer %j without creating a repeated question", text => {
+  it.each(["", "  "])("rejects only an empty mandatory answer %j", text => {
     const item = cases[0]!;
     for (const id of Object.keys(item.answers)) {
       expect(invalidRequiredTermAnswers(item.slug, item.input, { [id]: text })).toEqual([expect.objectContaining({ path: id })]);
+    }
+  });
+  it.each(cases)("$slug: accepts short or uncertain answers for every additional topic", item => {
+    for (const text of ["не знаю", "потом", "по согласованию", "как обычно", "да", "нет", "Лично", "В день продажи"]) {
+      const answers = Object.fromEntries(Object.keys(item.answers).map(id => [id, text]));
+      expect(invalidRequiredTermAnswers(item.slug, item.input, answers)).toEqual([]);
+      expect(missingContractTerms(item.slug, item.input, answers)).toEqual([]);
     }
   });
   it("does not count price/payment text as an address", () => {
@@ -57,13 +65,13 @@ describe("Contract completeness: all five templates", () => {
     expect(missingContractTerms("property-rental", { utilitiesIncluded: true, depositAmount: 0 }).map(item => item.id)).not.toEqual(expect.arrayContaining(["termsDeposit", "termsUtilities"]));
     expect(missingContractTerms("personal-loan", { interestType: "Без процентов", interestRate: 0, earlyRepaymentAllowed: false }).map(item => item.id)).not.toContain("termsInterest");
   });
-  it("partial prepayment is insufficient without the balance", () => {
-    expect(invalidRequiredTermAnswers("work-contract", {}, { termsPayment: "Предоплата 50%" })).toHaveLength(1);
+  it("accepts partial prepayment in the user's wording", () => {
+    expect(invalidRequiredTermAnswers("work-contract", {}, { termsPayment: "Предоплата 50%" })).toEqual([]);
     expect(invalidRequiredTermAnswers("work-contract", {}, { termsPayment: "После завершения работ" })).toEqual([]);
     expect(invalidRequiredTermAnswers("work-contract", {}, { termsPayment: "Предоплата 100%" })).toEqual([]);
   });
-  it("distinguishes a loan amount from its transfer date", () => {
-    expect(invalidRequiredTermAnswers("personal-loan", {}, { termsLoanTransfer: "Банковский перевод 30000 рублей" })).toHaveLength(1);
+  it("accepts a loan transfer answer without demanding a date", () => {
+    expect(invalidRequiredTermAnswers("personal-loan", {}, { termsLoanTransfer: "Банковский перевод 30000 рублей" })).toEqual([]);
   });
   it("does not invent a policy for a custom template", () => expect(missingContractTerms("custom-template", {})).toEqual([]));
   it("does not confuse the property description with an unspecified payment method", () => {

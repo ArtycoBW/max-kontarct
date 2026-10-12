@@ -231,6 +231,26 @@ describe("ContractGenerationProcessor", () => {
     expect(markCompleted).not.toHaveBeenCalled();
   });
 
+  it("generates and retains the client's exact short answers without semantic rejection", async () => {
+    const generation = record();
+    generation.templateVersion.template = { slug: "vehicle-sale", title: "Купля-продажа автомобиля" };
+    generation.inputAnswers = { transferLocation: "Иркутск", paymentMethod: "Наличные" };
+    generation.templateVersion.questionnaireSchema = { properties: { transferLocation: { title: "Место передачи" }, paymentMethod: { title: "Способ оплаты" } } };
+    generation.clarificationAnswers = { termsPayment: "В день продажи", termsAcceptance: "Лично", vehicleColor: "Белый", vehicleCondition: "Хорошее" };
+    const questions = [
+      ...missingContractTerms("vehicle-sale", generation.inputAnswers).map(question => ({ ...question, options: [] })),
+      ...[{ id: "vehicleColor", label: "Укажите цвет автомобиля" }, { id: "vehicleCondition", label: "Укажите состояние автомобиля" }].map(question => ({ ...question, type: "short_text", required: true, description: "", options: [] })),
+    ];
+    generation.providerMetadata = { completenessVersion: "1.3.0", questionHistory: questions };
+    findForProcessing.mockResolvedValue(generation);
+    generateStructured.mockResolvedValue({ data: draft(), metadata: metadata() });
+    await processor.process(job());
+    expect(generateStructured.mock.calls[0]?.[0].userData.clarificationAnswers).toEqual(generation.clarificationAnswers);
+    expect(markCompleted).toHaveBeenCalledTimes(1);
+    const saved = JSON.stringify(markCompleted.mock.calls[0]?.[0].draft);
+    for (const answer of Object.values(generation.clarificationAnswers)) expect(saved).toContain(answer);
+  });
+
   it("does not reject complete source-description terms after clarification and enqueue", async () => {
     const generation = record();
     generation.clarificationAnswers = {};

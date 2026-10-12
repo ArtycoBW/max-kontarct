@@ -1,4 +1,5 @@
 import { invalidRequiredTermAnswers, missingContractTerms } from "./contract-completeness";
+import { acceptanceIssue, paymentIssue } from "./term-validation";
 
 describe("Human payment answers across templates", () => {
   it.each([
@@ -33,8 +34,8 @@ describe("Human payment answers across templates", () => {
   }
   it.each(["", "Предоплата 50%", "Уточним"])("does not replace an explicit correction with an older valid answer: %s", termsPayment => {
     const input = { paymentProcedure: "Оплата после приёмки", sourceDescription: "Оплата при передаче, без аванса" };
-    expect(missingContractTerms("paid-services", input, { termsPayment }).map(q => q.id)).toContain("termsPayment");
-    expect(invalidRequiredTermAnswers("paid-services", input, { termsPayment })).toHaveLength(1);
+    expect(missingContractTerms("paid-services", input, { termsPayment }).some(q => q.id === "termsPayment")).toBe(!termsPayment.trim());
+    expect(invalidRequiredTermAnswers("paid-services", input, { termsPayment })).toHaveLength(termsPayment.trim() ? 0 : 1);
   });
   it.each([
     ["нет", "момент"], ["по согласованию", "момент"], ["аванс не нужен", "срок"],
@@ -49,14 +50,14 @@ describe("Human payment answers across templates", () => {
     ["Аванса нет, на месте", "Понятно, что аванса нет"],
     ["Оплата сразу", "Уточните срок"], ["Оплата не сразу на месте", "Уточните срок"],
     ["Оплата не при встрече", "Уточните срок"], ["Возможно, сразу на месте", "Уточните срок"],
-  ])("gives an actionable error for %s", (termsPayment, fragment) => {
-    const errors = invalidRequiredTermAnswers("paid-services", {}, { termsPayment });
-    expect(errors).toHaveLength(1);
-    expect(errors[0]?.path).toBe("termsPayment");
-    expect(errors[0]?.message).toContain(fragment);
+  ])("uses heuristics for initial discovery but accepts explicit wording: %s", (termsPayment, fragment) => {
+    expect(paymentIssue(termsPayment, true)).toContain(fragment);
+    expect(invalidRequiredTermAnswers("paid-services", {}, { termsPayment })).toEqual([]);
+    expect(missingContractTerms("paid-services", {}, { termsPayment }).map(q => q.id)).not.toContain("termsPayment");
   });
   it.each(["Без акта", "Акт не подписывается", "Не подпишем акт", "Не подтверждаем приёмку в чате", "Отправлю файл в чат", "Проверим результат за 3 дня"])("does not invent acceptance from %s", termsAcceptance => {
-    expect(invalidRequiredTermAnswers("paid-services", {}, { termsAcceptance })).toHaveLength(1);
+    expect(acceptanceIssue(termsAcceptance)).not.toBeNull();
+    expect(invalidRequiredTermAnswers("paid-services", {}, { termsAcceptance })).toEqual([]);
   });
   it.each([
     ["work-contract", { materialsIncluded: false }, { termsMaterials: "Материалы не нужны" }],

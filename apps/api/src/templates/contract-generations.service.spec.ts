@@ -97,6 +97,18 @@ describe("ContractGenerationsService", () => {
     expect(enqueue).not.toHaveBeenCalled();
   });
 
+  it("queues the client's short vehicle answers from an older clarification session", async () => {
+    findOwned.mockResolvedValue(record(AiGenerationStatus.READY_TO_GENERATE, {
+      inputAnswers: { transferLocation: "Иркутск", paymentMethod: "Наличные" },
+      clarificationAnswers: { termsPayment: "В день продажи", termsAcceptance: "Лично", vehicleColor: "Белый", vehicleCondition: "Хорошее" },
+      providerMetadata: { completenessVersion: "1.3.0" },
+    }));
+    markQueued.mockResolvedValue(record(AiGenerationStatus.QUEUED));
+    enqueue.mockResolvedValue();
+    await expect(service.start("vehicle-sale", generationId, userId)).resolves.toMatchObject({ status: "QUEUED" });
+    expect(enqueue).toHaveBeenCalledWith(generationId);
+  });
+
   it("does not re-evaluate or overwrite an already completed historic contract", async () => {
     findOwned.mockResolvedValue(record(AiGenerationStatus.COMPLETED, { providerMetadata: { completenessVersion: "1.0.0" } }));
     await expect(service.start("work-contract", generationId, userId)).resolves.toMatchObject({ status: "COMPLETED" });

@@ -393,6 +393,43 @@ test("generation waits for both profiles and submits the actual deal id", async 
   expect(posted).toEqual({ dealId: "review-deal" });
 });
 
+test("client vehicle clarification accepts short answers and reaches generation", async ({ page }) => {
+  await page.setViewportSize({ width: 393, height: 851 });
+  await mockApp(page);
+  const workspace = { ...workspaceFixture("DRAFT", true), currentUserRole: "INITIATOR", contractDraft: null, sourceGenerationId: null };
+  workspace.template.slug = "vehicle-sale";
+  const draft = { ...workspace, draft: { ...workspace.draft, currentStep: "AI_CLARIFICATION", clarificationSessionId: "session" } };
+  const template = { slug: "vehicle-sale", title: "Купля-продажа автомобиля", summary: "Автомобиль", currentVersion: { id: "template", versionNumber: 1, documentRequirements: [], questionnaireSchema: { type: "object", properties: {} } } };
+  const questions = [
+    { id: "termsPayment", label: "Когда и в каком порядке производится оплата?" },
+    { id: "termsAcceptance", label: "Как покупатель проверяет и принимает имущество?" },
+    { id: "vehicleColor", label: "Укажите цвет автомобиля" },
+    { id: "vehicleCondition", label: "Укажите состояние автомобиля" },
+  ].map(question => ({ ...question, type: "short_text", required: true, options: [], description: "" }));
+  await page.route("**/api/v1/deals", route => route.fulfill({ json: { items: [{ ...workspace, templateTitle: template.title }] } }));
+  await page.route("**/api/v1/deals/review-deal/workspace", route => route.fulfill({ json: workspace }));
+  await page.route(/\/api\/v1\/deals\/review-deal(?:\/draft)?$/, route => route.fulfill({ json: draft }));
+  await page.route("**/api/v1/templates**", route => route.fulfill({ json: route.request().url().endsWith("/templates") ? { items: [template] } : template }));
+  let posted: unknown = null;
+  await page.route("**/clarifications/session", route => route.fulfill({ json: { id: "session", status: "NEED_MORE_INFO", questions, answers: {}, round: 0 } }));
+  await page.route("**/clarifications/session/answers", route => {
+    posted = route.request().postDataJSON();
+    return route.fulfill({ json: { id: "session", status: "READY_TO_GENERATE", questions: [], answers: (posted as { answers: unknown }).answers, round: 1 } });
+  });
+  await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
+  await page.getByRole("button", { name: /Тестовая сделка/ }).click();
+  await page.getByRole("button", { name: "Редактировать черновик" }).click();
+  const answers = ["В день продажи", "Лично", "Белый", "Хорошее"];
+  for (let index = 0; index < answers.length; index++) {
+    await expect(page.getByRole("heading", { name: questions[index]!.label, exact: false })).toBeVisible();
+    await page.locator("textarea").fill(answers[index]!);
+    await page.getByRole("button", { name: index === 3 ? "Завершить" : "Продолжить", exact: true }).click();
+  }
+  await expect(page.getByRole("button", { name: "Подготовить договор", exact: true })).toBeEnabled();
+  expect(posted).toEqual({ answers: { termsPayment: "В день продажи", termsAcceptance: "Лично", vehicleColor: "Белый", vehicleCondition: "Хорошее" } });
+  await expect(page.getByText("Не удалось выполнить запрос", { exact: true })).toHaveCount(0);
+});
+
 async function openMockDeal(page: Page, workspace: ReturnType<typeof workspaceFixture>) {
   await mockApp(page);
   await page.route("**/api/v1/deals", route => route.fulfill({ json: { items: [{ ...workspace, templateTitle: "Купля-продажа" }] } }));

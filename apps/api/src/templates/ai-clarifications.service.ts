@@ -20,7 +20,6 @@ import { AiService } from "../ai/ai.service";
 import type { AiClarificationRecord } from "./ai-clarifications.repository";
 import { AiClarificationsRepository } from "./ai-clarifications.repository";
 import { TemplatesService } from "./templates.service";
-import { readSubjectDocumentsParty } from "../deals/declared-party-roles";
 import { templateAiInstructions } from "./template-ai-instructions";
 import {
   COMPLETENESS_VERSION,
@@ -32,7 +31,7 @@ import {
 } from "./contract-completeness";
 
 const PROMPT_ID = "contract-clarification";
-const PROMPT_VERSION = "1.4.0";
+const PROMPT_VERSION = "1.5.0";
 const MAX_TOTAL_QUESTIONS = 12;
 
 type ClarificationAiOutput = {
@@ -170,10 +169,6 @@ export class AiClarificationsService {
       session.providerMetadata,
       questions,
     );
-    const remainingQuestions = Math.max(
-      0,
-      MAX_TOTAL_QUESTIONS - questionHistory.length,
-    );
     const missing = completenessEnabled
       ? missingContractTerms(
           templateSlug,
@@ -182,72 +177,16 @@ export class AiClarificationsService {
           questionHistory,
         )
       : [];
-    if (missing.length > remainingQuestions) {
-      throw new BadRequestException({
-        code: "AI_CLARIFICATION_ANSWERS_INVALID",
-        details: {
-          errors: missing.map((question) => ({
-            path: question.id,
-            message: question.description,
-          })),
-        },
-        message:
-          "Уточните обязательные условия; при необходимости вернитесь к параметрам сделки",
-      });
-    }
-    let data: ClarificationAiOutput = {
-      questions: [],
-      status: "READY_TO_GENERATE",
+    // Accept the user's wording without another AI review. Legacy sessions may
+    // still need an unanswered topic, but never a rewording of an existing answer.
+    const data: ClarificationAiOutput = {
+      questions: missing,
+      status: missing.length ? "NEED_MORE_INFO" : "READY_TO_GENERATE",
     };
-    let metadata = withQuestionHistory(
-      session.providerMetadata,
-      questionHistory,
-    );
-
-    if (remainingQuestions > 0) {
-      const output = await this.generate(
-        {
-          clarificationAnswers: cumulativeAnswers,
-          inputAnswers,
-          previousQuestions: questionHistory,
-          description: sourceDescription(session.providerMetadata),
-          templateTitle: session.templateVersion.template.title,
-          templateSlug,
-          requiredQuestions: missing,
-        },
-        userId,
-        remainingQuestions,
-      );
-      data = prioritizeRequiredQuestions(
-        sanitizeClarificationOutput(output.data, {
-          clarificationAnswers: cumulativeAnswers,
-          inputAnswers,
-          previousQuestions: [
-            ...questionHistory,
-            ...knownContractTerms(
-              templateSlug,
-              completenessInput,
-              cumulativeAnswers,
-              questionHistory,
-            ),
-          ],
-          remainingQuestions,
-        }),
-        missing,
-        remainingQuestions,
-      );
-      metadata = withQuestionHistory(
-        {
-          ...output.metadata,
-          sourceDescription: sourceDescription(session.providerMetadata),
-          subjectDocumentsParty: readSubjectDocumentsParty(session.providerMetadata),
-          ...(completenessEnabled
-            ? { completenessVersion: COMPLETENESS_VERSION }
-            : {}),
-        },
-        [...questionHistory, ...data.questions],
-      );
-    }
+    const metadata = {
+      ...withQuestionHistory(session.providerMetadata, [...questionHistory, ...missing]),
+      ...(completenessEnabled ? { completenessVersion: COMPLETENESS_VERSION } : {}),
+    };
     const record = await this.clarifications.update({
       answers: toPrismaObject(cumulativeAnswers),
       id: session.id,
@@ -289,7 +228,7 @@ export class AiClarificationsService {
             `Если данных недостаточно, верни NEED_MORE_INFO и не более ${maxQuestions} конкретных вопросов.`,
             `За всю сессию можно задать не более ${MAX_TOTAL_QUESTIONS} вопросов.`,
             "Не повторяй вопросы из previousQuestions и не переспрашивай сведения, которые уже есть в inputAnswers или clarificationAnswers, даже если ключи или формулировки отличаются.",
-            "Проверяй содержание значений, а не наличие ключа. Пустая строка, «потом», «по согласованию» и «квартира собственника» не задают конкретного условия.",
+            "Задавай вопросы только об отсутствующих сведениях. Пользователь может отвечать кратко и своими словами; не требуй специальной формулировки и не оценивай качество его ответа.",
             "requiredQuestions уже проверены сервером: не создавай их дубликаты. Не задавай вопросы по другим типам сделок.",
             "Условия могут содержаться в свободном описании: используй их и не переспрашивай полный адрес, оплату или приёмку, если они конкретно описаны.",
             "description — исходный контекст. При расхождении с ним inputAnswers и clarificationAnswers имеют приоритет: пользователь проверил и мог изменить поля. Не переноси устаревшие даты, суммы или условия из description.",
@@ -316,11 +255,6 @@ export class AiClarificationsService {
       throw error;
     }
   }
-}
-
-function sourceDescription(metadata: Prisma.JsonValue): string {
-  return metadata && typeof metadata === "object" && !Array.isArray(metadata) && typeof metadata.sourceDescription === "string"
-    ? metadata.sourceDescription : "";
 }
 
 function prioritizeRequiredQuestions(
@@ -508,7 +442,7 @@ function readQuestionHistory(
   try {
     const history = rawHistory as unknown as AiClarificationQuestion[];
     assertClarificationOutput({ questions: history, status: "NEED_MORE_INFO" });
-    return history.slice(0, MAX_TOTAL_QUESTIONS);
+    return history;
   } catch {
     return fallback;
   }
@@ -524,7 +458,9 @@ function withQuestionHistory(
   >;
   return toPrismaObject({
     ...stored,
-    questionHistory: questions.slice(0, MAX_TOTAL_QUESTIONS),
+    // Preserve labels for all saved answers, including extra missing topics
+    // recovered from legacy sessions. The cap applies to initial AI questions.
+    questionHistory: questions,
   });
 }
 

@@ -2,11 +2,11 @@ import { contractLocationIssue } from "./contract-location";
 import { missingContractTerms, invalidRequiredTermAnswers } from "./contract-completeness";
 
 describe("contract location syntax", () => {
-  it.each(["Иркутск", "г. Иркутск", "Ростов-на-Дону", "Нижний Новгород", "Самовывоз из г. Тюмень"])("allows a locality for transfer, not for identifying rented real estate: %s", termsLocation => {
+  it.each(["Иркутск", "г. Иркутск", "Ростов-на-Дону", "Нижний Новгород", "Самовывоз из г. Тюмень"])("accepts a city as the user's explicit location answer: %s", termsLocation => {
     expect(invalidRequiredTermAnswers("movable-property-sale", {}, { termsLocation })).toEqual([]);
     expect(missingContractTerms("movable-property-sale", {}, { termsLocation }).map(q => q.id)).not.toContain("termsLocation");
     expect(missingContractTerms("paid-services", { serviceLocation: termsLocation }).map(q => q.id)).not.toContain("termsLocation");
-    expect(invalidRequiredTermAnswers("property-rental", {}, { termsProperty: termsLocation })).toHaveLength(1);
+    expect(invalidRequiredTermAnswers("property-rental", {}, { termsProperty: termsLocation })).toEqual([]);
   });
   it.each([
     "Казань Примерная 10", "Тверь, Примерная, 10", "Дербент Буйнакского 68",
@@ -20,11 +20,10 @@ describe("contract location syntax", () => {
     ["ул. Примерная, д. 8", "населённый пункт"],
     ["г. Казань, ул. Примерная", "номер дома"],
     ["по согласованию", "конкретного места"],
-  ])("explains the missing part instead of repeating the question: %s", (text, reason) => {
-    const errors = invalidRequiredTermAnswers("work-contract", {}, { termsLocation: text });
-    expect(errors).toHaveLength(1);
-    expect(errors[0]?.message).toContain(reason);
-    expect(errors[0]?.message).toContain("Например:");
+  ])("can detect an incomplete location without blocking an explicit answer: %s", (text, reason) => {
+    expect(contractLocationIssue(text)).toContain(reason);
+    expect(invalidRequiredTermAnswers("work-contract", {}, { termsLocation: text })).toEqual([]);
+    expect(missingContractTerms("work-contract", {}, { termsLocation: text }).map(q => q.id)).not.toContain("termsLocation");
   });
   it.each(["Работы стоимостью 10000 рублей", "Оплата через 5 дней", "Квартира собственника", "Не онлайн, место уточним"])("does not turn unrelated text into an address: %s", text => {
     expect(contractLocationIssue(text)).not.toBeNull();
