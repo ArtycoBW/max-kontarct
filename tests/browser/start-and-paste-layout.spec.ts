@@ -393,6 +393,65 @@ test("generation waits for both profiles and submits the actual deal id", async 
   expect(posted).toEqual({ dealId: "review-deal" });
 });
 
+for (const width of [393, 1280]) {
+test(`empty required questionnaire fields show one centered toast at ${width}px`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 851 });
+  await mockApp(page);
+  const workspace = { ...workspaceFixture("DRAFT", true), currentUserRole: "INITIATOR", contractDraft: null, sourceGenerationId: null };
+  workspace.draft.currentStep = "QUESTIONNAIRE";
+  workspace.draft.subjectDocumentsParty = "COUNTERPARTY";
+  const template = { slug: workspace.template.slug, title: "Купля-продажа", summary: "Имущество", currentVersion: { id: "template", versionNumber: 1, documentRequirements: [], questionnaireSchema: {
+    type: "object", required: ["vehicleDefects", "vehicleRestrictions"], properties: {
+      vehicleDefects: { type: "string", title: "Известные повреждения и неисправности", minLength: 3, maxLength: 1000 },
+      vehicleRestrictions: { type: "string", title: "Залог и ограничения", minLength: 3, maxLength: 1000 },
+    },
+  } } };
+  await page.route("**/api/v1/deals", route => route.fulfill({ json: { items: [{ ...workspace, templateTitle: template.title }] } }));
+  await page.route("**/api/v1/deals/review-deal/workspace", route => route.fulfill({ json: workspace }));
+  await page.route(/\/api\/v1\/deals\/review-deal(?:\/draft)?$/, route => route.fulfill({ json: workspace }));
+  await page.route("**/api/v1/templates**", route => route.fulfill({ json: route.request().url().endsWith("/templates") ? { items: [template] } : template }));
+  let validations = 0;
+  await page.route("**/templates/*/validate", route => {
+    validations++;
+    return route.fulfill({ json: { valid: true, answers: route.request().postDataJSON().answers, snapshot: { templateVersionId: "template" } } });
+  });
+  await page.route("**/templates/*/clarifications", route => route.fulfill({ json: { id: "session", status: "READY_TO_GENERATE", questions: [], answers: {}, round: 0 } }));
+  await page.getByRole("button", { name: "Начать работу с Макс-Контракт" }).click();
+  await page.getByRole("button", { name: /Тестовая сделка/ }).click();
+  await page.getByRole("button", { name: "Редактировать черновик" }).click();
+  const submit = page.getByRole("button", { name: "Продолжить", exact: true });
+  const defects = page.getByRole("textbox", { name: "Известные повреждения и неисправности" });
+  const restrictions = page.getByRole("textbox", { name: "Залог и ограничения" });
+  await submit.click();
+  const notice = page.locator('[data-sonner-toast]').filter({ hasText: "Заполните обязательные поля" });
+  await expect(notice).toBeVisible();
+  await expect(defects).toHaveAttribute("aria-invalid", "true");
+  await expect(restrictions).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByText("Заполните обязательное поле", { exact: true })).toHaveCount(2);
+  expect(validations).toBe(0);
+  await expect.poll(async () => {
+    const box = await notice.boundingBox();
+    return box ? Math.abs(box.y + box.height / 2 - 851 / 2) : 999;
+  }).toBeLessThan(2);
+  const box = (await notice.boundingBox())!;
+  expect(Math.abs(box.x + box.width / 2 - width / 2)).toBeLessThan(2);
+  await submit.click();
+  await expect(notice).toHaveCount(1);
+  await page.screenshot({ path: `test-results/required-fields-toast-${width}.png` });
+  await expect(notice).toHaveCount(0, { timeout: 8000 });
+  await submit.click();
+  await expect(notice).toBeVisible();
+  await defects.fill("Нет");
+  await restrictions.fill("Нет");
+  await expect(defects).toHaveAttribute("aria-invalid", "false");
+  await expect(restrictions).toHaveAttribute("aria-invalid", "false");
+  await submit.click();
+  await expect(page.getByRole("button", { name: "Подготовить договор", exact: true })).toBeEnabled();
+  await expect(notice).toHaveCount(0);
+  expect(validations).toBe(1);
+});
+}
+
 test("client vehicle clarification accepts short answers and reaches generation", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 851 });
   await mockApp(page);

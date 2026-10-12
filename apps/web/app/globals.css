@@ -3118,6 +3118,28 @@ button.service-status {
   font-size: 9px;
 }
 
+[data-sonner-toaster].toaster.form-validation-toaster {
+  top: 50%;
+  bottom: auto;
+  left: 50%;
+  right: auto;
+  width: min(356px, calc(100% - 32px));
+  height: var(--front-toast-height);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+[data-sonner-toaster].form-validation-toaster [data-sonner-toast] {
+  width: 100%;
+  pointer-events: auto;
+}
+
+[data-sonner-toaster].form-validation-toaster [data-title] {
+  font-size: 14px;
+  font-weight: 750;
+  text-align: center;
+}
+
 @media (max-width: 820px) {
   .admin-shell {
     display: block;

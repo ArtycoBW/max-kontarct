@@ -61,6 +61,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
         <AuthProvider>
           {children}
           <Toaster />
+          <Toaster id="form-validation" className="toaster form-validation-toaster" closeButton={false} visibleToasts={1} />
         </AuthProvider>
       </MotionConfig>
     </QueryClientProvider>

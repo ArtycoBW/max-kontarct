@@ -16,6 +16,7 @@ import type {
   VerifiedPhone,
 } from "@max-contract/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   ArrowLeft,
   ArrowRight,
@@ -860,7 +861,17 @@ function CreateDealScreen({
       questionnaireAnswers,
     );
     setFieldErrors(normalized.errors);
-    if (Object.keys(normalized.errors).length > 0) return;
+    if (Object.keys(normalized.errors).length > 0) {
+      if (Object.values(normalized.errors).includes("Заполните обязательное поле")) {
+        toast.error("Заполните обязательные поля", {
+          id: "questionnaire-required-fields",
+          toasterId: "form-validation",
+          duration: 4_000,
+        });
+      }
+      return;
+    }
+    toast.dismiss("questionnaire-required-fields");
 
     try {
       setAnswers(normalized.answers);
